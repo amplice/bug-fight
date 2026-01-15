@@ -1,0 +1,311 @@
+/* Bug Fights - Styles */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: #0a0a0a;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.container {
+    max-width: 900px;
+    width: 100%;
+}
+
+h1 {
+    text-align: center;
+    color: #ff0;
+    font-size: 32px;
+    text-shadow: 2px 2px 0 #f80, 4px 4px 0 #f00;
+    margin-bottom: 20px;
+    letter-spacing: 4px;
+}
+
+.live-badge {
+    display: inline-block;
+    background: #f00;
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 10px;
+    animation: pulse 1.5s infinite;
+    text-shadow: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Arena Canvas */
+#arena {
+    display: block;
+    margin: 0 auto 20px;
+    border: 4px solid #333;
+    background: #1a1a1a;
+    image-rendering: pixelated;
+}
+
+/* Fighter Cards */
+.selection-panel {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.fighter-card {
+    flex: 1;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    padding: 15px;
+    border-radius: 4px;
+}
+
+.fighter-card h3 {
+    color: #ff0;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.fighter-card.left h3 {
+    color: #f55;
+}
+
+.fighter-card.right h3 {
+    color: #5af;
+}
+
+.fighter-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.fighter-stats {
+    font-size: 11px;
+    line-height: 1.6;
+    color: #aaa;
+    margin-bottom: 5px;
+}
+
+.fighter-attrs {
+    font-size: 11px;
+    margin-bottom: 10px;
+    min-height: 16px;
+}
+
+.odds {
+    text-align: center;
+    font-size: 18px;
+    color: #0f0;
+    margin: 10px 0;
+}
+
+/* Bet Buttons */
+.bet-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: linear-gradient(180deg, #0a0, #070);
+    color: #fff;
+}
+
+.bet-btn:hover {
+    background: linear-gradient(180deg, #0c0, #090);
+    box-shadow: 0 0 10px #0f0;
+}
+
+.disabled .bet-btn {
+    background: #333;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.disabled .bet-btn:hover {
+    box-shadow: none;
+}
+
+/* VS Divider with Countdown */
+.vs-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+}
+
+.countdown {
+    text-align: center;
+    padding: 10px;
+}
+
+.countdown.hidden {
+    visibility: hidden;
+}
+
+#countdown-timer {
+    font-size: 48px;
+    font-weight: bold;
+    color: #ff0;
+    text-shadow: 0 0 20px #f80;
+    line-height: 1;
+}
+
+.countdown-label {
+    font-size: 12px;
+    color: #888;
+    margin-top: 5px;
+}
+
+/* Betting Panel */
+.betting-panel {
+    background: #1a1a1a;
+    border: 2px solid #333;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.betting-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.money-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.money-display .label {
+    color: #888;
+    font-size: 14px;
+}
+
+.money {
+    color: #ff0;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.bet-amount-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bet-amount-group label {
+    color: #888;
+}
+
+.bet-amount-group input {
+    width: 100px;
+    padding: 8px;
+    font-size: 16px;
+    font-family: inherit;
+    background: #2a2a2a;
+    color: #ff0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    text-align: right;
+}
+
+.current-bet-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.current-bet-display .label {
+    color: #888;
+    font-size: 14px;
+}
+
+#current-bet {
+    color: #0f0;
+    font-size: 16px;
+}
+
+/* Stats Legend */
+.stats-legend {
+    background: #111;
+    border: 1px solid #333;
+    padding: 10px 15px;
+    border-radius: 4px;
+    margin-top: 20px;
+    font-size: 10px;
+    color: #666;
+    text-align: center;
+}
+
+.stats-legend span {
+    margin: 0 8px;
+}
+
+/* Attributes Legend */
+.attributes-legend {
+    background: #111;
+    border: 1px solid #333;
+    padding: 10px 15px;
+    border-radius: 4px;
+    margin-top: 10px;
+    font-size: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.attr-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.attr-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+    .selection-panel {
+        flex-direction: column;
+    }
+
+    .vs-divider {
+        padding: 10px 0;
+    }
+
+    .betting-info {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #arena {
+        width: 100%;
+        height: auto;
+    }
+}

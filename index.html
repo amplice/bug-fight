@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Fights - 24/7 Live</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>BUG FIGHTS <span class="live-badge">LIVE 24/7</span></h1>
+
+        <canvas id="arena" width="600" height="550"></canvas>
+
+        <div class="selection-panel">
+            <div class="fighter-card left">
+                <h3>FIGHTER 1</h3>
+                <div id="fighter1-name" class="fighter-name">-</div>
+                <div id="fighter1-stats" class="fighter-stats"></div>
+                <div id="fighter1-attrs" class="fighter-attrs"></div>
+                <div class="odds">Odds: <span id="odds1">-</span></div>
+                <div id="bet-buttons">
+                    <button id="bet-fighter1" class="bet-btn">BET ON FIGHTER 1</button>
+                </div>
+            </div>
+
+            <div class="vs-divider">
+                <div id="countdown-display" class="countdown">
+                    <div id="countdown-timer">10</div>
+                    <div class="countdown-label">seconds</div>
+                </div>
+            </div>
+
+            <div class="fighter-card right">
+                <h3>FIGHTER 2</h3>
+                <div id="fighter2-name" class="fighter-name">-</div>
+                <div id="fighter2-stats" class="fighter-stats"></div>
+                <div id="fighter2-attrs" class="fighter-attrs"></div>
+                <div class="odds">Odds: <span id="odds2">-</span></div>
+                <div id="bet-buttons">
+                    <button id="bet-fighter2" class="bet-btn">BET ON FIGHTER 2</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="betting-panel">
+            <div class="betting-info">
+                <div class="money-display">
+                    <span class="label">BALANCE:</span>
+                    <span class="money">$<span id="money">1000</span></span>
+                </div>
+                <div class="bet-amount-group">
+                    <label>Bet Amount: $</label>
+                    <input type="number" id="bet-amount" value="100" min="0" step="50">
+                </div>
+                <div class="current-bet-display">
+                    <span class="label">Current Bet:</span>
+                    <span id="current-bet">None</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-legend">
+            <span>PWR = Power</span>
+            <span>SPD = Speed</span>
+            <span>ARM = Armor</span>
+            <span>VIT = Vitality</span>
+            <span>FER = Ferocity</span>
+            <span>INS = Instinct</span>
+        </div>
+
+        <div class="attributes-legend">
+            <div class="attr-item"><span class="attr-dot" style="background:#0f0"></span> Venomous</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#888"></span> Armored</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#aaf"></span> Winged</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#a50"></span> Mandibles</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#f80"></span> Stinger</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#5f5"></span> Regenerative</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#ff0"></span> Multistrike</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#fff"></span> Webspinner</div>
+            <div class="attr-item"><span class="attr-dot" style="background:#595"></span> Camouflage</div>
+        </div>
+    </div>
+
+    <script src="js/sprites.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
