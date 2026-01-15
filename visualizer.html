@@ -308,15 +308,26 @@
 
             <!-- Controls -->
             <div class="controls-section">
-                <!-- Body Type -->
+                <!-- Abdomen Type -->
                 <div class="control-group">
-                    <h3>BODY TYPE</h3>
-                    <div class="option-buttons" id="body-options">
-                        <button class="option-btn selected" data-value="beetle">Beetle</button>
-                        <button class="option-btn" data-value="ant">Ant</button>
-                        <button class="option-btn" data-value="spider">Spider</button>
-                        <button class="option-btn" data-value="mantis">Mantis</button>
-                        <button class="option-btn" data-value="roach">Roach</button>
+                    <h3>ABDOMEN TYPE</h3>
+                    <div class="option-buttons" id="abdomen-options">
+                        <button class="option-btn selected" data-value="round">Round</button>
+                        <button class="option-btn" data-value="oval">Oval</button>
+                        <button class="option-btn" data-value="pointed">Pointed</button>
+                        <button class="option-btn" data-value="bulbous">Bulbous</button>
+                        <button class="option-btn" data-value="segmented">Segmented</button>
+                    </div>
+                </div>
+
+                <!-- Thorax Type -->
+                <div class="control-group">
+                    <h3>THORAX TYPE</h3>
+                    <div class="option-buttons" id="thorax-options">
+                        <button class="option-btn selected" data-value="compact">Compact</button>
+                        <button class="option-btn" data-value="elongated">Elongated</button>
+                        <button class="option-btn" data-value="wide">Wide</button>
+                        <button class="option-btn" data-value="humped">Humped</button>
                     </div>
                 </div>
 
@@ -326,8 +337,19 @@
                     <div class="option-buttons" id="head-options">
                         <button class="option-btn selected" data-value="round">Round</button>
                         <button class="option-btn" data-value="triangular">Triangular</button>
-                        <button class="option-btn" data-value="flat">Flat</button>
+                        <button class="option-btn" data-value="square">Square</button>
                         <button class="option-btn" data-value="elongated">Elongated</button>
+                        <button class="option-btn" data-value="pincer">Pincer</button>
+                    </div>
+                </div>
+
+                <!-- Leg Count -->
+                <div class="control-group">
+                    <h3>LEG COUNT</h3>
+                    <div class="option-buttons" id="legcount-options">
+                        <button class="option-btn" data-value="4">4</button>
+                        <button class="option-btn selected" data-value="6">6</button>
+                        <button class="option-btn" data-value="8">8</button>
                     </div>
                 </div>
 
@@ -335,10 +357,10 @@
                 <div class="control-group">
                     <h3>LEG STYLE</h3>
                     <div class="option-buttons" id="leg-options">
-                        <button class="option-btn selected" data-value="thin">Thin</button>
-                        <button class="option-btn" data-value="thick">Thick</button>
-                        <button class="option-btn" data-value="bent">Bent</button>
-                        <button class="option-btn" data-value="stubby">Stubby</button>
+                        <button class="option-btn selected" data-value="straight">Straight</button>
+                        <button class="option-btn" data-value="curved-back">Curved )</button>
+                        <button class="option-btn" data-value="curved-forward">Curved (</button>
+                        <button class="option-btn" data-value="short">Short</button>
                     </div>
                 </div>
 
@@ -349,7 +371,6 @@
                         <button class="option-btn selected" data-value="solid">Solid</button>
                         <button class="option-btn" data-value="striped">Striped</button>
                         <button class="option-btn" data-value="spotted">Spotted</button>
-                        <button class="option-btn" data-value="segmented">Segmented</button>
                     </div>
                 </div>
 
@@ -430,9 +451,9 @@
             </div>
         </div>
 
-        <!-- All Body Type Combinations -->
+        <!-- All Abdomen Type Combinations -->
         <div class="combinations-section">
-            <h2>ALL BODY TYPES</h2>
+            <h2>ALL ABDOMEN TYPES</h2>
             <div class="combinations-grid" id="body-grid"></div>
         </div>
     </div>
@@ -452,9 +473,11 @@
         // Get current selections
         function getSelections() {
             return {
-                bodyType: document.querySelector('#body-options .selected')?.dataset.value || 'beetle',
+                abdomenType: document.querySelector('#abdomen-options .selected')?.dataset.value || 'round',
+                thoraxType: document.querySelector('#thorax-options .selected')?.dataset.value || 'compact',
                 headType: document.querySelector('#head-options .selected')?.dataset.value || 'round',
-                legStyle: document.querySelector('#leg-options .selected')?.dataset.value || 'thin',
+                legCount: parseInt(document.querySelector('#legcount-options .selected')?.dataset.value || '3'),
+                legStyle: document.querySelector('#leg-options .selected')?.dataset.value || 'straight',
                 pattern: document.querySelector('#pattern-options .selected')?.dataset.value || 'solid',
                 weapon: document.querySelector('#weapon-options .selected')?.dataset.value || 'mandibles',
                 defense: document.querySelector('#defense-options .selected')?.dataset.value || 'shell',
@@ -479,8 +502,10 @@
                 speed: sel.speed,
                 fury: sel.fury,
                 instinct: sel.instinct,
-                bodyType: sel.bodyType,
+                abdomenType: sel.abdomenType,
+                thoraxType: sel.thoraxType,
                 headType: sel.headType,
+                legCount: sel.legCount,
                 legStyle: sel.legStyle,
                 pattern: sel.pattern,
                 weapon: sel.weapon,
@@ -508,7 +533,8 @@
             document.getElementById('bug-stats').innerHTML =
                 `Size: ${currentBug.size}px | ` +
                 `BLK:${g.bulk} SPD:${g.speed} FRY:${g.fury} INS:${g.instinct}<br>` +
-                `${g.bodyType} / ${g.headType} / ${g.legStyle} / ${g.pattern}`;
+                `Abd:${g.abdomenType} Thx:${g.thoraxType} Hd:${g.headType}<br>` +
+                `Legs:${g.legCount}x ${g.legStyle} / ${g.pattern}`;
 
             // Update color preview
             const hue = parseInt(document.getElementById('hue-slider').value);
@@ -595,34 +621,39 @@
             });
         }
 
-        // Generate body type grid
+        // Generate abdomen type grid
         function generateBodyGrid() {
             const grid = document.getElementById('body-grid');
             grid.innerHTML = '';
 
-            const bodyTypes = ['beetle', 'ant', 'spider', 'mantis', 'roach'];
+            const abdomenTypes = ['round', 'oval', 'pointed', 'bulbous', 'segmented'];
+            const thoraxTypes = ['compact', 'elongated', 'wide', 'humped'];
+            const headTypes = ['round', 'triangular', 'square', 'elongated', 'pincer'];
             const colors = [0, 60, 120, 180, 240, 300]; // Different hues
 
-            bodyTypes.forEach(bodyType => {
+            // Show different segment combinations
+            abdomenTypes.forEach(abdomenType => {
                 colors.forEach(hue => {
                     const cell = document.createElement('div');
                     cell.className = 'combo-cell';
-                    cell.title = `${bodyType} (hue: ${hue})`;
+                    cell.title = `${abdomenType} abdomen (hue: ${hue})`;
 
                     const miniCanvas = document.createElement('canvas');
                     miniCanvas.width = 64;
                     miniCanvas.height = 64;
                     cell.appendChild(miniCanvas);
 
-                    // Create bug with this body type
+                    // Create bug with this abdomen type
                     const genome = new BugGenome({
                         bulk: 60,
                         speed: 60,
                         fury: 60,
                         instinct: 60,
-                        bodyType: bodyType,
+                        abdomenType: abdomenType,
+                        thoraxType: 'compact',
                         headType: 'round',
-                        legStyle: 'thin',
+                        legCount: 6,
+                        legStyle: 'straight',
                         pattern: 'solid',
                         weapon: 'mandibles',
                         defense: 'shell',
@@ -637,8 +668,8 @@
                     // Click to apply
                     cell.addEventListener('click', () => {
                         // Update selections
-                        document.querySelectorAll('#body-options .option-btn').forEach(b => {
-                            b.classList.toggle('selected', b.dataset.value === bodyType);
+                        document.querySelectorAll('#abdomen-options .option-btn').forEach(b => {
+                            b.classList.toggle('selected', b.dataset.value === abdomenType);
                         });
                         document.getElementById('hue-slider').value = hue;
                         createBugFromSelections();
@@ -685,11 +716,17 @@
             const g = randomBug.genome;
 
             // Update all controls to match
-            document.querySelectorAll('#body-options .option-btn').forEach(b => {
-                b.classList.toggle('selected', b.dataset.value === g.bodyType);
+            document.querySelectorAll('#abdomen-options .option-btn').forEach(b => {
+                b.classList.toggle('selected', b.dataset.value === g.abdomenType);
+            });
+            document.querySelectorAll('#thorax-options .option-btn').forEach(b => {
+                b.classList.toggle('selected', b.dataset.value === g.thoraxType);
             });
             document.querySelectorAll('#head-options .option-btn').forEach(b => {
                 b.classList.toggle('selected', b.dataset.value === g.headType);
+            });
+            document.querySelectorAll('#legcount-options .option-btn').forEach(b => {
+                b.classList.toggle('selected', b.dataset.value === String(g.legCount));
             });
             document.querySelectorAll('#leg-options .option-btn').forEach(b => {
                 b.classList.toggle('selected', b.dataset.value === g.legStyle);
@@ -739,8 +776,10 @@
         // Initialize
         function init() {
             // Setup all option button groups
-            setupOptionButtons('body-options', createBugFromSelections);
+            setupOptionButtons('abdomen-options', createBugFromSelections);
+            setupOptionButtons('thorax-options', createBugFromSelections);
             setupOptionButtons('head-options', createBugFromSelections);
+            setupOptionButtons('legcount-options', createBugFromSelections);
             setupOptionButtons('leg-options', createBugFromSelections);
             setupOptionButtons('pattern-options', createBugFromSelections);
             setupOptionButtons('weapon-options', createBugFromSelections);

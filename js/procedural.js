@@ -1,5 +1,5 @@
-// Bug Fights - Procedural Bug Generator v2
-// Modular sprite system with distinct body types, heads, and legs
+// Bug Fights - Procedural Bug Generator v6
+// Reverting to pre-side-on visuals, keeping new wings
 
 // ============================================
 // BUG GENOME STRUCTURE
@@ -30,7 +30,6 @@ class BugGenome {
             remaining -= add;
         }
 
-        // Shuffle and assign
         for (let i = stats.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [stats[i], stats[j]] = [stats[j], stats[i]];
@@ -38,44 +37,41 @@ class BugGenome {
 
         [this.bulk, this.speed, this.fury, this.instinct] = stats;
 
-        // Body type determines base silhouette
-        this.bodyType = ['beetle', 'ant', 'spider', 'mantis', 'roach'][Math.floor(Math.random() * 5)];
+        // Three body segments
+        this.abdomenType = ['round', 'oval', 'pointed', 'bulbous', 'segmented'][Math.floor(Math.random() * 5)];
+        this.thoraxType = ['compact', 'elongated', 'wide', 'humped'][Math.floor(Math.random() * 4)];
+        this.headType = ['round', 'triangular', 'square', 'elongated', 'pincer'][Math.floor(Math.random() * 5)];
 
-        // Head type
-        this.headType = ['round', 'triangular', 'flat', 'elongated'][Math.floor(Math.random() * 4)];
-
-        // Leg style
-        this.legStyle = ['thin', 'thick', 'bent', 'stubby'][Math.floor(Math.random() * 4)];
+        // Leg count and style
+        this.legCount = [4, 6, 8][Math.floor(Math.random() * 3)];
+        this.legStyle = ['straight', 'curved-back', 'curved-forward', 'short'][Math.floor(Math.random() * 4)];
 
         // Pattern type
-        this.pattern = ['solid', 'striped', 'spotted', 'segmented'][Math.floor(Math.random() * 4)];
+        this.pattern = ['solid', 'striped', 'spotted'][Math.floor(Math.random() * 3)];
 
         // Combat types
         this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
         this.defense = ['shell', 'agility', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
 
-        // Color - primary and accent
+        // Color
         this.color = {
             hue: Math.random() * 360,
             saturation: 0.5 + Math.random() * 0.4,
             lightness: 0.35 + Math.random() * 0.25
         };
-
-        // Accent color for patterns
         this.accentHue = (this.color.hue + 30 + Math.random() * 60) % 360;
+        this.patternSeed = Math.floor(Math.random() * 10000);
     }
 
     breed(other) {
         const child = new BugGenome();
 
-        // Inherit stats with mutation
         child.bulk = this.inheritStat(this.bulk, other.bulk);
         child.speed = this.inheritStat(this.speed, other.speed);
         child.fury = this.inheritStat(this.fury, other.fury);
         child.instinct = this.inheritStat(this.instinct, other.instinct);
 
-        // Normalize to 350
         const total = child.bulk + child.speed + child.fury + child.instinct;
         const scale = 350 / total;
         child.bulk = Math.round(child.bulk * scale);
@@ -83,8 +79,8 @@ class BugGenome {
         child.fury = Math.round(child.fury * scale);
         child.instinct = 350 - child.bulk - child.speed - child.fury;
 
-        // Inherit types (dominant parent)
-        child.bodyType = Math.random() < 0.5 ? this.bodyType : other.bodyType;
+        child.abdomenType = Math.random() < 0.5 ? this.abdomenType : other.abdomenType;
+        child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
         child.headType = Math.random() < 0.5 ? this.headType : other.headType;
         child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
         child.pattern = Math.random() < 0.5 ? this.pattern : other.pattern;
@@ -92,13 +88,13 @@ class BugGenome {
         child.defense = Math.random() < 0.5 ? this.defense : other.defense;
         child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
 
-        // Blend colors
         child.color = {
             hue: this.blendHue(this.color.hue, other.color.hue),
             saturation: (this.color.saturation + other.color.saturation) / 2,
             lightness: (this.color.lightness + other.color.lightness) / 2
         };
         child.accentHue = this.blendHue(this.accentHue, other.accentHue);
+        child.patternSeed = Math.floor(Math.random() * 10000);
 
         return child;
     }
@@ -125,42 +121,31 @@ class BugGenome {
             claws: ['Slasher', 'Ripper', 'Shredder', 'Razor']
         };
         const suffixes = {
-            beetle: ['Back', 'Shell', 'Dome', 'Beetle'],
-            ant: ['March', 'Worker', 'Scout', 'Runner'],
-            spider: ['Web', 'Crawler', 'Hunter', 'Lurker'],
-            mantis: ['Blade', 'Stalker', 'Reaper', 'Scythe'],
-            roach: ['Roach', 'Scuttle', 'Creep', 'Skitter']
+            round: ['Blob', 'Orb', 'Ball', 'Dome'],
+            oval: ['Runner', 'Swift', 'Dash', 'Scout'],
+            pointed: ['Spike', 'Lance', 'Arrow', 'Dart'],
+            bulbous: ['Bulk', 'Mass', 'Tank', 'Heavy'],
+            segmented: ['Crawler', 'Creep', 'Chain', 'Link']
         };
         return prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +
-               suffixes[this.bodyType][Math.floor(Math.random() * 4)];
+               suffixes[this.abdomenType][Math.floor(Math.random() * 4)];
     }
 
-    // Size multiplier based on bulk and body type
     getSizeMultiplier() {
-        const baseSize = {
-            beetle: 1.0,
-            ant: 0.6,
-            spider: 0.85,
-            mantis: 1.3,
-            roach: 0.9
-        };
-        // Bulk affects size: low bulk = smaller, high bulk = bigger
-        const bulkMod = 0.5 + (this.bulk / 100) * 1.0; // 0.5x to 1.5x
-        return baseSize[this.bodyType] * bulkMod;
+        return 0.6 + (this.bulk / 100) * 0.9;
     }
 }
 
 // ============================================
-// SPRITE GENERATOR - Modular Body Parts
+// SPRITE GENERATOR
 // ============================================
 
 class BugSpriteGenerator {
     constructor(genome) {
         this.genome = genome;
         this.sizeMult = genome.getSizeMultiplier();
-        // Base size 24x24, scaled by size multiplier (range ~14 to ~38 pixels)
-        this.size = Math.round(24 * this.sizeMult);
-        this.size = Math.max(12, Math.min(48, this.size)); // Clamp
+        this.size = Math.round(32 * this.sizeMult);
+        this.size = Math.max(20, Math.min(48, this.size));
 
         this.canvas = document.createElement('canvas');
         this.canvas.width = this.size;
@@ -178,11 +163,12 @@ class BugSpriteGenerator {
 
         return [
             'transparent',
-            this.hslToHex(h, s, l * 0.5),       // Dark outline
-            this.hslToHex(h, s, l),              // Base color
-            this.hslToHex(h, s * 0.8, l * 1.3),  // Highlight
-            this.hslToHex(ah, s, l),             // Accent (for patterns)
-            this.hslToHex(ah, s, l * 1.3)        // Accent highlight
+            this.hslToHex(h, s, l * 0.4),       // 1: Dark outline
+            this.hslToHex(h, s, l * 0.7),       // 2: Shadow
+            this.hslToHex(h, s, l),              // 3: Base color
+            this.hslToHex(h, s * 0.8, l * 1.3),  // 4: Highlight
+            this.hslToHex(0, 0, 0.15),           // 5: Dark pattern
+            this.hslToHex(0, 0, 0.9)             // 6: Light pattern
         ];
     }
 
@@ -205,429 +191,488 @@ class BugSpriteGenerator {
 
     generateFrame(state = 'idle', frameNum = 0) {
         const grid = Array(this.size).fill(null).map(() => Array(this.size).fill(0));
-        const cx = Math.floor(this.size / 2);
-        const cy = Math.floor(this.size / 2);
+        const scale = this.size / 32;
 
-        // Animation parameters
-        const animPhase = frameNum * Math.PI / 2;
-        const isAttacking = state === 'attack';
-        const isHit = state === 'hit';
-        const isDead = state === 'death';
+        // Bug faces RIGHT, centered in canvas
+        const centerY = Math.floor(this.size / 2);
 
-        // Draw in order: legs, body, head, features
-        this.drawLegs(grid, cx, cy, state, frameNum);
-        this.drawBody(grid, cx, cy, state, frameNum);
-        this.drawHead(grid, cx, cy, state, frameNum);
+        // Segment positions with small gap for visual flair
+        const gap = Math.ceil(scale);
+        const thoraxX = Math.floor(14 * scale);
+        const abdomenX = Math.floor(6 * scale);
+        const headX = Math.floor(22 * scale);
 
-        // Wings if flying
+        // Animation offsets
+        const breathe = Math.sin(frameNum * Math.PI / 2) * scale * 0.5;
+        const isAttacking = state === 'attack' && frameNum >= 2;
+
+        // Draw legs first (behind body)
+        this.drawLegs(grid, thoraxX, centerY, scale, state, frameNum);
+
+        // Draw the three body segments
+        this.drawAbdomen(grid, abdomenX, centerY, scale, state, frameNum);
+        this.drawThorax(grid, thoraxX, centerY, scale, state, frameNum);
+        this.drawHead(grid, headX, centerY, scale, state, frameNum);
+
+        // Draw features
         if (this.genome.mobility === 'winged') {
-            this.drawWings(grid, cx, cy, state, frameNum);
+            this.drawWings(grid, thoraxX, centerY, scale, state, frameNum);
         }
 
-        // Weapon features
-        this.drawWeapon(grid, cx, cy, state, frameNum);
+        this.drawWeapon(grid, headX, centerY, scale, state, frameNum);
+        this.drawAntennae(grid, headX, centerY, scale, state, frameNum);
 
-        // Antennae based on instinct
-        this.drawAntennae(grid, cx, cy, state, frameNum);
+        if (this.genome.weapon === 'stinger') {
+            this.drawStinger(grid, abdomenX, centerY, scale, state, frameNum);
+        }
 
-        // Apply death transform
-        if (isDead && frameNum >= 2) {
+        // Apply pattern
+        this.applyPattern(grid);
+
+        // Death transform
+        if (state === 'death' && frameNum >= 2) {
             this.applyDeathTransform(grid, frameNum);
         }
 
         return grid;
     }
 
-    // BODY SHAPES - Core silhouette
-    drawBody(grid, cx, cy, state, frameNum) {
+    // ==================== ABDOMEN TYPES ====================
+    drawAbdomen(grid, cx, cy, scale, state, frameNum) {
         const g = this.genome;
-        const scale = this.size / 24; // Scale factor
+        const squash = state === 'hit' ? 1.3 : 1;
 
-        // Squash/stretch for hit/attack
-        let squashX = 1, squashY = 1;
-        if (state === 'hit') { squashX = 1.3; squashY = 0.7; }
-        if (state === 'attack' && frameNum >= 2) { squashX = 0.8; squashY = 1.2; }
-
-        switch (g.bodyType) {
-            case 'beetle':
-                this.drawBeetleBody(grid, cx, cy, scale, squashX, squashY);
+        switch (g.abdomenType) {
+            case 'round':
+                this.drawRoundAbdomen(grid, cx, cy, scale, squash);
                 break;
-            case 'ant':
-                this.drawAntBody(grid, cx, cy, scale, squashX, squashY);
+            case 'oval':
+                this.drawOvalAbdomen(grid, cx, cy, scale, squash);
                 break;
-            case 'spider':
-                this.drawSpiderBody(grid, cx, cy, scale, squashX, squashY);
+            case 'pointed':
+                this.drawPointedAbdomen(grid, cx, cy, scale, squash);
                 break;
-            case 'mantis':
-                this.drawMantisBody(grid, cx, cy, scale, squashX, squashY);
+            case 'bulbous':
+                this.drawBulbousAbdomen(grid, cx, cy, scale, squash);
                 break;
-            case 'roach':
-                this.drawRoachBody(grid, cx, cy, scale, squashX, squashY);
+            case 'segmented':
+                this.drawSegmentedAbdomen(grid, cx, cy, scale, squash);
                 break;
         }
-
-        // Apply pattern
-        this.applyPattern(grid, cx, cy);
     }
 
-    drawBeetleBody(grid, cx, cy, scale, sx, sy) {
-        // Round dome shape - like a ladybug
-        const w = Math.floor(6 * scale * sx);
-        const h = Math.floor(5 * scale * sy);
+    drawRoundAbdomen(grid, cx, cy, scale, squash) {
+        const r = Math.floor(5 * scale * squash);
+        this.fillOval(grid, cx, cy, r, r, 3, 2, 1);
+    }
 
-        for (let y = -h; y <= h; y++) {
-            for (let x = -w; x <= w; x++) {
+    drawOvalAbdomen(grid, cx, cy, scale, squash) {
+        const rx = Math.floor(6 * scale * squash);
+        const ry = Math.floor(4 * scale);
+        this.fillOval(grid, cx, cy, rx, ry, 3, 2, 1);
+    }
+
+    drawPointedAbdomen(grid, cx, cy, scale, squash) {
+        const len = Math.floor(7 * scale);
+        const maxH = Math.floor(4 * scale);
+        // Draw the pointed part extending backward (left)
+        for (let x = 0; x < len; x++) {
+            const progress = x / len;
+            const h = Math.floor(maxH * (1 - progress * 0.7));
+            for (let y = -h; y <= h; y++) {
+                const px = cx - x;
+                const py = cy + y;
+                if (this.inBounds(px, py)) {
+                    grid[py][px] = Math.abs(y) < h * 0.6 ? 3 : (Math.abs(y) < h ? 2 : 1);
+                }
+            }
+        }
+        // Extend toward thorax (right) with a rounded connection
+        const extendLen = Math.floor(4 * scale);
+        for (let x = 1; x <= extendLen; x++) {
+            const progress = x / extendLen;
+            const h = Math.floor(maxH * (1 - progress * 0.3));
+            for (let y = -h; y <= h; y++) {
                 const px = cx + x;
                 const py = cy + y;
-                if (px < 0 || px >= this.size || py < 0 || py >= this.size) continue;
-
-                const ex = x / w;
-                const ey = y / h;
-                const dist = ex * ex + ey * ey;
-
-                if (dist < 0.5) grid[py][px] = 3;
-                else if (dist < 0.8) grid[py][px] = 2;
-                else if (dist < 1.0) grid[py][px] = 1;
-            }
-        }
-
-        // Shell line down middle
-        for (let y = -h + 1; y < h; y++) {
-            const py = cy + y;
-            if (py >= 0 && py < this.size && cx >= 0 && cx < this.size) {
-                if (grid[py][cx] !== 0) grid[py][cx] = 1;
+                if (this.inBounds(px, py)) {
+                    grid[py][px] = Math.abs(y) < h * 0.6 ? 3 : (Math.abs(y) < h ? 2 : 1);
+                }
             }
         }
     }
 
-    drawAntBody(grid, cx, cy, scale, sx, sy) {
-        // Three segments: head, thorax, abdomen (side view shows elongated shape)
-        const segSize = Math.floor(2.5 * scale);
+    drawBulbousAbdomen(grid, cx, cy, scale, squash) {
+        const rx = Math.floor(7 * scale * squash);
+        const ry = Math.floor(6 * scale);
+        this.fillOval(grid, cx - Math.floor(scale), cy, rx, ry, 3, 2, 1);
+        this.fillOval(grid, cx - Math.floor(2 * scale), cy - Math.floor(scale),
+                      Math.floor(2 * scale), Math.floor(2 * scale), 4, 4, 4);
+    }
 
-        // Thorax (middle, smaller)
-        this.fillEllipse(grid, cx, cy, Math.floor(segSize * 0.8 * sx), Math.floor(segSize * 0.7 * sy), 2, 1);
-
-        // Abdomen (back, larger, oval)
-        const abdX = cx - Math.floor(3 * scale);
-        this.fillEllipse(grid, abdX, cy, Math.floor(segSize * 1.2 * sx), Math.floor(segSize * sy), 2, 1);
-
-        // Petiole (thin waist)
-        const waistX = cx - Math.floor(1 * scale);
-        if (waistX >= 0 && waistX < this.size) {
-            grid[cy][waistX] = 2;
+    drawSegmentedAbdomen(grid, cx, cy, scale, squash) {
+        const segments = 3;
+        const segR = Math.floor(3 * scale);
+        for (let i = 0; i < segments; i++) {
+            const sx = cx - i * Math.floor(3.5 * scale);
+            this.fillOval(grid, sx, cy, segR, Math.floor(segR * 0.9), 3, 2, 1);
         }
     }
 
-    drawSpiderBody(grid, cx, cy, scale, sx, sy) {
-        // Two round segments: cephalothorax and abdomen
-        const size1 = Math.floor(3 * scale);
-        const size2 = Math.floor(4 * scale);
-
-        // Cephalothorax (front)
-        this.fillEllipse(grid, cx + Math.floor(2 * scale), cy, size1 * sx, size1 * sy, 2, 1);
-
-        // Abdomen (back, larger)
-        this.fillEllipse(grid, cx - Math.floor(2 * scale), cy, size2 * sx, size2 * sy, 2, 1);
-    }
-
-    drawMantisBody(grid, cx, cy, scale, sx, sy) {
-        // Long, thin body - elongated thorax
-        const thoraxLen = Math.floor(7 * scale);
-        const thoraxH = Math.floor(2 * scale);
-
-        // Long thorax
-        for (let x = -thoraxLen / 2; x <= thoraxLen / 2; x++) {
-            for (let y = -thoraxH; y <= thoraxH; y++) {
-                const px = cx + Math.floor(x);
-                const py = cy + Math.floor(y);
-                if (px < 0 || px >= this.size || py < 0 || py >= this.size) continue;
-
-                const ey = Math.abs(y) / thoraxH;
-                if (ey < 0.7) grid[py][px] = 2;
-                else if (ey < 1.0) grid[py][px] = 1;
-            }
-        }
-
-        // Abdomen (back)
-        this.fillEllipse(grid, cx - Math.floor(5 * scale), cy, Math.floor(3 * scale * sx), Math.floor(2.5 * scale * sy), 2, 1);
-    }
-
-    drawRoachBody(grid, cx, cy, scale, sx, sy) {
-        // Oval, flat body
-        const w = Math.floor(5 * scale * sx);
-        const h = Math.floor(3 * scale * sy);
-
-        this.fillEllipse(grid, cx, cy, w, h, 2, 1);
-
-        // Pronotum (shield over head area)
-        const shieldX = cx + Math.floor(3 * scale);
-        this.fillEllipse(grid, shieldX, cy, Math.floor(2.5 * scale), Math.floor(2 * scale), 3, 1);
-    }
-
-    // HEAD SHAPES
-    drawHead(grid, cx, cy, state, frameNum) {
+    // ==================== THORAX TYPES ====================
+    drawThorax(grid, cx, cy, scale, state, frameNum) {
         const g = this.genome;
-        const scale = this.size / 24;
 
-        // Head position depends on body type
-        let headX = cx + Math.floor(5 * scale);
-        let headY = cy;
+        switch (g.thoraxType) {
+            case 'compact':
+                this.drawCompactThorax(grid, cx, cy, scale);
+                break;
+            case 'elongated':
+                this.drawElongatedThorax(grid, cx, cy, scale);
+                break;
+            case 'wide':
+                this.drawWideThorax(grid, cx, cy, scale);
+                break;
+            case 'humped':
+                this.drawHumpedThorax(grid, cx, cy, scale);
+                break;
+        }
+    }
 
-        if (g.bodyType === 'ant') headX = cx + Math.floor(3 * scale);
-        if (g.bodyType === 'mantis') headX = cx + Math.floor(6 * scale);
-        if (g.bodyType === 'spider') headX = cx + Math.floor(4 * scale);
+    drawCompactThorax(grid, cx, cy, scale) {
+        const r = Math.floor(3 * scale);
+        this.fillOval(grid, cx, cy, r, r, 3, 2, 1);
+    }
 
-        const headSize = Math.floor((1.5 + g.instinct / 150) * scale);
+    drawElongatedThorax(grid, cx, cy, scale) {
+        const rx = Math.floor(5 * scale);
+        const ry = Math.floor(2.5 * scale);
+        this.fillOval(grid, cx, cy, rx, ry, 3, 2, 1);
+    }
+
+    drawWideThorax(grid, cx, cy, scale) {
+        const rx = Math.floor(3.5 * scale);
+        const ry = Math.floor(4 * scale);
+        this.fillOval(grid, cx, cy, rx, ry, 3, 2, 1);
+    }
+
+    drawHumpedThorax(grid, cx, cy, scale) {
+        const rx = Math.floor(3.5 * scale);
+        const ry = Math.floor(3 * scale);
+        this.fillOval(grid, cx, cy, rx, ry, 3, 2, 1);
+        this.fillOval(grid, cx, cy - Math.floor(2 * scale),
+                      Math.floor(2 * scale), Math.floor(2 * scale), 4, 3, 2);
+    }
+
+    // ==================== HEAD TYPES ====================
+    drawHead(grid, cx, cy, scale, state, frameNum) {
+        const g = this.genome;
+        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(2 * scale) : 0;
+        const headX = cx + extend;
 
         switch (g.headType) {
             case 'round':
-                this.fillEllipse(grid, headX, headY, headSize, headSize, 2, 1);
+                this.drawRoundHead(grid, headX, cy, scale);
                 break;
             case 'triangular':
-                this.drawTriangleHead(grid, headX, headY, headSize);
+                this.drawTriangularHead(grid, headX, cy, scale);
                 break;
-            case 'flat':
-                this.fillEllipse(grid, headX, headY, headSize * 1.3, headSize * 0.6, 2, 1);
+            case 'square':
+                this.drawSquareHead(grid, headX, cy, scale);
                 break;
             case 'elongated':
-                this.fillEllipse(grid, headX, headY, headSize * 1.5, headSize * 0.8, 2, 1);
+                this.drawElongatedHead(grid, headX, cy, scale);
+                break;
+            case 'pincer':
+                this.drawPincerHead(grid, headX, cy, scale);
                 break;
         }
 
-        // Eyes
-        this.drawEyes(grid, headX, headY, headSize, scale);
+        this.drawEyes(grid, headX, cy, scale);
     }
 
-    drawTriangleHead(grid, hx, hy, size) {
-        for (let x = 0; x <= size; x++) {
-            const h = Math.floor(size * (1 - x / size));
-            for (let y = -h; y <= h; y++) {
-                const px = hx + x;
-                const py = hy + y;
-                if (px >= 0 && px < this.size && py >= 0 && py < this.size) {
-                    grid[py][px] = Math.abs(y) < h * 0.6 ? 2 : 1;
+    drawRoundHead(grid, cx, cy, scale) {
+        const r = Math.floor(3 * scale);
+        this.fillOval(grid, cx, cy, r, r, 3, 2, 1);
+    }
+
+    drawTriangularHead(grid, cx, cy, scale) {
+        const w = Math.floor(4 * scale);
+        const h = Math.floor(3 * scale);
+        // Draw the pointed part extending forward (right)
+        for (let x = 0; x <= w; x++) {
+            const progress = x / w;
+            const halfH = Math.floor(h * (1 - progress));
+            for (let y = -halfH; y <= halfH; y++) {
+                const px = cx + x;
+                const py = cy + y;
+                if (this.inBounds(px, py)) {
+                    grid[py][px] = Math.abs(y) < halfH * 0.5 ? 3 : 2;
+                }
+            }
+        }
+        // Extend backward toward thorax (left) with rounded connection
+        const extendLen = Math.floor(3 * scale);
+        for (let x = 1; x <= extendLen; x++) {
+            const progress = x / extendLen;
+            const halfH = Math.floor(h * (1 - progress * 0.4));
+            for (let y = -halfH; y <= halfH; y++) {
+                const px = cx - x;
+                const py = cy + y;
+                if (this.inBounds(px, py)) {
+                    grid[py][px] = Math.abs(y) < halfH * 0.5 ? 3 : 2;
+                }
+            }
+        }
+        // Outline at the base
+        for (let y = -h; y <= h; y++) {
+            if (this.inBounds(cx, cy + y)) grid[cy + y][cx] = 1;
+        }
+    }
+
+    drawSquareHead(grid, cx, cy, scale) {
+        const s = Math.floor(3 * scale);
+        for (let x = -s; x <= s; x++) {
+            for (let y = -s; y <= s; y++) {
+                const px = cx + x;
+                const py = cy + y;
+                if (this.inBounds(px, py)) {
+                    const edge = Math.abs(x) === s || Math.abs(y) === s;
+                    const nearEdge = Math.abs(x) >= s - 1 || Math.abs(y) >= s - 1;
+                    grid[py][px] = edge ? 1 : (nearEdge ? 2 : 3);
                 }
             }
         }
     }
 
-    drawEyes(grid, hx, hy, headSize, scale) {
-        // Compound eyes on sides of head
-        const eyeOffset = Math.max(1, Math.floor(headSize * 0.5));
-        const eyeX = hx + Math.floor(scale * 0.5);
+    drawElongatedHead(grid, cx, cy, scale) {
+        const rx = Math.floor(5 * scale);
+        const ry = Math.floor(2.5 * scale);
+        this.fillOval(grid, cx + Math.floor(scale), cy, rx, ry, 3, 2, 1);
+    }
 
-        const positions = [[eyeX, hy - eyeOffset], [eyeX, hy + eyeOffset]];
-        for (const [ex, ey] of positions) {
-            if (ex >= 0 && ex < this.size && ey >= 0 && ey < this.size) {
-                grid[ey][ex] = 3;
+    drawPincerHead(grid, cx, cy, scale) {
+        const r = Math.floor(2.5 * scale);
+        // Main head - slightly extended toward thorax
+        this.fillOval(grid, cx - Math.floor(scale), cy, Math.floor(3.5 * scale), r, 3, 2, 1);
+        // Pincers on top and bottom
+        this.fillOval(grid, cx - Math.floor(scale), cy - Math.floor(2.5 * scale),
+                      Math.floor(2 * scale), Math.floor(1.5 * scale), 2, 2, 1);
+        this.fillOval(grid, cx - Math.floor(scale), cy + Math.floor(2.5 * scale),
+                      Math.floor(2 * scale), Math.floor(1.5 * scale), 2, 2, 1);
+    }
+
+    drawEyes(grid, cx, cy, scale) {
+        const eyeR = Math.max(1, Math.floor(scale * 0.8));
+        const eyeOffset = Math.floor(2 * scale);
+        for (const yOff of [-eyeOffset, eyeOffset]) {
+            const ex = cx + Math.floor(scale);
+            const ey = cy + Math.floor(yOff * 0.6);
+            if (this.inBounds(ex, ey)) {
+                grid[ey][ex] = 4;
+                if (this.inBounds(ex + 1, ey)) grid[ey][ex + 1] = 1;
             }
         }
     }
 
-    // LEG STYLES
-    drawLegs(grid, cx, cy, state, frameNum) {
+    // ==================== LEG STYLES ====================
+    drawLegs(grid, cx, cy, scale, state, frameNum) {
         const g = this.genome;
-        const scale = this.size / 24;
+        const legCount = g.legCount || 6;
+        const legLen = Math.floor((5 + g.speed / 40) * scale);
 
-        const legCount = g.bodyType === 'spider' ? 4 : 3; // Pairs
-        const legLen = Math.floor((3 + g.speed / 40) * scale);
-
-        // Animation
         const animPhase = frameNum * Math.PI / 2;
 
+        // Span legs across the whole body (from abdomen to head area)
+        const totalSpan = Math.floor(16 * scale);
+        const spacing = legCount > 1 ? totalSpan / (legCount - 1) : 0;
+        const startOffset = -totalSpan / 2;
+
         for (let i = 0; i < legCount; i++) {
-            const offset = (i - (legCount - 1) / 2) * Math.floor(2.5 * scale);
+            const xOffset = legCount > 1 ? startOffset + i * spacing : 0;
             const legPhase = animPhase + i * Math.PI / legCount;
-            const anim = state === 'idle' ? Math.sin(legPhase) * scale : 0;
+            const anim = state === 'idle' ? Math.sin(legPhase) * scale * 0.5 : 0;
 
-            for (let side of [-1, 1]) {
-                switch (g.legStyle) {
-                    case 'thin':
-                        this.drawThinLeg(grid, cx + offset, cy, side, legLen, anim, scale);
-                        break;
-                    case 'thick':
-                        this.drawThickLeg(grid, cx + offset, cy, side, legLen, anim, scale);
-                        break;
-                    case 'bent':
-                        this.drawBentLeg(grid, cx + offset, cy, side, legLen, anim, scale);
-                        break;
-                    case 'stubby':
-                        this.drawStubbyLeg(grid, cx + offset, cy, side, legLen * 0.5, anim, scale);
-                        break;
-                }
+            const startX = cx + xOffset;
+            const startY = cy + Math.floor(1 * scale); // Start legs lower, below body center
+
+            if (g.legStyle === 'straight') {
+                this.drawStraightLeg(grid, startX, startY, legLen, anim, scale);
+            } else if (g.legStyle === 'curved-back') {
+                this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, -1);
+            } else if (g.legStyle === 'curved-forward') {
+                this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, 1);
+            } else if (g.legStyle === 'short') {
+                this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 0.7), anim, scale);
+            } else {
+                // Default fallback
+                this.drawStraightLeg(grid, startX, startY, legLen, anim, scale);
             }
         }
     }
 
-    drawThinLeg(grid, x, y, side, len, anim, scale) {
-        // Thin spider-like legs
+    drawStraightLeg(grid, x, y, len, anim, scale) {
+        // Simple straight leg going down
         for (let i = 1; i <= len; i++) {
-            const lx = Math.floor(x + side * i * 0.3);
+            const lx = Math.floor(x);
             const ly = Math.floor(y + i + anim * (i / len));
-            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
-                grid[ly][lx] = 1;
-            }
+            if (this.inBounds(lx, ly)) grid[ly][lx] = 1;
         }
     }
 
-    drawThickLeg(grid, x, y, side, len, anim, scale) {
-        // Thick beetle legs
+    drawCurvedLeg(grid, x, y, len, anim, scale, dir) {
+        // Curved leg like ( or )
         for (let i = 1; i <= len; i++) {
-            const lx = Math.floor(x + side * i * 0.4);
+            const t = i / len;
+            // Curve peaks in middle, returns to straight at end
+            const curve = Math.round(Math.sin(t * Math.PI) * 3) * dir;
+            const lx = Math.round(x + curve);
             const ly = Math.floor(y + i + anim * (i / len));
-            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
-                grid[ly][lx] = 1;
-                // Thicker
-                if (lx + side >= 0 && lx + side < this.size) {
-                    grid[ly][lx + side] = 1;
+            if (this.inBounds(lx, ly)) grid[ly][lx] = 1;
+        }
+    }
+
+    // ==================== WINGS (NEW STYLE - FROM TOP) ====================
+    drawWings(grid, cx, cy, scale, state, frameNum) {
+        const wingLen = Math.floor(10 * scale);
+        const wingH = Math.floor(6 * scale);
+        const flapPhase = Math.sin(frameNum * Math.PI * 0.5);
+        const flapAngle = flapPhase * 0.4;
+
+        // Start wings higher up, above the body
+        const wingBaseY = cy - Math.floor(5 * scale);
+
+        for (let i = 0; i < wingLen; i++) {
+            const progress = i / wingLen;
+            const wx = cx - Math.floor(i * 0.5);
+            const heightAtPoint = Math.floor(wingH * (1 - progress * 0.4));
+
+            for (let h = 0; h < heightAtPoint; h++) {
+                const wy = wingBaseY - h - Math.floor(i * flapAngle);
+                if (this.inBounds(wx, wy) && grid[wy][wx] === 0) {
+                    grid[wy][wx] = (h === 0 || i === 0) ? 1 : 4;
                 }
             }
         }
-    }
 
-    drawBentLeg(grid, x, y, side, len, anim, scale) {
-        // Grasshopper-style bent legs
-        const knee = Math.floor(len * 0.4);
-
-        // Upper leg (goes up and out)
-        for (let i = 1; i <= knee; i++) {
-            const lx = Math.floor(x + side * i * 0.5);
-            const ly = Math.floor(y - i * 0.3 + anim * 0.3);
-            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
-                grid[ly][lx] = 1;
-            }
-        }
-
-        // Lower leg (goes down sharply)
-        const kneeX = x + side * Math.floor(knee * 0.5);
-        const kneeY = y - Math.floor(knee * 0.3);
-        for (let i = 1; i <= len - knee; i++) {
-            const lx = Math.floor(kneeX + side * i * 0.2);
-            const ly = Math.floor(kneeY + i + anim);
-            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
-                grid[ly][lx] = 1;
-            }
+        // Wing vein
+        for (let i = 2; i < wingLen - 2; i++) {
+            const vx = cx - Math.floor(i * 0.5);
+            const vy = wingBaseY - Math.floor(3 * scale) - Math.floor(i * flapAngle);
+            if (this.inBounds(vx, vy)) grid[vy][vx] = 1;
         }
     }
 
-    drawStubbyLeg(grid, x, y, side, len, anim, scale) {
-        // Short stubby legs (ladybug style)
-        for (let i = 1; i <= len; i++) {
-            const lx = Math.floor(x + side * i * 0.6);
-            const ly = Math.floor(y + i * 0.8 + anim * 0.5);
-            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
-                grid[ly][lx] = 1;
-            }
-        }
-    }
-
-    // WINGS
-    drawWings(grid, cx, cy, state, frameNum) {
-        const scale = this.size / 24;
-        const wingSpan = Math.floor(4 * scale);
-        const flapPhase = Math.sin(frameNum * Math.PI);
-
-        for (let side of [-1, 1]) {
-            for (let i = 0; i < wingSpan; i++) {
-                const wx = cx - Math.floor(scale) + i;
-                const wy = cy + side * (Math.floor(2 * scale) + i + Math.floor(flapPhase * 2 * side));
-
-                if (wx >= 0 && wx < this.size && wy >= 0 && wy < this.size) {
-                    if (grid[wy][wx] === 0) {
-                        grid[wy][wx] = 3; // Translucent wing color
-                    }
-                }
-                // Wing edge
-                if (wx + 1 < this.size && wy >= 0 && wy < this.size) {
-                    if (grid[wy][wx + 1] === 0) {
-                        grid[wy][wx + 1] = 1;
-                    }
-                }
-            }
-        }
-    }
-
-    // WEAPONS
-    drawWeapon(grid, cx, cy, state, frameNum) {
+    // ==================== WEAPONS ====================
+    drawWeapon(grid, headX, cy, scale, state, frameNum) {
         const g = this.genome;
-        const scale = this.size / 24;
-        const headX = cx + Math.floor(5 * scale);
-        const weaponSize = Math.floor((1 + g.fury / 60) * scale);
+        if (g.weapon === 'stinger') return;
 
-        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(2 * scale) : 0;
+        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(3 * scale) : 0;
+        const weaponSize = Math.floor((2 + g.fury / 40) * scale);
 
         switch (g.weapon) {
             case 'mandibles':
-                // Large pincers
-                for (let i = 0; i < weaponSize + 1; i++) {
-                    const mx = headX + i + extend;
-                    if (mx < this.size) {
-                        const spread = Math.floor(1 + i * 0.5);
-                        if (cy - spread >= 0) grid[cy - spread][mx] = 1;
-                        if (cy + spread < this.size) grid[cy + spread][mx] = 1;
-                    }
-                }
+                this.drawMandibles(grid, headX, cy, scale, weaponSize, extend);
                 break;
-
-            case 'stinger':
-                // Tail stinger
-                const tailX = cx - Math.floor(6 * scale);
-                for (let i = 0; i < weaponSize + 2; i++) {
-                    const sx = tailX - i;
-                    if (sx >= 0 && sx < this.size) {
-                        grid[cy][sx] = i === weaponSize + 1 ? 3 : 1;
-                    }
-                }
-                break;
-
             case 'fangs':
-                // Two fangs pointing down
-                for (let i = 0; i < weaponSize; i++) {
-                    const fx = headX + 1;
-                    const fy1 = cy - 1 + i + extend;
-                    const fy2 = cy + 1 - i - extend;
-                    if (fx < this.size) {
-                        if (fy1 < this.size) grid[fy1][fx] = 1;
-                        if (fy2 >= 0) grid[fy2][fx] = 1;
-                    }
-                }
+                this.drawFangs(grid, headX, cy, scale, weaponSize, extend);
                 break;
-
             case 'claws':
-                // Raptorial front legs (mantis style)
-                for (let side of [-1, 1]) {
-                    for (let i = 0; i < weaponSize + 1; i++) {
-                        const clx = headX + Math.floor(i * 0.5) + extend;
-                        const cly = cy + side * (1 + i);
-                        if (clx >= 0 && clx < this.size && cly >= 0 && cly < this.size) {
-                            grid[cly][clx] = 1;
-                        }
-                    }
-                }
+                this.drawClaws(grid, headX, cy, scale, weaponSize, extend);
                 break;
         }
     }
 
-    // ANTENNAE
-    drawAntennae(grid, cx, cy, state, frameNum) {
-        const g = this.genome;
-        const scale = this.size / 24;
-        const headX = cx + Math.floor(5 * scale);
-        const antennaLen = Math.floor((1 + g.instinct / 50) * scale);
+    drawMandibles(grid, hx, cy, scale, size, extend) {
+        for (const side of [-1, 1]) {
+            for (let i = 0; i <= size; i++) {
+                const progress = i / size;
+                const spread = Math.floor(side * (1 + i * 0.6) * scale);
+                const mx = hx + Math.floor(2 * scale) + i + extend;
+                const my = cy + spread;
 
-        for (let side of [-1, 1]) {
-            for (let i = 1; i <= antennaLen; i++) {
-                const ax = headX + i;
-                const ay = cy + side * Math.floor(i * 0.6);
-                if (ax >= 0 && ax < this.size && ay >= 0 && ay < this.size) {
-                    grid[ay][ax] = 1;
-                }
+                if (this.inBounds(mx, my)) grid[my][mx] = 1;
+                if (this.inBounds(mx, my - side)) grid[my - side][mx] = 1;
+            }
+            const tipX = hx + Math.floor(2 * scale) + size + extend;
+            const tipY = cy + Math.floor(side * (1 + size * 0.6) * scale);
+            if (this.inBounds(tipX + 1, tipY)) grid[tipY][tipX + 1] = 1;
+        }
+    }
+
+    drawFangs(grid, hx, cy, scale, size, extend) {
+        for (const side of [-1, 1]) {
+            const baseX = hx + Math.floor(2 * scale) + extend;
+            const baseY = cy + side * Math.floor(scale);
+            for (let i = 0; i <= size; i++) {
+                const fx = baseX + Math.floor(i * 0.3);
+                const fy = baseY + side * i;
+                if (this.inBounds(fx, fy)) grid[fy][fx] = 1;
+            }
+        }
+        if (this.genome.fury > 60) {
+            const dripX = hx + Math.floor(3 * scale) + extend;
+            const dripY = cy + Math.floor(size + 2);
+            if (this.inBounds(dripX, dripY)) grid[dripY][dripX] = 6;
+        }
+    }
+
+    drawClaws(grid, hx, cy, scale, size, extend) {
+        for (const side of [-1, 1]) {
+            for (let i = 0; i < size; i++) {
+                const ax = hx + Math.floor(scale) + Math.floor(i * 0.5);
+                const ay = cy + side * (Math.floor(2 * scale) + i);
+                if (this.inBounds(ax, ay)) grid[ay][ax] = 1;
+                if (this.inBounds(ax + 1, ay)) grid[ay][ax + 1] = 1;
+            }
+            const elbowX = hx + Math.floor(scale) + Math.floor(size * 0.5);
+            const elbowY = cy + side * (Math.floor(2 * scale) + size);
+            for (let i = 0; i < Math.floor(size * 0.7); i++) {
+                const clawX = elbowX + extend + i;
+                const clawY = elbowY - side * Math.floor(i * 0.3);
+                if (this.inBounds(clawX, clawY)) grid[clawY][clawX] = 1;
             }
         }
     }
 
-    // PATTERNS
-    applyPattern(grid, cx, cy) {
+    drawStinger(grid, abdX, cy, scale, state, frameNum) {
+        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(3 * scale) : 0;
+        const stingerLen = Math.floor((3 + this.genome.fury / 30) * scale);
+
+        for (let i = 0; i < stingerLen; i++) {
+            const progress = i / stingerLen;
+            const curve = Math.sin(progress * Math.PI * 0.5) * scale;
+            const sx = abdX - Math.floor(5 * scale) - i - extend;
+            const sy = cy - Math.floor(curve);
+
+            if (this.inBounds(sx, sy)) {
+                grid[sy][sx] = i === stingerLen - 1 ? 4 : 1;
+            }
+            if (i < stingerLen - 1 && this.inBounds(sx, sy + 1)) {
+                grid[sy + 1][sx] = 1;
+            }
+        }
+    }
+
+    drawAntennae(grid, hx, cy, scale, state, frameNum) {
+        const antennaLen = Math.floor((2 + this.genome.instinct / 40) * scale);
+        const wave = Math.sin(frameNum * Math.PI / 2) * scale * 0.5;
+
+        for (const side of [-1, 1]) {
+            for (let i = 1; i <= antennaLen; i++) {
+                const ax = hx + Math.floor(2 * scale) + i;
+                const ay = cy + side * Math.floor(i * 0.8 + wave);
+                if (this.inBounds(ax, ay)) grid[ay][ax] = 1;
+            }
+            const tipX = hx + Math.floor(2 * scale) + antennaLen + 1;
+            const tipY = cy + side * Math.floor(antennaLen * 0.8 + wave);
+            if (this.inBounds(tipX, tipY)) grid[tipY][tipX] = 4;
+        }
+    }
+
+    // ==================== PATTERNS ====================
+    applyPattern(grid) {
         const g = this.genome;
 
         switch (g.pattern) {
@@ -635,49 +680,40 @@ class BugSpriteGenerator {
                 this.applyStripes(grid);
                 break;
             case 'spotted':
-                this.applySpots(grid, cx, cy);
+                this.applySpots(grid);
                 break;
-            case 'segmented':
-                this.applySegments(grid);
-                break;
-            // 'solid' - no pattern
         }
     }
 
     applyStripes(grid) {
-        // Horizontal stripes
-        for (let y = 0; y < this.size; y++) {
-            if (y % 3 === 0) {
-                for (let x = 0; x < this.size; x++) {
-                    if (grid[y][x] === 2) {
-                        grid[y][x] = 4; // Accent color
-                    }
-                }
-            }
-        }
-    }
-
-    applySpots(grid, cx, cy) {
-        // Random spots
-        const spotCount = 3 + Math.floor(Math.random() * 4);
-        for (let i = 0; i < spotCount; i++) {
-            const sx = cx + Math.floor((Math.random() - 0.5) * this.size * 0.6);
-            const sy = cy + Math.floor((Math.random() - 0.5) * this.size * 0.4);
-            if (sx >= 0 && sx < this.size && sy >= 0 && sy < this.size) {
-                if (grid[sy][sx] === 2 || grid[sy][sx] === 3) {
-                    grid[sy][sx] = 4;
-                }
-            }
-        }
-    }
-
-    applySegments(grid) {
-        // Vertical segment lines
         for (let x = 0; x < this.size; x++) {
-            if (x % 4 === 0) {
+            if (x % 4 < 2) {
                 for (let y = 0; y < this.size; y++) {
-                    if (grid[y][x] === 2) {
-                        grid[y][x] = 1; // Dark line
+                    if (grid[y][x] === 3) grid[y][x] = 5;
+                }
+            }
+        }
+    }
+
+    applySpots(grid) {
+        const seed = this.genome.patternSeed || 0;
+        const spotCount = 5 + (seed % 4);
+
+        const seededRandom = (n) => {
+            const x = Math.sin(seed + n * 127.1) * 43758.5453;
+            return x - Math.floor(x);
+        };
+
+        for (let i = 0; i < spotCount; i++) {
+            const sx = Math.floor(seededRandom(i * 2) * this.size);
+            const sy = Math.floor(seededRandom(i * 2 + 1) * this.size);
+            const spotColor = this.genome.color.lightness > 0.45 ? 5 : 6;
+
+            if (this.inBounds(sx, sy) && grid[sy][sx] === 3) {
+                grid[sy][sx] = spotColor;
+                for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                    if (this.inBounds(sx+dx, sy+dy) && grid[sy+dy][sx+dx] === 3) {
+                        grid[sy+dy][sx+dx] = spotColor;
                     }
                 }
             }
@@ -704,20 +740,25 @@ class BugSpriteGenerator {
         }
     }
 
-    // Utility: fill ellipse
-    fillEllipse(grid, cx, cy, rx, ry, fillColor, outlineColor) {
+    // ==================== UTILITIES ====================
+    inBounds(x, y) {
+        return x >= 0 && x < this.size && y >= 0 && y < this.size;
+    }
+
+    fillOval(grid, cx, cy, rx, ry, fillColor, midColor, outlineColor) {
         rx = Math.max(1, Math.floor(rx));
         ry = Math.max(1, Math.floor(ry));
 
-        for (let y = -ry; y <= ry; y++) {
-            for (let x = -rx; x <= rx; x++) {
+        for (let y = -ry - 1; y <= ry + 1; y++) {
+            for (let x = -rx - 1; x <= rx + 1; x++) {
                 const px = Math.floor(cx + x);
                 const py = Math.floor(cy + y);
-                if (px < 0 || px >= this.size || py < 0 || py >= this.size) continue;
+                if (!this.inBounds(px, py)) continue;
 
                 const dist = (x * x) / (rx * rx) + (y * y) / (ry * ry);
-                if (dist < 0.7) grid[py][px] = fillColor;
-                else if (dist < 1.0) grid[py][px] = outlineColor;
+                if (dist < 0.5) grid[py][px] = fillColor;
+                else if (dist < 0.85) grid[py][px] = midColor;
+                else if (dist < 1.1) grid[py][px] = outlineColor;
             }
         }
     }
@@ -765,7 +806,8 @@ class BugFactory {
                     FURY: genome.fury,
                     INSTINCT: genome.instinct
                 },
-                bodyType: genome.bodyType,
+                abdomenType: genome.abdomenType,
+                thoraxType: genome.thoraxType,
                 headType: genome.headType,
                 legStyle: genome.legStyle,
                 pattern: genome.pattern,
