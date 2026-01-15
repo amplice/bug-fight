@@ -1,5 +1,5 @@
-// Bug Fights - Procedural Bug Generator
-// Generates bug sprites based on genetic traits
+// Bug Fights - Procedural Bug Generator v2
+// Modular sprite system with distinct body types, heads, and legs
 
 // ============================================
 // BUG GENOME STRUCTURE
@@ -8,90 +8,68 @@
 class BugGenome {
     constructor(data = null) {
         if (data) {
-            // Clone existing genome
-            this.bulk = data.bulk;
-            this.speed = data.speed;
-            this.fury = data.fury;
-            this.instinct = data.instinct;
-            this.weapon = data.weapon;
-            this.defense = data.defense;
-            this.mobility = data.mobility;
+            Object.assign(this, data);
             this.color = { ...data.color };
         } else {
-            // Generate random genome
             this.randomize();
         }
     }
 
     randomize() {
-        // Distribute exactly 350 points across 4 stats
-        // Each stat: min 10, max 100
-        const TOTAL_POINTS = 350;
-        const MIN_STAT = 10;
-        const MAX_STAT = 100;
-        const NUM_STATS = 4;
+        // Distribute exactly 350 points across 4 stats (min 10, max 100 each)
+        const TOTAL = 350, MIN = 10, MAX = 100;
+        const stats = [MIN, MIN, MIN, MIN];
+        let remaining = TOTAL - MIN * 4;
 
-        // Start all stats at minimum
-        const stats = [MIN_STAT, MIN_STAT, MIN_STAT, MIN_STAT];
-        let remaining = TOTAL_POINTS - (MIN_STAT * NUM_STATS); // 310 points to distribute
-
-        // Distribute remaining points randomly
         while (remaining > 0) {
-            // Pick a random stat that hasn't hit max
-            const available = [];
-            for (let i = 0; i < NUM_STATS; i++) {
-                if (stats[i] < MAX_STAT) available.push(i);
-            }
-
-            if (available.length === 0) break;
-
+            const available = stats.map((s, i) => s < MAX ? i : -1).filter(i => i >= 0);
+            if (!available.length) break;
             const idx = available[Math.floor(Math.random() * available.length)];
-            const maxAdd = Math.min(remaining, MAX_STAT - stats[idx]);
-            // Add random amount (weighted toward smaller increments for variety)
-            const add = Math.min(maxAdd, Math.floor(Math.random() * 30) + 1);
+            const add = Math.min(remaining, MAX - stats[idx], Math.floor(Math.random() * 25) + 1);
             stats[idx] += add;
             remaining -= add;
         }
 
-        // If any points remain, distribute to non-maxed stats
-        while (remaining > 0) {
-            for (let i = 0; i < NUM_STATS && remaining > 0; i++) {
-                if (stats[i] < MAX_STAT) {
-                    const add = Math.min(remaining, MAX_STAT - stats[i]);
-                    stats[i] += add;
-                    remaining -= add;
-                }
-            }
-        }
-
-        // Shuffle the stats array to randomize which stat gets what
+        // Shuffle and assign
         for (let i = stats.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [stats[i], stats[j]] = [stats[j], stats[i]];
         }
 
-        this.bulk = stats[0];
-        this.speed = stats[1];
-        this.fury = stats[2];
-        this.instinct = stats[3];
+        [this.bulk, this.speed, this.fury, this.instinct] = stats;
 
-        // Random types
+        // Body type determines base silhouette
+        this.bodyType = ['beetle', 'ant', 'spider', 'mantis', 'roach'][Math.floor(Math.random() * 5)];
+
+        // Head type
+        this.headType = ['round', 'triangular', 'flat', 'elongated'][Math.floor(Math.random() * 4)];
+
+        // Leg style
+        this.legStyle = ['thin', 'thick', 'bent', 'stubby'][Math.floor(Math.random() * 4)];
+
+        // Pattern type
+        this.pattern = ['solid', 'striped', 'spotted', 'segmented'][Math.floor(Math.random() * 4)];
+
+        // Combat types
         this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
         this.defense = ['shell', 'agility', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
 
-        // Random color
+        // Color - primary and accent
         this.color = {
             hue: Math.random() * 360,
             saturation: 0.5 + Math.random() * 0.4,
-            lightness: 0.3 + Math.random() * 0.3
+            lightness: 0.35 + Math.random() * 0.25
         };
+
+        // Accent color for patterns
+        this.accentHue = (this.color.hue + 30 + Math.random() * 60) % 360;
     }
 
     breed(other) {
         const child = new BugGenome();
 
-        // Stats: weighted average with mutation
+        // Inherit stats with mutation
         child.bulk = this.inheritStat(this.bulk, other.bulk);
         child.speed = this.inheritStat(this.speed, other.speed);
         child.fury = this.inheritStat(this.fury, other.fury);
@@ -105,92 +83,90 @@ class BugGenome {
         child.fury = Math.round(child.fury * scale);
         child.instinct = 350 - child.bulk - child.speed - child.fury;
 
-        // Types: inherit from one parent (80% chance) or other (20%)
-        child.weapon = Math.random() < 0.8 ? this.weapon : other.weapon;
-        child.defense = Math.random() < 0.8 ? this.defense : other.defense;
-        child.mobility = Math.random() < 0.8 ? this.mobility : other.mobility;
+        // Inherit types (dominant parent)
+        child.bodyType = Math.random() < 0.5 ? this.bodyType : other.bodyType;
+        child.headType = Math.random() < 0.5 ? this.headType : other.headType;
+        child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
+        child.pattern = Math.random() < 0.5 ? this.pattern : other.pattern;
+        child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
+        child.defense = Math.random() < 0.5 ? this.defense : other.defense;
+        child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
 
-        // Small chance of type mutation
-        if (Math.random() < 0.05) {
-            child.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
-        }
-        if (Math.random() < 0.05) {
-            child.defense = ['shell', 'agility', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
-        }
-        if (Math.random() < 0.02) {
-            child.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
-        }
-
-        // Color: blend with small mutation
+        // Blend colors
         child.color = {
-            hue: this.blendHue(this.color.hue, other.color.hue) + (Math.random() - 0.5) * 20,
-            saturation: (this.color.saturation + other.color.saturation) / 2 + (Math.random() - 0.5) * 0.1,
-            lightness: (this.color.lightness + other.color.lightness) / 2 + (Math.random() - 0.5) * 0.1
+            hue: this.blendHue(this.color.hue, other.color.hue),
+            saturation: (this.color.saturation + other.color.saturation) / 2,
+            lightness: (this.color.lightness + other.color.lightness) / 2
         };
-        child.color.hue = (child.color.hue + 360) % 360;
-        child.color.saturation = Math.max(0.3, Math.min(0.9, child.color.saturation));
-        child.color.lightness = Math.max(0.25, Math.min(0.55, child.color.lightness));
+        child.accentHue = this.blendHue(this.accentHue, other.accentHue);
 
         return child;
     }
 
     inheritStat(a, b) {
-        // Weighted average with mutation
         const avg = (a + b) / 2;
-        const mutation = (Math.random() - 0.5) * 20; // ±10 points
+        const mutation = (Math.random() - 0.5) * 20;
         return Math.max(10, Math.min(100, Math.round(avg + mutation)));
     }
 
     blendHue(h1, h2) {
-        // Blend hues correctly around the color wheel
         const diff = h2 - h1;
         if (Math.abs(diff) > 180) {
-            if (diff > 0) {
-                return (h1 + (diff - 360) / 2 + 360) % 360;
-            } else {
-                return (h1 + (diff + 360) / 2) % 360;
-            }
+            return diff > 0 ? (h1 + (diff - 360) / 2 + 360) % 360 : (h1 + (diff + 360) / 2) % 360;
         }
-        return h1 + diff / 2;
+        return (h1 + diff / 2 + 360) % 360;
     }
 
     getName() {
-        // Generate a procedural name based on traits
         const prefixes = {
             mandibles: ['Crusher', 'Gnasher', 'Chomper', 'Breaker'],
             stinger: ['Piercer', 'Stabber', 'Lancer', 'Spike'],
-            fangs: ['Venom', 'Toxic', 'Poison', 'Blight'],
+            fangs: ['Venom', 'Toxic', 'Biter', 'Fang'],
             claws: ['Slasher', 'Ripper', 'Shredder', 'Razor']
         };
-
         const suffixes = {
-            shell: ['Shell', 'Carapace', 'Plate', 'Guard'],
-            agility: ['Dancer', 'Blur', 'Flash', 'Swift'],
-            toxic: ['Bane', 'Plague', 'Miasma', 'Rot'],
-            camouflage: ['Shadow', 'Ghost', 'Phantom', 'Shade']
+            beetle: ['Back', 'Shell', 'Dome', 'Beetle'],
+            ant: ['March', 'Worker', 'Scout', 'Runner'],
+            spider: ['Web', 'Crawler', 'Hunter', 'Lurker'],
+            mantis: ['Blade', 'Stalker', 'Reaper', 'Scythe'],
+            roach: ['Roach', 'Scuttle', 'Creep', 'Skitter']
         };
+        return prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +
+               suffixes[this.bodyType][Math.floor(Math.random() * 4)];
+    }
 
-        const prefix = prefixes[this.weapon][Math.floor(Math.random() * 4)];
-        const suffix = suffixes[this.defense][Math.floor(Math.random() * 4)];
-
-        return `${prefix} ${suffix}`;
+    // Size multiplier based on bulk and body type
+    getSizeMultiplier() {
+        const baseSize = {
+            beetle: 1.0,
+            ant: 0.6,
+            spider: 0.85,
+            mantis: 1.3,
+            roach: 0.9
+        };
+        // Bulk affects size: low bulk = smaller, high bulk = bigger
+        const bulkMod = 0.5 + (this.bulk / 100) * 1.0; // 0.5x to 1.5x
+        return baseSize[this.bodyType] * bulkMod;
     }
 }
 
 // ============================================
-// PROCEDURAL SPRITE GENERATOR
+// SPRITE GENERATOR - Modular Body Parts
 // ============================================
 
 class BugSpriteGenerator {
     constructor(genome) {
         this.genome = genome;
-        this.size = 16;
+        this.sizeMult = genome.getSizeMultiplier();
+        // Base size 24x24, scaled by size multiplier (range ~14 to ~38 pixels)
+        this.size = Math.round(24 * this.sizeMult);
+        this.size = Math.max(12, Math.min(48, this.size)); // Clamp
+
         this.canvas = document.createElement('canvas');
         this.canvas.width = this.size;
         this.canvas.height = this.size;
         this.ctx = this.canvas.getContext('2d');
 
-        // Generate color palette from genome
         this.colors = this.generatePalette();
     }
 
@@ -198,23 +174,24 @@ class BugSpriteGenerator {
         const h = this.genome.color.hue;
         const s = this.genome.color.saturation;
         const l = this.genome.color.lightness;
+        const ah = this.genome.accentHue;
 
         return [
             'transparent',
-            this.hslToHex(h, s, l * 0.6),      // Dark
-            this.hslToHex(h, s, l),             // Base
-            this.hslToHex(h, s * 0.8, l * 1.4)  // Highlight
+            this.hslToHex(h, s, l * 0.5),       // Dark outline
+            this.hslToHex(h, s, l),              // Base color
+            this.hslToHex(h, s * 0.8, l * 1.3),  // Highlight
+            this.hslToHex(ah, s, l),             // Accent (for patterns)
+            this.hslToHex(ah, s, l * 1.3)        // Accent highlight
         ];
     }
 
     hslToHex(h, s, l) {
         l = Math.max(0, Math.min(1, l));
         s = Math.max(0, Math.min(1, s));
-
         const c = (1 - Math.abs(2 * l - 1)) * s;
         const x = c * (1 - Math.abs((h / 60) % 2 - 1));
         const m = l - c / 2;
-
         let r, g, b;
         if (h < 60) { r = c; g = x; b = 0; }
         else if (h < 120) { r = x; g = c; b = 0; }
@@ -222,257 +199,408 @@ class BugSpriteGenerator {
         else if (h < 240) { r = 0; g = x; b = c; }
         else if (h < 300) { r = x; g = 0; b = c; }
         else { r = c; g = 0; b = x; }
-
-        const toHex = v => {
-            const hex = Math.round((v + m) * 255).toString(16);
-            return hex.length === 1 ? '0' + hex : hex;
-        };
-
+        const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
         return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
     }
 
-    // Generate a single frame as a 2D array of color indices
     generateFrame(state = 'idle', frameNum = 0) {
         const grid = Array(this.size).fill(null).map(() => Array(this.size).fill(0));
+        const cx = Math.floor(this.size / 2);
+        const cy = Math.floor(this.size / 2);
 
-        // Calculate dimensions based on stats
-        const bulkFactor = this.genome.bulk / 100;
-        const speedFactor = this.genome.speed / 100;
-        const furyFactor = this.genome.fury / 100;
-        const instinctFactor = this.genome.instinct / 100;
+        // Animation parameters
+        const animPhase = frameNum * Math.PI / 2;
+        const isAttacking = state === 'attack';
+        const isHit = state === 'hit';
+        const isDead = state === 'death';
 
-        // Body dimensions
-        const bodyWidth = Math.floor(4 + bulkFactor * 5);  // 4-9
-        const bodyHeight = Math.floor(3 + bulkFactor * 3); // 3-6
-        const bodyLength = Math.floor(5 + speedFactor * 3); // elongation for speed
+        // Draw in order: legs, body, head, features
+        this.drawLegs(grid, cx, cy, state, frameNum);
+        this.drawBody(grid, cx, cy, state, frameNum);
+        this.drawHead(grid, cx, cy, state, frameNum);
 
-        // Center of bug
-        const cx = 8;
-        const cy = 8;
-
-        // Animation offsets
-        const animBob = Math.sin(frameNum * Math.PI / 2) * (state === 'idle' ? 0.5 : 0);
-        const animSquash = state === 'attack' ? (frameNum < 2 ? 0.8 : 1.2) : 1;
-        const animHit = state === 'hit' ? 1.3 : 1;
-
-        // Draw body
-        this.drawBody(grid, cx, cy + animBob, bodyWidth * animSquash * animHit, bodyHeight, state, frameNum);
-
-        // Draw legs based on mobility and speed
-        this.drawLegs(grid, cx, cy + animBob, bodyWidth, speedFactor, state, frameNum);
-
-        // Draw head with sensory organs based on instinct
-        this.drawHead(grid, cx, cy + animBob, instinctFactor, state, frameNum);
-
-        // Draw weapon based on type and fury
-        this.drawWeapon(grid, cx, cy + animBob, furyFactor, state, frameNum);
-
-        // Draw wings if winged
+        // Wings if flying
         if (this.genome.mobility === 'winged') {
-            this.drawWings(grid, cx, cy + animBob, state, frameNum);
+            this.drawWings(grid, cx, cy, state, frameNum);
         }
 
-        // Draw defense features
-        this.drawDefense(grid, cx, cy + animBob, state, frameNum);
+        // Weapon features
+        this.drawWeapon(grid, cx, cy, state, frameNum);
 
-        // Death animation - fall over
-        if (state === 'death') {
+        // Antennae based on instinct
+        this.drawAntennae(grid, cx, cy, state, frameNum);
+
+        // Apply death transform
+        if (isDead && frameNum >= 2) {
             this.applyDeathTransform(grid, frameNum);
         }
 
         return grid;
     }
 
-    drawBody(grid, cx, cy, width, height, state, frameNum) {
-        const hw = Math.floor(width / 2);
-        const hh = Math.floor(height / 2);
+    // BODY SHAPES - Core silhouette
+    drawBody(grid, cx, cy, state, frameNum) {
+        const g = this.genome;
+        const scale = this.size / 24; // Scale factor
 
-        // Main body ellipse
-        for (let y = -hh; y <= hh; y++) {
-            for (let x = -hw - 1; x <= hw + 1; x++) {
-                const px = Math.floor(cx + x);
-                const py = Math.floor(cy + y);
+        // Squash/stretch for hit/attack
+        let squashX = 1, squashY = 1;
+        if (state === 'hit') { squashX = 1.3; squashY = 0.7; }
+        if (state === 'attack' && frameNum >= 2) { squashX = 0.8; squashY = 1.2; }
 
-                if (px < 0 || px >= 16 || py < 0 || py >= 16) continue;
+        switch (g.bodyType) {
+            case 'beetle':
+                this.drawBeetleBody(grid, cx, cy, scale, squashX, squashY);
+                break;
+            case 'ant':
+                this.drawAntBody(grid, cx, cy, scale, squashX, squashY);
+                break;
+            case 'spider':
+                this.drawSpiderBody(grid, cx, cy, scale, squashX, squashY);
+                break;
+            case 'mantis':
+                this.drawMantisBody(grid, cx, cy, scale, squashX, squashY);
+                break;
+            case 'roach':
+                this.drawRoachBody(grid, cx, cy, scale, squashX, squashY);
+                break;
+        }
 
-                // Ellipse check with some noise for organic feel
-                const ex = x / (hw + 1);
-                const ey = y / (hh + 0.5);
+        // Apply pattern
+        this.applyPattern(grid, cx, cy);
+    }
+
+    drawBeetleBody(grid, cx, cy, scale, sx, sy) {
+        // Round dome shape - like a ladybug
+        const w = Math.floor(6 * scale * sx);
+        const h = Math.floor(5 * scale * sy);
+
+        for (let y = -h; y <= h; y++) {
+            for (let x = -w; x <= w; x++) {
+                const px = cx + x;
+                const py = cy + y;
+                if (px < 0 || px >= this.size || py < 0 || py >= this.size) continue;
+
+                const ex = x / w;
+                const ey = y / h;
                 const dist = ex * ex + ey * ey;
 
-                if (dist < 0.6) {
-                    grid[py][px] = 3; // Highlight center
-                } else if (dist < 0.85) {
-                    grid[py][px] = 2; // Base color
-                } else if (dist < 1.1) {
-                    grid[py][px] = 1; // Dark edge
-                }
+                if (dist < 0.5) grid[py][px] = 3;
+                else if (dist < 0.8) grid[py][px] = 2;
+                else if (dist < 1.0) grid[py][px] = 1;
             }
         }
 
-        // Shell segments for high bulk or shell defense
-        if (this.genome.bulk > 60 || this.genome.defense === 'shell') {
-            const segments = Math.floor(2 + this.genome.bulk / 40);
-            for (let i = 1; i < segments; i++) {
-                const sx = Math.floor(cx - hw + (i * width / segments));
-                for (let y = -hh; y <= hh; y++) {
-                    const py = Math.floor(cy + y);
-                    if (py >= 0 && py < 16 && sx >= 0 && sx < 16 && grid[py][sx] !== 0) {
-                        grid[py][sx] = 1;
-                    }
+        // Shell line down middle
+        for (let y = -h + 1; y < h; y++) {
+            const py = cy + y;
+            if (py >= 0 && py < this.size && cx >= 0 && cx < this.size) {
+                if (grid[py][cx] !== 0) grid[py][cx] = 1;
+            }
+        }
+    }
+
+    drawAntBody(grid, cx, cy, scale, sx, sy) {
+        // Three segments: head, thorax, abdomen (side view shows elongated shape)
+        const segSize = Math.floor(2.5 * scale);
+
+        // Thorax (middle, smaller)
+        this.fillEllipse(grid, cx, cy, Math.floor(segSize * 0.8 * sx), Math.floor(segSize * 0.7 * sy), 2, 1);
+
+        // Abdomen (back, larger, oval)
+        const abdX = cx - Math.floor(3 * scale);
+        this.fillEllipse(grid, abdX, cy, Math.floor(segSize * 1.2 * sx), Math.floor(segSize * sy), 2, 1);
+
+        // Petiole (thin waist)
+        const waistX = cx - Math.floor(1 * scale);
+        if (waistX >= 0 && waistX < this.size) {
+            grid[cy][waistX] = 2;
+        }
+    }
+
+    drawSpiderBody(grid, cx, cy, scale, sx, sy) {
+        // Two round segments: cephalothorax and abdomen
+        const size1 = Math.floor(3 * scale);
+        const size2 = Math.floor(4 * scale);
+
+        // Cephalothorax (front)
+        this.fillEllipse(grid, cx + Math.floor(2 * scale), cy, size1 * sx, size1 * sy, 2, 1);
+
+        // Abdomen (back, larger)
+        this.fillEllipse(grid, cx - Math.floor(2 * scale), cy, size2 * sx, size2 * sy, 2, 1);
+    }
+
+    drawMantisBody(grid, cx, cy, scale, sx, sy) {
+        // Long, thin body - elongated thorax
+        const thoraxLen = Math.floor(7 * scale);
+        const thoraxH = Math.floor(2 * scale);
+
+        // Long thorax
+        for (let x = -thoraxLen / 2; x <= thoraxLen / 2; x++) {
+            for (let y = -thoraxH; y <= thoraxH; y++) {
+                const px = cx + Math.floor(x);
+                const py = cy + Math.floor(y);
+                if (px < 0 || px >= this.size || py < 0 || py >= this.size) continue;
+
+                const ey = Math.abs(y) / thoraxH;
+                if (ey < 0.7) grid[py][px] = 2;
+                else if (ey < 1.0) grid[py][px] = 1;
+            }
+        }
+
+        // Abdomen (back)
+        this.fillEllipse(grid, cx - Math.floor(5 * scale), cy, Math.floor(3 * scale * sx), Math.floor(2.5 * scale * sy), 2, 1);
+    }
+
+    drawRoachBody(grid, cx, cy, scale, sx, sy) {
+        // Oval, flat body
+        const w = Math.floor(5 * scale * sx);
+        const h = Math.floor(3 * scale * sy);
+
+        this.fillEllipse(grid, cx, cy, w, h, 2, 1);
+
+        // Pronotum (shield over head area)
+        const shieldX = cx + Math.floor(3 * scale);
+        this.fillEllipse(grid, shieldX, cy, Math.floor(2.5 * scale), Math.floor(2 * scale), 3, 1);
+    }
+
+    // HEAD SHAPES
+    drawHead(grid, cx, cy, state, frameNum) {
+        const g = this.genome;
+        const scale = this.size / 24;
+
+        // Head position depends on body type
+        let headX = cx + Math.floor(5 * scale);
+        let headY = cy;
+
+        if (g.bodyType === 'ant') headX = cx + Math.floor(3 * scale);
+        if (g.bodyType === 'mantis') headX = cx + Math.floor(6 * scale);
+        if (g.bodyType === 'spider') headX = cx + Math.floor(4 * scale);
+
+        const headSize = Math.floor((1.5 + g.instinct / 150) * scale);
+
+        switch (g.headType) {
+            case 'round':
+                this.fillEllipse(grid, headX, headY, headSize, headSize, 2, 1);
+                break;
+            case 'triangular':
+                this.drawTriangleHead(grid, headX, headY, headSize);
+                break;
+            case 'flat':
+                this.fillEllipse(grid, headX, headY, headSize * 1.3, headSize * 0.6, 2, 1);
+                break;
+            case 'elongated':
+                this.fillEllipse(grid, headX, headY, headSize * 1.5, headSize * 0.8, 2, 1);
+                break;
+        }
+
+        // Eyes
+        this.drawEyes(grid, headX, headY, headSize, scale);
+    }
+
+    drawTriangleHead(grid, hx, hy, size) {
+        for (let x = 0; x <= size; x++) {
+            const h = Math.floor(size * (1 - x / size));
+            for (let y = -h; y <= h; y++) {
+                const px = hx + x;
+                const py = hy + y;
+                if (px >= 0 && px < this.size && py >= 0 && py < this.size) {
+                    grid[py][px] = Math.abs(y) < h * 0.6 ? 2 : 1;
                 }
             }
         }
     }
 
-    drawLegs(grid, cx, cy, bodyWidth, speedFactor, state, frameNum) {
-        const legLength = Math.floor(2 + speedFactor * 4); // 2-6 pixels
-        const legCount = this.genome.mobility === 'wallcrawler' ? 4 : 3; // pairs per side
-        const hw = Math.floor(bodyWidth / 2);
+    drawEyes(grid, hx, hy, headSize, scale) {
+        // Compound eyes on sides of head
+        const eyeOffset = Math.max(1, Math.floor(headSize * 0.5));
+        const eyeX = hx + Math.floor(scale * 0.5);
 
-        const isWallcrawler = this.genome.mobility === 'wallcrawler';
+        const positions = [[eyeX, hy - eyeOffset], [eyeX, hy + eyeOffset]];
+        for (const [ex, ey] of positions) {
+            if (ex >= 0 && ex < this.size && ey >= 0 && ey < this.size) {
+                grid[ey][ex] = 3;
+            }
+        }
+    }
+
+    // LEG STYLES
+    drawLegs(grid, cx, cy, state, frameNum) {
+        const g = this.genome;
+        const scale = this.size / 24;
+
+        const legCount = g.bodyType === 'spider' ? 4 : 3; // Pairs
+        const legLen = Math.floor((3 + g.speed / 40) * scale);
+
+        // Animation
+        const animPhase = frameNum * Math.PI / 2;
 
         for (let i = 0; i < legCount; i++) {
-            const legOffset = (i - (legCount - 1) / 2) * 2;
+            const offset = (i - (legCount - 1) / 2) * Math.floor(2.5 * scale);
+            const legPhase = animPhase + i * Math.PI / legCount;
+            const anim = state === 'idle' ? Math.sin(legPhase) * scale : 0;
 
-            // Leg animation
-            const phase = (frameNum + i) * Math.PI / 2;
-            const animOffset = state === 'idle' ? Math.sin(phase) * 0.5 : 0;
-
-            // Left and right legs
             for (let side of [-1, 1]) {
-                const startX = Math.floor(cx + side * hw);
-                const startY = Math.floor(cy + legOffset);
-
-                if (startY < 0 || startY >= 16) continue;
-
-                // Draw leg segments
-                for (let l = 1; l <= legLength; l++) {
-                    let lx, ly;
-
-                    if (isWallcrawler) {
-                        // Splayed out legs with hooks
-                        lx = Math.floor(startX + side * l * 1.2);
-                        ly = Math.floor(startY + l * 0.3 + animOffset);
-                    } else {
-                        // Normal downward legs
-                        lx = Math.floor(startX + side * l * 0.4);
-                        ly = Math.floor(startY + l * 0.8 + animOffset);
-                    }
-
-                    if (lx >= 0 && lx < 16 && ly >= 0 && ly < 16) {
-                        grid[ly][lx] = l === legLength ? 1 : 2;
-                    }
+                switch (g.legStyle) {
+                    case 'thin':
+                        this.drawThinLeg(grid, cx + offset, cy, side, legLen, anim, scale);
+                        break;
+                    case 'thick':
+                        this.drawThickLeg(grid, cx + offset, cy, side, legLen, anim, scale);
+                        break;
+                    case 'bent':
+                        this.drawBentLeg(grid, cx + offset, cy, side, legLen, anim, scale);
+                        break;
+                    case 'stubby':
+                        this.drawStubbyLeg(grid, cx + offset, cy, side, legLen * 0.5, anim, scale);
+                        break;
                 }
             }
         }
     }
 
-    drawHead(grid, cx, cy, instinctFactor, state, frameNum) {
-        // Head at front of bug
-        const headX = cx + 4;
-        const headY = Math.floor(cy);
-        const headSize = Math.floor(1 + this.genome.bulk / 50);
+    drawThinLeg(grid, x, y, side, len, anim, scale) {
+        // Thin spider-like legs
+        for (let i = 1; i <= len; i++) {
+            const lx = Math.floor(x + side * i * 0.3);
+            const ly = Math.floor(y + i + anim * (i / len));
+            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
+                grid[ly][lx] = 1;
+            }
+        }
+    }
 
-        // Draw head
-        for (let y = -headSize; y <= headSize; y++) {
-            for (let x = 0; x <= headSize + 1; x++) {
-                const px = headX + x;
-                const py = headY + y;
-                if (px >= 0 && px < 16 && py >= 0 && py < 16) {
-                    const dist = Math.sqrt(x * x + y * y);
-                    if (dist < headSize + 0.5) {
-                        grid[py][px] = dist < headSize * 0.5 ? 3 : 2;
-                    }
+    drawThickLeg(grid, x, y, side, len, anim, scale) {
+        // Thick beetle legs
+        for (let i = 1; i <= len; i++) {
+            const lx = Math.floor(x + side * i * 0.4);
+            const ly = Math.floor(y + i + anim * (i / len));
+            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
+                grid[ly][lx] = 1;
+                // Thicker
+                if (lx + side >= 0 && lx + side < this.size) {
+                    grid[ly][lx + side] = 1;
                 }
             }
         }
+    }
 
-        // Antennae based on instinct
-        const antennaLength = Math.floor(1 + instinctFactor * 3);
+    drawBentLeg(grid, x, y, side, len, anim, scale) {
+        // Grasshopper-style bent legs
+        const knee = Math.floor(len * 0.4);
+
+        // Upper leg (goes up and out)
+        for (let i = 1; i <= knee; i++) {
+            const lx = Math.floor(x + side * i * 0.5);
+            const ly = Math.floor(y - i * 0.3 + anim * 0.3);
+            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
+                grid[ly][lx] = 1;
+            }
+        }
+
+        // Lower leg (goes down sharply)
+        const kneeX = x + side * Math.floor(knee * 0.5);
+        const kneeY = y - Math.floor(knee * 0.3);
+        for (let i = 1; i <= len - knee; i++) {
+            const lx = Math.floor(kneeX + side * i * 0.2);
+            const ly = Math.floor(kneeY + i + anim);
+            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
+                grid[ly][lx] = 1;
+            }
+        }
+    }
+
+    drawStubbyLeg(grid, x, y, side, len, anim, scale) {
+        // Short stubby legs (ladybug style)
+        for (let i = 1; i <= len; i++) {
+            const lx = Math.floor(x + side * i * 0.6);
+            const ly = Math.floor(y + i * 0.8 + anim * 0.5);
+            if (lx >= 0 && lx < this.size && ly >= 0 && ly < this.size) {
+                grid[ly][lx] = 1;
+            }
+        }
+    }
+
+    // WINGS
+    drawWings(grid, cx, cy, state, frameNum) {
+        const scale = this.size / 24;
+        const wingSpan = Math.floor(4 * scale);
+        const flapPhase = Math.sin(frameNum * Math.PI);
+
         for (let side of [-1, 1]) {
-            for (let i = 1; i <= antennaLength; i++) {
-                const ax = headX + i;
-                const ay = Math.floor(headY + side * i * 0.7);
-                if (ax >= 0 && ax < 16 && ay >= 0 && ay < 16) {
-                    grid[ay][ax] = 1;
-                }
-            }
-        }
+            for (let i = 0; i < wingSpan; i++) {
+                const wx = cx - Math.floor(scale) + i;
+                const wy = cy + side * (Math.floor(2 * scale) + i + Math.floor(flapPhase * 2 * side));
 
-        // Eyes - larger for high instinct
-        if (instinctFactor > 0.4) {
-            const eyeY1 = Math.floor(headY - 1);
-            const eyeY2 = Math.floor(headY + 1);
-            const eyeX = headX + 1;
-            if (eyeX < 16 && eyeY1 >= 0 && eyeY2 < 16) {
-                grid[eyeY1][eyeX] = 3;
-                grid[eyeY2][eyeX] = 3;
+                if (wx >= 0 && wx < this.size && wy >= 0 && wy < this.size) {
+                    if (grid[wy][wx] === 0) {
+                        grid[wy][wx] = 3; // Translucent wing color
+                    }
+                }
+                // Wing edge
+                if (wx + 1 < this.size && wy >= 0 && wy < this.size) {
+                    if (grid[wy][wx + 1] === 0) {
+                        grid[wy][wx + 1] = 1;
+                    }
+                }
             }
         }
     }
 
-    drawWeapon(grid, cx, cy, furyFactor, state, frameNum) {
-        const weaponSize = Math.floor(1 + furyFactor * 2);
-        const headX = cx + 5;
-        const headY = Math.floor(cy);
+    // WEAPONS
+    drawWeapon(grid, cx, cy, state, frameNum) {
+        const g = this.genome;
+        const scale = this.size / 24;
+        const headX = cx + Math.floor(5 * scale);
+        const weaponSize = Math.floor((1 + g.fury / 60) * scale);
 
-        // Attack animation extends weapon
-        const attackExtend = state === 'attack' && frameNum >= 2 ? 2 : 0;
+        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(2 * scale) : 0;
 
-        switch (this.genome.weapon) {
+        switch (g.weapon) {
             case 'mandibles':
-                // Two large pincer jaws
+                // Large pincers
                 for (let i = 0; i < weaponSize + 1; i++) {
-                    const mx = headX + i + attackExtend;
-                    if (mx < 16) {
-                        // Upper mandible
-                        const my1 = Math.floor(headY - 1 - i * 0.3);
-                        if (my1 >= 0) grid[my1][mx] = 1;
-                        // Lower mandible
-                        const my2 = Math.floor(headY + 1 + i * 0.3);
-                        if (my2 < 16) grid[my2][mx] = 1;
+                    const mx = headX + i + extend;
+                    if (mx < this.size) {
+                        const spread = Math.floor(1 + i * 0.5);
+                        if (cy - spread >= 0) grid[cy - spread][mx] = 1;
+                        if (cy + spread < this.size) grid[cy + spread][mx] = 1;
                     }
                 }
                 break;
 
             case 'stinger':
-                // Pointed tail at back
-                const tailX = cx - 5;
+                // Tail stinger
+                const tailX = cx - Math.floor(6 * scale);
                 for (let i = 0; i < weaponSize + 2; i++) {
-                    const tx = tailX - i - (state === 'attack' ? attackExtend : 0);
-                    if (tx >= 0 && tx < 16) {
-                        grid[headY][tx] = i === weaponSize + 1 ? 3 : 1;
+                    const sx = tailX - i;
+                    if (sx >= 0 && sx < this.size) {
+                        grid[cy][sx] = i === weaponSize + 1 ? 3 : 1;
                     }
                 }
                 break;
 
             case 'fangs':
-                // Two curved fangs
+                // Two fangs pointing down
                 for (let i = 0; i < weaponSize; i++) {
-                    const fx = headX + 1 + i + attackExtend;
-                    if (fx < 16) {
-                        grid[Math.floor(headY - 1)][fx] = 1;
-                        grid[Math.floor(headY + 1)][fx] = 1;
-                    }
-                }
-                // Dripping venom effect
-                if (this.genome.defense === 'toxic' || furyFactor > 0.6) {
-                    const vx = headX + weaponSize + attackExtend;
-                    if (vx < 16 && headY + 2 < 16) {
-                        grid[headY + 2][vx] = 2;
+                    const fx = headX + 1;
+                    const fy1 = cy - 1 + i + extend;
+                    const fy2 = cy + 1 - i - extend;
+                    if (fx < this.size) {
+                        if (fy1 < this.size) grid[fy1][fx] = 1;
+                        if (fy2 >= 0) grid[fy2][fx] = 1;
                     }
                 }
                 break;
 
             case 'claws':
-                // Sharp front claws
+                // Raptorial front legs (mantis style)
                 for (let side of [-1, 1]) {
                     for (let i = 0; i < weaponSize + 1; i++) {
-                        const clx = headX + i + attackExtend;
-                        const cly = Math.floor(headY + side * (1 + i * 0.5));
-                        if (clx >= 0 && clx < 16 && cly >= 0 && cly < 16) {
-                            grid[cly][clx] = i === weaponSize ? 3 : 1;
+                        const clx = headX + Math.floor(i * 0.5) + extend;
+                        const cly = cy + side * (1 + i);
+                        if (clx >= 0 && clx < this.size && cly >= 0 && cly < this.size) {
+                            grid[cly][clx] = 1;
                         }
                     }
                 }
@@ -480,129 +608,129 @@ class BugSpriteGenerator {
         }
     }
 
-    drawWings(grid, cx, cy, state, frameNum) {
-        // Wing animation - flapping
-        const flapPhase = (state === 'idle' || state === 'attack') ?
-            Math.sin(frameNum * Math.PI) * 0.5 : 0;
-
-        const wingSpan = Math.floor(3 + this.genome.speed / 30);
+    // ANTENNAE
+    drawAntennae(grid, cx, cy, state, frameNum) {
+        const g = this.genome;
+        const scale = this.size / 24;
+        const headX = cx + Math.floor(5 * scale);
+        const antennaLen = Math.floor((1 + g.instinct / 50) * scale);
 
         for (let side of [-1, 1]) {
-            for (let i = 0; i < wingSpan; i++) {
-                const wy = Math.floor(cy + side * (2 + i) + flapPhase * side);
-                const wx1 = cx - 1 + i;
-                const wx2 = cx + i;
+            for (let i = 1; i <= antennaLen; i++) {
+                const ax = headX + i;
+                const ay = cy + side * Math.floor(i * 0.6);
+                if (ax >= 0 && ax < this.size && ay >= 0 && ay < this.size) {
+                    grid[ay][ax] = 1;
+                }
+            }
+        }
+    }
 
-                if (wy >= 0 && wy < 16) {
-                    if (wx1 >= 0 && wx1 < 16 && grid[wy][wx1] === 0) {
-                        grid[wy][wx1] = 2;
-                    }
-                    if (wx2 >= 0 && wx2 < 16 && grid[wy][wx2] === 0) {
-                        grid[wy][wx2] = 3;
+    // PATTERNS
+    applyPattern(grid, cx, cy) {
+        const g = this.genome;
+
+        switch (g.pattern) {
+            case 'striped':
+                this.applyStripes(grid);
+                break;
+            case 'spotted':
+                this.applySpots(grid, cx, cy);
+                break;
+            case 'segmented':
+                this.applySegments(grid);
+                break;
+            // 'solid' - no pattern
+        }
+    }
+
+    applyStripes(grid) {
+        // Horizontal stripes
+        for (let y = 0; y < this.size; y++) {
+            if (y % 3 === 0) {
+                for (let x = 0; x < this.size; x++) {
+                    if (grid[y][x] === 2) {
+                        grid[y][x] = 4; // Accent color
                     }
                 }
             }
         }
     }
 
-    drawDefense(grid, cx, cy, state, frameNum) {
-        switch (this.genome.defense) {
-            case 'shell':
-                // Already handled in body - adds segments
-                break;
+    applySpots(grid, cx, cy) {
+        // Random spots
+        const spotCount = 3 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < spotCount; i++) {
+            const sx = cx + Math.floor((Math.random() - 0.5) * this.size * 0.6);
+            const sy = cy + Math.floor((Math.random() - 0.5) * this.size * 0.4);
+            if (sx >= 0 && sx < this.size && sy >= 0 && sy < this.size) {
+                if (grid[sy][sx] === 2 || grid[sy][sx] === 3) {
+                    grid[sy][sx] = 4;
+                }
+            }
+        }
+    }
 
-            case 'agility':
-                // Streamlined - no additions
-                break;
-
-            case 'toxic':
-                // Add warning pattern spots
-                const spotPositions = [
-                    [cx - 2, cy - 1],
-                    [cx + 1, cy],
-                    [cx - 1, cy + 1]
-                ];
-                for (const [sx, sy] of spotPositions) {
-                    if (sx >= 0 && sx < 16 && sy >= 0 && sy < 16) {
-                        if (grid[Math.floor(sy)][Math.floor(sx)] === 2) {
-                            grid[Math.floor(sy)][Math.floor(sx)] = 3;
-                        }
+    applySegments(grid) {
+        // Vertical segment lines
+        for (let x = 0; x < this.size; x++) {
+            if (x % 4 === 0) {
+                for (let y = 0; y < this.size; y++) {
+                    if (grid[y][x] === 2) {
+                        grid[y][x] = 1; // Dark line
                     }
                 }
-                break;
-
-            case 'camouflage':
-                // Mottled pattern - add dark spots
-                for (let y = 0; y < 16; y++) {
-                    for (let x = 0; x < 16; x++) {
-                        if (grid[y][x] === 2 && Math.random() < 0.3) {
-                            grid[y][x] = 1;
-                        }
-                    }
-                }
-                break;
+            }
         }
     }
 
     applyDeathTransform(grid, frameNum) {
-        // Rotate/collapse the sprite
-        if (frameNum >= 2) {
-            // Shift everything down-right to simulate falling
-            const newGrid = Array(16).fill(null).map(() => Array(16).fill(0));
-            const shift = Math.min(frameNum - 1, 3);
+        const shift = Math.min(frameNum - 1, 4);
+        const newGrid = Array(this.size).fill(null).map(() => Array(this.size).fill(0));
 
-            for (let y = 0; y < 16; y++) {
-                for (let x = 0; x < 16; x++) {
-                    const newY = Math.min(15, y + shift);
-                    const newX = Math.min(15, x + Math.floor(shift / 2));
-                    if (grid[y][x] !== 0) {
-                        newGrid[newY][newX] = grid[y][x];
-                    }
+        for (let y = 0; y < this.size; y++) {
+            for (let x = 0; x < this.size; x++) {
+                const newY = Math.min(this.size - 1, y + shift);
+                if (grid[y][x] !== 0) {
+                    newGrid[newY][x] = grid[y][x];
                 }
             }
+        }
 
-            // Copy back
-            for (let y = 0; y < 16; y++) {
-                for (let x = 0; x < 16; x++) {
-                    grid[y][x] = newGrid[y][x];
-                }
+        for (let y = 0; y < this.size; y++) {
+            for (let x = 0; x < this.size; x++) {
+                grid[y][x] = newGrid[y][x];
             }
         }
     }
 
-    // Generate all animation frames
+    // Utility: fill ellipse
+    fillEllipse(grid, cx, cy, rx, ry, fillColor, outlineColor) {
+        rx = Math.max(1, Math.floor(rx));
+        ry = Math.max(1, Math.floor(ry));
+
+        for (let y = -ry; y <= ry; y++) {
+            for (let x = -rx; x <= rx; x++) {
+                const px = Math.floor(cx + x);
+                const py = Math.floor(cy + y);
+                if (px < 0 || px >= this.size || py < 0 || py >= this.size) continue;
+
+                const dist = (x * x) / (rx * rx) + (y * y) / (ry * ry);
+                if (dist < 0.7) grid[py][px] = fillColor;
+                else if (dist < 1.0) grid[py][px] = outlineColor;
+            }
+        }
+    }
+
     generateAllFrames() {
-        const frames = {
-            idle: [],
-            attack: [],
-            hit: [],
-            death: []
-        };
+        const frames = { idle: [], attack: [], hit: [], death: [] };
 
-        // Generate 4 idle frames
-        for (let i = 0; i < 4; i++) {
-            frames.idle.push(this.frameToStrings(this.generateFrame('idle', i)));
-        }
+        for (let i = 0; i < 4; i++) frames.idle.push(this.frameToStrings(this.generateFrame('idle', i)));
+        for (let i = 0; i < 4; i++) frames.attack.push(this.frameToStrings(this.generateFrame('attack', i)));
+        for (let i = 0; i < 2; i++) frames.hit.push(this.frameToStrings(this.generateFrame('hit', i)));
+        for (let i = 0; i < 4; i++) frames.death.push(this.frameToStrings(this.generateFrame('death', i)));
 
-        // Generate 4 attack frames
-        for (let i = 0; i < 4; i++) {
-            frames.attack.push(this.frameToStrings(this.generateFrame('attack', i)));
-        }
-
-        // Generate 2 hit frames
-        for (let i = 0; i < 2; i++) {
-            frames.hit.push(this.frameToStrings(this.generateFrame('hit', i)));
-        }
-
-        // Generate 4 death frames
-        for (let i = 0; i < 4; i++) {
-            frames.death.push(this.frameToStrings(this.generateFrame('death', i)));
-        }
-
-        return {
-            colors: this.colors,
-            ...frames
-        };
+        return { colors: this.colors, size: this.size, ...frames };
     }
 
     frameToStrings(grid) {
@@ -628,6 +756,7 @@ class BugFactory {
             genome: genome,
             name: genome.getName(),
             sprite: sprite,
+            size: sprite.size,
             data: {
                 name: genome.getName(),
                 stats: {
@@ -636,6 +765,10 @@ class BugFactory {
                     FURY: genome.fury,
                     INSTINCT: genome.instinct
                 },
+                bodyType: genome.bodyType,
+                headType: genome.headType,
+                legStyle: genome.legStyle,
+                pattern: genome.pattern,
                 weapon: genome.weapon,
                 defense: genome.defense,
                 mobility: genome.mobility
@@ -649,7 +782,7 @@ class BugFactory {
     }
 }
 
-// Export for use in game
+// Export for browser
 if (typeof window !== 'undefined') {
     window.BugGenome = BugGenome;
     window.BugSpriteGenerator = BugSpriteGenerator;

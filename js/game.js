@@ -1,5 +1,20 @@
-// Bug Fights - Game Engine v3
-// Now with procedural bug generation
+// Bug Fights - Game Engine v4
+// Larger arena with proper mobility-based positioning
+
+// ============================================
+// CONSTANTS
+// ============================================
+
+const ARENA = {
+    width: 900,
+    height: 600,
+    groundY: 520,      // Ground level (floor of cage)
+    ceilingY: 100,     // Top of cage
+    leftWall: 50,      // Left boundary
+    rightWall: 850,    // Right boundary
+    fightZoneTop: 400, // Where ground bugs fight
+    fightZoneBottom: 530
+};
 
 // ============================================
 // GAME STATE
@@ -38,13 +53,17 @@ class Fighter {
         this.bug = bug;
         this.genome = bug.genome;
         this.sprite = bug.sprite;
+        this.spriteSize = bug.size || 24; // Dynamic sprite size
         this.side = side;
 
-        // Position
-        this.x = side === 'left' ? 120 : 480;
-        this.y = 275;
-        this.targetX = this.x;
-        this.targetY = this.y;
+        // Mobility type
+        this.isFlying = this.genome.mobility === 'winged';
+        this.isWallcrawler = this.genome.mobility === 'wallcrawler';
+        this.isGround = this.genome.mobility === 'ground';
+
+        // Starting position based on mobility
+        this.initializePosition();
+
         this.facingRight = side === 'left';
 
         // Combat stats derived from genome
@@ -72,10 +91,31 @@ class Fighter {
         // Movement
         this.circleAngle = side === 'left' ? 0 : Math.PI;
         this.moveTimer = 0;
+        this.onWall = false;
+        this.wallSide = null;
+    }
 
-        // Mobility effects
-        this.isFlying = this.genome.mobility === 'winged';
-        this.isWallcrawler = this.genome.mobility === 'wallcrawler';
+    initializePosition() {
+        // Position based on mobility type
+        if (this.isGround) {
+            // Ground bugs stay on the ground
+            this.x = this.side === 'left' ? 200 : 700;
+            this.y = ARENA.groundY - 20;
+            this.targetX = this.x;
+            this.targetY = this.y;
+        } else if (this.isFlying) {
+            // Flying bugs can be anywhere in the air
+            this.x = this.side === 'left' ? 200 : 700;
+            this.y = 250 + Math.random() * 150;
+            this.targetX = this.x;
+            this.targetY = this.y;
+        } else if (this.isWallcrawler) {
+            // Wallcrawlers start on ground but can climb walls
+            this.x = this.side === 'left' ? 150 : 750;
+            this.y = ARENA.groundY - 20;
+            this.targetX = this.x;
+            this.targetY = this.y;
+        }
     }
 
     get isAlive() {
@@ -193,10 +233,9 @@ class Fighter {
 
             // Weapon effects
             if (this.genome.weapon === 'mandibles' && target.genome.defense === 'shell') {
-                damage += 3; // Crush bonus vs shell
+                damage += 3;
             }
             if (this.genome.weapon === 'stinger') {
-                // Piercing - ignore some defense
                 damage += 2;
             }
 
@@ -264,8 +303,9 @@ class Fighter {
         const knockbackForce = isCrit ? 25 : 15;
         target.x += (dx / dist) * knockbackForce;
         target.y += (dy / dist) * knockbackForce * 0.5;
-        target.x = Math.max(50, Math.min(550, target.x));
-        target.y = Math.max(180, Math.min(370, target.y));
+
+        // Constrain to arena based on mobility
+        target.constrainToArena();
 
         // Particles
         spawnParticles(target.x, target.y, 'blood', isCrit ? 15 : 8);
@@ -302,6 +342,22 @@ class Fighter {
         }
     }
 
+    constrainToArena() {
+        if (this.isGround) {
+            // Ground bugs stay on the ground
+            this.x = Math.max(ARENA.leftWall + 50, Math.min(ARENA.rightWall - 50, this.x));
+            this.y = Math.max(ARENA.fightZoneTop, Math.min(ARENA.groundY - 10, this.y));
+        } else if (this.isFlying) {
+            // Flyers can go anywhere in the cage
+            this.x = Math.max(ARENA.leftWall + 30, Math.min(ARENA.rightWall - 30, this.x));
+            this.y = Math.max(ARENA.ceilingY + 50, Math.min(ARENA.groundY - 30, this.y));
+        } else if (this.isWallcrawler) {
+            // Wallcrawlers can be on ground or walls
+            this.x = Math.max(ARENA.leftWall, Math.min(ARENA.rightWall, this.x));
+            this.y = Math.max(ARENA.ceilingY + 30, Math.min(ARENA.groundY - 10, this.y));
+        }
+    }
+
     updateMovement(opponent) {
         if (hitPause > 0) return;
         if (!this.isAlive || this.state === 'death') return;
@@ -317,12 +373,43 @@ class Fighter {
 
         // Speed affects movement
         const moveSpeed = (0.3 + this.genome.speed / 200) * slowMotion;
-        const preferredDist = 50 + (100 - this.genome.fury) / 3;
+        const preferredDist = 80 + (100 - this.genome.fury) / 3;
 
         if (this.moveTimer % 3 === 0) {
             this.circleAngle += (this.side === 'left' ? 0.02 : -0.02) * (this.genome.speed / 50);
         }
 
+        // Movement behavior based on mobility
+        if (this.isGround) {
+            this.updateGroundMovement(opponent, dist, dx, dy, moveSpeed, preferredDist);
+        } else if (this.isFlying) {
+            this.updateFlyingMovement(opponent, dist, dx, dy, moveSpeed, preferredDist);
+        } else if (this.isWallcrawler) {
+            this.updateWallcrawlerMovement(opponent, dist, dx, dy, moveSpeed, preferredDist);
+        }
+
+        this.constrainToArena();
+
+        this.x += (this.targetX - this.x) * moveSpeed * 0.1;
+        this.y += (this.targetY - this.y) * moveSpeed * 0.1;
+    }
+
+    updateGroundMovement(opponent, dist, dx, dy, moveSpeed, preferredDist) {
+        // Ground bugs move left/right, slight vertical for depth
+        if (dist < preferredDist - 20) {
+            this.targetX = this.x - dx * 0.1;
+        } else if (dist > preferredDist + 20) {
+            this.targetX = this.x + dx * 0.1;
+        } else {
+            this.targetX = opponent.x + Math.cos(this.circleAngle) * preferredDist;
+        }
+
+        // Stay on ground level
+        this.targetY = ARENA.groundY - 20 + Math.sin(this.moveTimer / 15) * 5;
+    }
+
+    updateFlyingMovement(opponent, dist, dx, dy, moveSpeed, preferredDist) {
+        // Flying bugs bob and weave in 3D space
         if (dist < preferredDist - 20) {
             this.targetX = this.x - dx * 0.1;
             this.targetY = this.y - dy * 0.1;
@@ -334,43 +421,58 @@ class Fighter {
             this.targetY = opponent.y + Math.sin(this.circleAngle) * preferredDist * 0.5;
         }
 
-        // Wallcrawler can use edges
-        if (this.isWallcrawler) {
-            if (Math.random() < 0.02) {
-                // Occasionally move to wall
-                this.targetY = Math.random() < 0.5 ? 190 : 350;
-            }
-        }
-
-        // Flying bugs bob up and down
-        if (this.isFlying) {
-            this.targetY += Math.sin(this.moveTimer / 10) * 5;
-        }
-
-        this.targetX = Math.max(50, Math.min(550, this.targetX));
-        this.targetY = Math.max(200, Math.min(360, this.targetY));
-
-        this.x += (this.targetX - this.x) * moveSpeed * 0.1;
-        this.y += (this.targetY - this.y) * moveSpeed * 0.1;
+        // Bobbing motion
+        this.targetY += Math.sin(this.moveTimer / 10) * 15;
     }
 
-    render(ctx, scale) {
+    updateWallcrawlerMovement(opponent, dist, dx, dy, moveSpeed, preferredDist) {
+        // Wallcrawlers can climb to walls and attack from there
+        if (Math.random() < 0.01 && !this.onWall) {
+            // Occasionally climb to wall
+            this.onWall = true;
+            this.wallSide = this.x < ARENA.width / 2 ? 'left' : 'right';
+        } else if (Math.random() < 0.02 && this.onWall) {
+            // Return to ground
+            this.onWall = false;
+        }
+
+        if (this.onWall) {
+            // Move along wall
+            this.targetX = this.wallSide === 'left' ? ARENA.leftWall + 20 : ARENA.rightWall - 20;
+            // Move toward opponent's Y
+            this.targetY = opponent.y + Math.sin(this.circleAngle) * 50;
+        } else {
+            // Ground movement
+            if (dist < preferredDist - 20) {
+                this.targetX = this.x - dx * 0.1;
+            } else if (dist > preferredDist + 20) {
+                this.targetX = this.x + dx * 0.1;
+            }
+            this.targetY = ARENA.groundY - 20;
+        }
+    }
+
+    render(ctx) {
         const spriteState = (this.state === 'windup' || this.state === 'victory') ? 'idle' : this.state;
         const frames = this.sprite[spriteState];
         const frame = frames[Math.min(this.animFrame, frames.length - 1)];
         const colors = this.sprite.colors;
 
-        const size = 16 * scale;
+        // Scale based on sprite size - larger bugs render larger
+        const baseScale = 3;
+        const sizeRatio = this.spriteSize / 24;
+        const scale = baseScale * sizeRatio;
+
         const renderX = this.x + this.lungeX;
         const renderY = this.y + this.lungeY;
 
         const scaleX = scale * this.squash;
         const scaleY = scale * this.stretch;
-        const sizeX = 16 * scaleX;
-        const sizeY = 16 * scaleY;
+        const sizeX = this.spriteSize * scaleX;
+        const sizeY = this.spriteSize * scaleY;
 
         const startX = renderX - sizeX / 2;
-        const startY = renderY - sizeY / 2 + (size - sizeY) / 2;
+        const startY = renderY - sizeY / 2;
 
         ctx.save();
 
@@ -378,13 +480,19 @@ class Fighter {
             ctx.globalAlpha = 0.5 + (this.flashTimer / 16);
         }
 
-        for (let py = 0; py < 16; py++) {
-            for (let px = 0; px < 16; px++) {
-                const colorIdx = parseInt(frame[py][this.facingRight ? px : 15 - px]);
+        // Draw each pixel
+        for (let py = 0; py < this.spriteSize; py++) {
+            for (let px = 0; px < this.spriteSize; px++) {
+                const colorIdx = parseInt(frame[py][this.facingRight ? px : this.spriteSize - 1 - px]);
                 if (colorIdx === 0) continue;
 
                 ctx.fillStyle = (this.flashTimer > 0 && this.flashTimer % 2 === 0) ? '#fff' : colors[colorIdx];
-                ctx.fillRect(startX + px * scaleX, startY + py * scaleY, scaleX + 0.5, scaleY + 0.5);
+                ctx.fillRect(
+                    startX + px * scaleX,
+                    startY + py * scaleY,
+                    scaleX + 0.5,
+                    scaleY + 0.5
+                );
             }
         }
 
@@ -392,10 +500,10 @@ class Fighter {
 
         // Health bar
         if (this.isAlive || this.state === 'death') {
-            const barWidth = 50;
+            const barWidth = 50 * sizeRatio;
             const barHeight = 6;
             const barX = this.x - barWidth / 2;
-            const barY = renderY - size / 2 - 20;
+            const barY = renderY - sizeY / 2 - 15;
 
             ctx.fillStyle = '#000';
             ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
@@ -541,9 +649,10 @@ function processCombatTick() {
             const dy = opponent.y - f.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
 
-            if (dist < 120) {
+            // Attack range scales with bug size
+            const attackRange = 100 + (f.spriteSize * 2);
+            if (dist < attackRange) {
                 f.startAttack(opponent);
-                // Faster bugs attack more often
                 const cooldown = Math.max(25, 80 - f.genome.speed / 2);
                 f.attackCooldown = cooldown + rollDice(30);
             }
@@ -753,21 +862,36 @@ function renderArena() {
     ctx.save();
     ctx.translate(screenShake.x, screenShake.y);
 
-    // Background
-    const gradient = ctx.createRadialGradient(300, 300, 50, 300, 300, 350);
-    gradient.addColorStop(0, '#8B7355');
-    gradient.addColorStop(0.5, '#6B5344');
-    gradient.addColorStop(1, '#3a2718');
+    // Background - cage/enclosure view
+    const gradient = ctx.createLinearGradient(0, 0, 0, ARENA.height);
+    gradient.addColorStop(0, '#2a2a2a');
+    gradient.addColorStop(0.7, '#1a1510');
+    gradient.addColorStop(1, '#0a0805');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Border
-    ctx.strokeStyle = '#1a0a00';
-    ctx.lineWidth = 10;
-    ctx.strokeRect(20, 150, 560, 250);
-    ctx.strokeStyle = '#4a3a2a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(28, 158, 544, 234);
+    // Ground (dirt/sand floor)
+    const groundGradient = ctx.createLinearGradient(0, ARENA.fightZoneTop, 0, ARENA.height);
+    groundGradient.addColorStop(0, '#4a3828');
+    groundGradient.addColorStop(0.3, '#5a4838');
+    groundGradient.addColorStop(1, '#3a2818');
+    ctx.fillStyle = groundGradient;
+    ctx.fillRect(0, ARENA.fightZoneTop, canvas.width, canvas.height - ARENA.fightZoneTop);
+
+    // Cage frame
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(30, 70, canvas.width - 60, canvas.height - 100);
+
+    // Glass/mesh pattern on walls
+    ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+    ctx.lineWidth = 1;
+    for (let y = 80; y < canvas.height - 40; y += 30) {
+        ctx.beginPath();
+        ctx.moveTo(35, y);
+        ctx.lineTo(canvas.width - 35, y);
+        ctx.stroke();
+    }
 
     // Blood stains
     bloodStains.forEach(s => {
@@ -792,7 +916,7 @@ function renderArena() {
     }
 
     // Fighters
-    fighters.forEach(f => f.render(ctx, 4));
+    fighters.forEach(f => f.render(ctx));
 
     // Particles
     particles.forEach(p => { p.update(); p.render(ctx); });
@@ -802,52 +926,53 @@ function renderArena() {
 
     // Title
     ctx.fillStyle = '#ff0';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = 'bold 28px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('BUG FIGHTS', 300, 40);
+    ctx.fillText('BUG FIGHTS', canvas.width / 2, 35);
 
     ctx.fillStyle = '#888';
     ctx.font = '12px monospace';
-    ctx.fillText(`FIGHT #${fightNumber}`, 300, 60);
+    ctx.fillText(`FIGHT #${fightNumber}`, canvas.width / 2, 55);
 
-    // VS
+    // VS display
     if (fighters.length === 2 || gameState === 'countdown') {
-        ctx.fillStyle = '#f00';
-        ctx.font = 'bold 20px monospace';
-        ctx.fillText('VS', 300, 130);
-
         const n1 = gameState === 'countdown' ? nextBugs.bug1.name : fighters[0].bug.name;
         const n2 = gameState === 'countdown' ? nextBugs.bug2.name : fighters[1].bug.name;
 
         ctx.fillStyle = '#fff';
-        ctx.font = '14px monospace';
+        ctx.font = 'bold 16px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(n1, 30, 130);
+        ctx.fillText(n1, 50, 90);
         ctx.textAlign = 'right';
-        ctx.fillText(n2, 570, 130);
+        ctx.fillText(n2, canvas.width - 50, 90);
+
+        ctx.fillStyle = '#f00';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('VS', canvas.width / 2, 90);
     }
 
     // Countdown
     if (gameState === 'countdown') {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(200, 240, 200, 100);
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(canvas.width / 2 - 100, 250, 200, 120);
         ctx.fillStyle = countdownTimer <= 3 ? '#f00' : '#ff0';
-        ctx.font = 'bold 56px monospace';
+        ctx.font = 'bold 64px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(countdownTimer, 300, 305);
+        ctx.fillText(countdownTimer, canvas.width / 2, 330);
         ctx.fillStyle = '#fff';
-        ctx.font = '14px monospace';
-        ctx.fillText('PLACE YOUR BETS', 300, 330);
+        ctx.font = '16px monospace';
+        ctx.fillText('PLACE YOUR BETS', canvas.width / 2, 360);
     }
 
     // Commentary
     ctx.textAlign = 'left';
-    ctx.font = '12px monospace';
+    ctx.font = '13px monospace';
     commentary.forEach((c, i) => {
         c.age++;
         ctx.globalAlpha = Math.max(0, 1 - c.age / 180);
         ctx.fillStyle = c.color;
-        ctx.fillText(c.text, 30, 430 + i * 16);
+        ctx.fillText(c.text, 50, canvas.height - 60 + i * 18);
     });
     ctx.globalAlpha = 1;
     commentary = commentary.filter(c => c.age < 180);
