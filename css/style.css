@@ -274,19 +274,51 @@ h1 {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 10px;
+    gap: 15px;
 }
 
-.attr-item {
+.attr-group {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
 }
 
-.attr-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+.attr-group strong {
+    color: #888;
+    margin-right: 4px;
+}
+
+/* Attribute type colors */
+.weapon {
+    color: #f55;
+    background: rgba(255, 85, 85, 0.15);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+.defense {
+    color: #5af;
+    background: rgba(85, 170, 255, 0.15);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+.mobility {
+    color: #af5;
+    background: rgba(170, 255, 85, 0.15);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+/* Fighter card attribute display */
+.fighter-attrs .weapon,
+.fighter-attrs .defense,
+.fighter-attrs .mobility {
+    display: inline-block;
+    margin-right: 4px;
 }
 
 /* Responsive */
