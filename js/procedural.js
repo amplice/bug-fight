@@ -24,35 +24,56 @@ class BugGenome {
     }
 
     randomize() {
-        // Distribute 350 points across 4 stats (max 400)
-        const points = 350;
-        let remaining = points;
+        // Distribute exactly 350 points across 4 stats
+        // Each stat: min 10, max 100
+        const TOTAL_POINTS = 350;
+        const MIN_STAT = 10;
+        const MAX_STAT = 100;
+        const NUM_STATS = 4;
 
-        // Random distribution with some variance
-        this.bulk = Math.floor(Math.random() * 80) + 20; // 20-100
-        remaining -= this.bulk;
+        // Start all stats at minimum
+        const stats = [MIN_STAT, MIN_STAT, MIN_STAT, MIN_STAT];
+        let remaining = TOTAL_POINTS - (MIN_STAT * NUM_STATS); // 310 points to distribute
 
-        this.speed = Math.floor(Math.random() * Math.min(80, remaining - 40)) + 20;
-        remaining -= this.speed;
+        // Distribute remaining points randomly
+        while (remaining > 0) {
+            // Pick a random stat that hasn't hit max
+            const available = [];
+            for (let i = 0; i < NUM_STATS; i++) {
+                if (stats[i] < MAX_STAT) available.push(i);
+            }
 
-        this.fury = Math.floor(Math.random() * Math.min(80, remaining - 20)) + 20;
-        remaining -= this.fury;
+            if (available.length === 0) break;
 
-        this.instinct = Math.max(20, Math.min(100, remaining));
+            const idx = available[Math.floor(Math.random() * available.length)];
+            const maxAdd = Math.min(remaining, MAX_STAT - stats[idx]);
+            // Add random amount (weighted toward smaller increments for variety)
+            const add = Math.min(maxAdd, Math.floor(Math.random() * 30) + 1);
+            stats[idx] += add;
+            remaining -= add;
+        }
 
-        // Normalize to exactly 350 points
-        const total = this.bulk + this.speed + this.fury + this.instinct;
-        const scale = points / total;
-        this.bulk = Math.round(this.bulk * scale);
-        this.speed = Math.round(this.speed * scale);
-        this.fury = Math.round(this.fury * scale);
-        this.instinct = points - this.bulk - this.speed - this.fury;
+        // If any points remain, distribute to non-maxed stats
+        while (remaining > 0) {
+            for (let i = 0; i < NUM_STATS && remaining > 0; i++) {
+                if (stats[i] < MAX_STAT) {
+                    const add = Math.min(remaining, MAX_STAT - stats[i]);
+                    stats[i] += add;
+                    remaining -= add;
+                }
+            }
+        }
 
-        // Clamp all values
-        this.bulk = Math.max(10, Math.min(100, this.bulk));
-        this.speed = Math.max(10, Math.min(100, this.speed));
-        this.fury = Math.max(10, Math.min(100, this.fury));
-        this.instinct = Math.max(10, Math.min(100, this.instinct));
+        // Shuffle the stats array to randomize which stat gets what
+        for (let i = stats.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [stats[i], stats[j]] = [stats[j], stats[i]];
+        }
+
+        this.bulk = stats[0];
+        this.speed = stats[1];
+        this.fury = stats[2];
+        this.instinct = stats[3];
 
         // Random types
         this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
