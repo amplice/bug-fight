@@ -293,7 +293,7 @@
             <!-- Preview -->
             <div class="preview-section">
                 <div class="preview-container">
-                    <canvas id="preview-canvas" width="200" height="200"></canvas>
+                    <canvas id="preview-canvas" width="300" height="300"></canvas>
                     <div class="bug-name" id="bug-name">-</div>
                     <div class="bug-stats" id="bug-stats">-</div>
 
@@ -557,8 +557,10 @@
             const colors = sprite.colors;
             const size = currentBug.size;
 
-            // Scale to fit canvas nicely
-            const scale = Math.min(180 / size, 6);
+            // Use same scale as arena (3x base, scaled by size ratio)
+            const baseScale = 3;
+            const sizeRatio = size / 24;
+            const scale = baseScale * sizeRatio;
             const startX = (canvas.width - size * scale) / 2;
             const startY = (canvas.height - size * scale) / 2;
 
@@ -582,7 +584,7 @@
             ctx.fillStyle = '#666';
             ctx.font = '10px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(`${size}x${size}px`, canvas.width / 2, canvas.height - 5);
+            ctx.fillText(`${size}px sprite @ ${scale.toFixed(1)}x = ${Math.round(size * scale)}px`, canvas.width / 2, canvas.height - 5);
         }
 
         // Animation loop (slowed down for better visibility)

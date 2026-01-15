@@ -196,11 +196,11 @@ class BugSpriteGenerator {
         // Bug faces RIGHT, centered in canvas
         const centerY = Math.floor(this.size / 2);
 
-        // Segment positions with small gap for visual flair
+        // Segment positions - shifted right to give abdomen room
         const gap = Math.ceil(scale);
-        const thoraxX = Math.floor(14 * scale);
-        const abdomenX = Math.floor(6 * scale);
-        const headX = Math.floor(22 * scale);
+        const thoraxX = Math.floor(16 * scale);
+        const abdomenX = Math.floor(10 * scale);
+        const headX = Math.floor(24 * scale);
 
         // Animation offsets
         const breathe = Math.sin(frameNum * Math.PI / 2) * scale * 0.5;
@@ -478,13 +478,21 @@ class BugSpriteGenerator {
     // ==================== LEG STYLES ====================
     drawLegs(grid, cx, cy, scale, state, frameNum) {
         const g = this.genome;
-        const legCount = g.legCount || 6;
+        let legCount = g.legCount || 6;
         const legLen = Math.floor((5 + g.speed / 40) * scale);
 
         const animPhase = frameNum * Math.PI / 2;
 
         // Span legs across the whole body (from abdomen to head area)
         const totalSpan = Math.floor(16 * scale);
+
+        // Reduce leg count at small scales to prevent cramping
+        const minSpacing = 2;
+        const maxLegs = Math.floor(totalSpan / minSpacing) + 1;
+        if (legCount > maxLegs) {
+            legCount = Math.max(2, maxLegs);
+        }
+
         const spacing = legCount > 1 ? totalSpan / (legCount - 1) : 0;
         const startOffset = -totalSpan / 2;
 
@@ -496,39 +504,65 @@ class BugSpriteGenerator {
             const startX = cx + xOffset;
             const startY = cy + Math.floor(1 * scale); // Start legs lower, below body center
 
+            const isWallcrawler = g.mobility === 'wallcrawler';
+
             if (g.legStyle === 'straight') {
-                this.drawStraightLeg(grid, startX, startY, legLen, anim, scale);
+                this.drawStraightLeg(grid, startX, startY, legLen, anim, scale, isWallcrawler);
             } else if (g.legStyle === 'curved-back') {
-                this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, -1);
+                this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, -1, isWallcrawler);
             } else if (g.legStyle === 'curved-forward') {
-                this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, 1);
+                this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, 1, isWallcrawler);
             } else if (g.legStyle === 'short') {
-                this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 0.7), anim, scale);
+                this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 0.7), anim, scale, isWallcrawler);
             } else {
                 // Default fallback
-                this.drawStraightLeg(grid, startX, startY, legLen, anim, scale);
+                this.drawStraightLeg(grid, startX, startY, legLen, anim, scale, isWallcrawler);
             }
         }
     }
 
-    drawStraightLeg(grid, x, y, len, anim, scale) {
+    drawStraightLeg(grid, x, y, len, anim, scale, isWallcrawler) {
         // Simple straight leg going down
         for (let i = 1; i <= len; i++) {
             const lx = Math.floor(x);
             const ly = Math.floor(y + i + anim * (i / len));
-            if (this.inBounds(lx, ly)) grid[ly][lx] = 1;
+            // Wallcrawler: foot tip is lighter color
+            const color = (isWallcrawler && i === len) ? 4 : 1;
+            if (this.inBounds(lx, ly)) grid[ly][lx] = color;
         }
     }
 
-    drawCurvedLeg(grid, x, y, len, anim, scale, dir) {
+    drawCurvedLeg(grid, x, y, len, anim, scale, dir, isWallcrawler) {
         // Curved leg like ( or )
+        let prevLx = Math.round(x);
+        let prevLy = Math.floor(y + 1);
+
         for (let i = 1; i <= len; i++) {
             const t = i / len;
             // Curve peaks in middle, returns to straight at end
-            const curve = Math.round(Math.sin(t * Math.PI) * 3) * dir;
+            const curve = Math.sin(t * Math.PI) * 3 * dir;
             const lx = Math.round(x + curve);
             const ly = Math.floor(y + i + anim * (i / len));
-            if (this.inBounds(lx, ly)) grid[ly][lx] = 1;
+
+            // Wallcrawler: foot tip is lighter color
+            const color = (isWallcrawler && i === len) ? 4 : 1;
+
+            // Draw pixel at current position
+            if (this.inBounds(lx, ly)) grid[ly][lx] = color;
+
+            // Fill any gaps between previous and current position
+            const dx = lx - prevLx;
+            if (Math.abs(dx) > 1) {
+                // Fill horizontal gap
+                const stepX = dx > 0 ? 1 : -1;
+                for (let fx = prevLx + stepX; fx !== lx; fx += stepX) {
+                    if (this.inBounds(fx, ly)) grid[ly][fx] = 1;
+                    if (this.inBounds(fx, prevLy)) grid[prevLy][fx] = 1;
+                }
+            }
+
+            prevLx = lx;
+            prevLy = ly;
         }
     }
 
@@ -568,18 +602,19 @@ class BugSpriteGenerator {
         const g = this.genome;
         if (g.weapon === 'stinger') return;
 
-        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(3 * scale) : 0;
+        const attacking = (state === 'attack' && frameNum >= 2);
         const weaponSize = Math.floor((2 + g.fury / 40) * scale);
 
         switch (g.weapon) {
             case 'mandibles':
+                const extend = attacking ? Math.floor(3 * scale) : 0;
                 this.drawMandibles(grid, headX, cy, scale, weaponSize, extend);
                 break;
             case 'fangs':
-                this.drawFangs(grid, headX, cy, scale, weaponSize, extend);
+                this.drawFangs(grid, headX, cy, scale, weaponSize, attacking);
                 break;
             case 'claws':
-                this.drawClaws(grid, headX, cy, scale, weaponSize, extend);
+                this.drawClaws(grid, headX, cy, scale, weaponSize, attacking);
                 break;
         }
     }
@@ -601,56 +636,182 @@ class BugSpriteGenerator {
         }
     }
 
-    drawFangs(grid, hx, cy, scale, size, extend) {
+    drawFangs(grid, hx, cy, scale, size, attacking) {
+        const fangLen = size + Math.floor(2 * scale);
+
+        // During attack: fangs thrust forward and close together in a bite
+        const biteExtend = attacking ? Math.floor(2 * scale) : 0;
+        const biteClose = attacking ? 0.3 : 1.0; // Multiplier for how spread apart fangs are
+
         for (const side of [-1, 1]) {
-            const baseX = hx + Math.floor(2 * scale) + extend;
-            const baseY = cy + side * Math.floor(scale);
-            for (let i = 0; i <= size; i++) {
-                const fx = baseX + Math.floor(i * 0.3);
-                const fy = baseY + side * i;
+            const baseX = hx + Math.floor(2 * scale) + biteExtend;
+            const baseY = cy + side * Math.floor(scale * 0.5 * biteClose);
+
+            // Draw thicker, longer fangs - during attack they curve inward
+            for (let i = 0; i <= fangLen; i++) {
+                const progress = i / fangLen;
+                // Fangs close together during attack (reduce spread at tip)
+                const spreadMult = attacking ? (1 - progress * 0.7) : 1;
+                const fx = baseX + Math.floor(i * 0.4) + (attacking ? Math.floor(i * 0.2) : 0);
+                const fy = baseY + side * Math.floor(i * spreadMult);
                 if (this.inBounds(fx, fy)) grid[fy][fx] = 1;
+                if (this.inBounds(fx + 1, fy)) grid[fy][fx + 1] = 1;
             }
+
+            // Sharp tip - comes closer together during attack
+            const tipSpread = attacking ? 0.3 : 1;
+            const tipX = baseX + Math.floor(fangLen * 0.4) + 1 + (attacking ? Math.floor(fangLen * 0.2) : 0);
+            const tipY = baseY + side * Math.floor((fangLen + 1) * tipSpread);
+            if (this.inBounds(tipX, tipY)) grid[tipY][tipX] = 1;
         }
-        if (this.genome.fury > 60) {
-            const dripX = hx + Math.floor(3 * scale) + extend;
-            const dripY = cy + Math.floor(size + 2);
+
+        // Venom drip - only when not attacking
+        if (this.genome.fury > 50 && !attacking) {
+            const dripX = hx + Math.floor(3 * scale);
+            const dripY = cy + Math.floor(fangLen + 3);
             if (this.inBounds(dripX, dripY)) grid[dripY][dripX] = 6;
+            if (this.inBounds(dripX, dripY + 1)) grid[dripY + 1][dripX] = 6;
         }
     }
 
-    drawClaws(grid, hx, cy, scale, size, extend) {
+    drawClaws(grid, hx, cy, scale, size, attacking) {
+        const armLen = size + Math.floor(scale);
+        const clawLen = Math.floor(size * 1.2);
+
+        // During attack: claws extend forward and scissor inward
+        const attackExtend = attacking ? Math.floor(2 * scale) : 0;
+        const clawClose = attacking ? Math.floor(3 * scale) : 0; // How much claws close together
+
         for (const side of [-1, 1]) {
-            for (let i = 0; i < size; i++) {
-                const ax = hx + Math.floor(scale) + Math.floor(i * 0.5);
-                const ay = cy + side * (Math.floor(2 * scale) + i);
+            // Arm segment going out from head - during attack, arms extend forward more
+            for (let i = 0; i < armLen; i++) {
+                const armProgress = i / armLen;
+                const ax = hx + Math.floor(1.5 * scale) + Math.floor(i * 0.3) + Math.floor(attackExtend * armProgress);
+                const ay = cy + side * (Math.floor(1.5 * scale) + i - Math.floor(clawClose * armProgress));
                 if (this.inBounds(ax, ay)) grid[ay][ax] = 1;
                 if (this.inBounds(ax + 1, ay)) grid[ay][ax + 1] = 1;
             }
-            const elbowX = hx + Math.floor(scale) + Math.floor(size * 0.5);
-            const elbowY = cy + side * (Math.floor(2 * scale) + size);
-            for (let i = 0; i < Math.floor(size * 0.7); i++) {
-                const clawX = elbowX + extend + i;
-                const clawY = elbowY - side * Math.floor(i * 0.3);
+
+            // Elbow position adjusts during attack
+            const elbowX = hx + Math.floor(1.5 * scale) + Math.floor(armLen * 0.3) + attackExtend;
+            const elbowY = cy + side * (Math.floor(1.5 * scale) + armLen - clawClose);
+
+            // Claw segment - during attack, claws angle inward to "grab"
+            const clawInward = attacking ? 0.6 : 0.2; // How much claw curves toward center
+            for (let i = 0; i < clawLen + attackExtend; i++) {
+                const clawX = elbowX + i;
+                const clawY = elbowY - side * Math.floor(i * clawInward);
                 if (this.inBounds(clawX, clawY)) grid[clawY][clawX] = 1;
+                if (this.inBounds(clawX, clawY + side)) grid[clawY + side][clawX] = 1;
             }
+
+            // Sharp claw tip
+            const tipX = elbowX + clawLen + attackExtend;
+            const tipY = elbowY - side * Math.floor((clawLen + attackExtend) * clawInward);
+            if (this.inBounds(tipX, tipY)) grid[tipY][tipX] = 1;
         }
     }
 
     drawStinger(grid, abdX, cy, scale, state, frameNum) {
-        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(3 * scale) : 0;
-        const stingerLen = Math.floor((3 + this.genome.fury / 30) * scale);
+        // Scorpion-style tail that curves high up and over the body
+        const tailLen = Math.floor((9 + this.genome.fury / 25) * scale);
+        const tailHeight = Math.floor(7 * scale);
 
-        for (let i = 0; i < stingerLen; i++) {
-            const progress = i / stingerLen;
-            const curve = Math.sin(progress * Math.PI * 0.5) * scale;
-            const sx = abdX - Math.floor(5 * scale) - i - extend;
-            const sy = cy - Math.floor(curve);
+        // Attack state - tail strikes forward and down
+        const attacking = (state === 'attack' && frameNum >= 2);
 
-            if (this.inBounds(sx, sy)) {
-                grid[sy][sx] = i === stingerLen - 1 ? 4 : 1;
+        // Start position - higher up and further back on abdomen
+        const startX = abdX - Math.floor(6 * scale);
+        const startY = cy - Math.floor(3 * scale); // Start above centerline
+
+        // Head position for reference - stinger needs to reach PAST this during attack
+        const headX = Math.floor(24 * scale);
+        const forwardReach = headX - startX + Math.floor(8 * scale); // How far past the head
+
+        // Draw tail curving up and then forward over the body
+        // Use more iterations for smoother curve, track previous position to fill gaps
+        const iterations = tailLen * 3; // More iterations = smoother
+        let prevX = null, prevY = null;
+
+        for (let i = 0; i <= iterations; i++) {
+            const t = i / iterations;
+
+            let xCurve, yCurve;
+
+            if (attacking) {
+                // Attack pose: tail straightens and THRUSTS forward past the head
+                // Then the tip strikes DOWN at the enemy
+                xCurve = t * forwardReach; // Extend all the way forward past head
+
+                // Y: slight rise at start, then curves down to strike level
+                if (t < 0.3) {
+                    // Initial rise
+                    yCurve = Math.sin(t / 0.3 * Math.PI * 0.5) * tailHeight * 0.5;
+                } else {
+                    // Descend to strike - ends at or below center line
+                    const descendProgress = (t - 0.3) / 0.7;
+                    const peakHeight = tailHeight * 0.5;
+                    yCurve = peakHeight * (1 - descendProgress * 1.5); // Goes below center
+                }
+            } else {
+                // Normal pose: curved scorpion tail
+                xCurve = t < 0.3
+                    ? -t * 2 * Math.floor(2 * scale)  // go back slightly
+                    : -Math.floor(2 * scale) + (t - 0.3) * 1.5 * Math.floor(10 * scale); // come forward
+
+                // Y: curves up high, stays high (less dip at end)
+                yCurve = Math.sin(t * Math.PI * 0.7) * tailHeight;
             }
-            if (i < stingerLen - 1 && this.inBounds(sx, sy + 1)) {
-                grid[sy + 1][sx] = 1;
+
+            const sx = Math.floor(startX + xCurve);
+            const sy = Math.floor(startY - yCurve);
+
+            // Fill gaps between previous and current position
+            if (prevX !== null && prevY !== null) {
+                const dx = sx - prevX;
+                const dy = sy - prevY;
+                const steps = Math.max(Math.abs(dx), Math.abs(dy));
+                for (let s = 0; s <= steps; s++) {
+                    const fx = Math.floor(prevX + (dx * s / Math.max(steps, 1)));
+                    const fy = Math.floor(prevY + (dy * s / Math.max(steps, 1)));
+                    if (this.inBounds(fx, fy)) grid[fy][fx] = 1;
+                    if (this.inBounds(fx, fy + 1)) grid[fy + 1][fx] = 1;
+                }
+            }
+
+            // Draw tail segment (2px thick)
+            if (this.inBounds(sx, sy)) grid[sy][sx] = 1;
+            if (this.inBounds(sx, sy + 1)) grid[sy + 1][sx] = 1;
+
+            prevX = sx;
+            prevY = sy;
+        }
+
+        // Stinger tip position
+        let tipX, tipY;
+        if (attacking) {
+            // Tip ends past the head, at strike level (slightly below center)
+            tipX = Math.floor(startX + forwardReach) + Math.floor(2 * scale);
+            tipY = Math.floor(startY - tailHeight * 0.5 * (1 - 1.5)) + Math.floor(1 * scale);
+        } else {
+            const tipXCurve = -Math.floor(2 * scale) + 0.7 * 1.5 * Math.floor(10 * scale);
+            const tipYCurve = Math.sin(0.7 * Math.PI) * tailHeight;
+            tipX = Math.floor(startX + tipXCurve) + Math.floor(2 * scale);
+            tipY = Math.floor(startY - tipYCurve);
+        }
+
+        // Draw sharp stinger point - use highlight color during attack
+        const tipColor = attacking ? 6 : 4; // brighter during strike
+        if (this.inBounds(tipX, tipY)) grid[tipY][tipX] = tipColor;
+        if (this.inBounds(tipX + 1, tipY)) grid[tipY][tipX + 1] = tipColor;
+        if (this.inBounds(tipX + 1, tipY + 1)) grid[tipY + 1][tipX + 1] = 1;
+
+        // Add venom splash during attack - spray forward
+        if (attacking) {
+            for (let v = 0; v < 3; v++) {
+                const vx = tipX + 2 + v;
+                const vy = tipY + (v % 2);
+                if (this.inBounds(vx, vy)) grid[vy][vx] = 6;
             }
         }
     }
