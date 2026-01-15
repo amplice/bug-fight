@@ -559,9 +559,15 @@
             ctx.fillText(`${size}x${size}px`, canvas.width / 2, canvas.height - 5);
         }
 
-        // Animation loop
+        // Animation loop (slowed down for better visibility)
+        let frameCounter = 0;
         function animate() {
-            animFrame++;
+            frameCounter++;
+            // Only advance animation every 10 frames (~6fps instead of 60fps)
+            if (frameCounter >= 10) {
+                frameCounter = 0;
+                animFrame++;
+            }
             renderBug();
             animLoop = requestAnimationFrame(animate);
         }
