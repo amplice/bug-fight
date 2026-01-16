@@ -505,6 +505,7 @@ class Fighter {
         if (!this.isAlive || this.state === 'death') return;
 
         const bounds = this.getScaledBounds();
+        const bounceFactor = 0.6; // How much velocity is retained on bounce
 
         // Apply gravity (reduced for flyers, zero when on wall)
         if (!this.onWall) {
@@ -515,34 +516,58 @@ class Fighter {
         this.x += this.vx * slowMotion;
         this.y += this.vy * slowMotion;
 
-        // Ground check
+        // === ARENA BOUNDARY COLLISION (all bugs must stay inside) ===
+
+        // Floor collision
         const floorLevel = ARENA.floorY - bounds.bottom;
-        if (this.y >= floorLevel && !this.isFlying) {
+        if (this.y >= floorLevel) {
             this.y = floorLevel;
-            this.vy = 0;
-            this.grounded = true;
-            if (this.onWall) {
-                this.onWall = false; // Left wall, now on ground
+            if (this.isFlying) {
+                // Flyers bounce off floor
+                this.vy = -Math.abs(this.vy) * bounceFactor;
+            } else {
+                this.vy = 0;
+                this.grounded = true;
+                if (this.onWall) {
+                    this.onWall = false;
+                }
             }
-        } else if (!this.onWall) {
+        } else if (!this.onWall && !this.isFlying) {
             this.grounded = false;
         }
 
-        // Ceiling check for flyers
-        if (this.isFlying && this.y < ARENA.ceilingY + bounds.top) {
-            this.y = ARENA.ceilingY + bounds.top;
-            this.vy = 0;
+        // Ceiling collision (all bugs)
+        const ceilingLevel = ARENA.ceilingY + bounds.top;
+        if (this.y < ceilingLevel) {
+            this.y = ceilingLevel;
+            this.vy = Math.abs(this.vy) * bounceFactor; // Bounce down
         }
 
-        // Wall collision for non-wallcrawlers
-        if (!this.isWallcrawler || !this.onWall) {
-            if (this.x < ARENA.leftWall + bounds.left) {
-                this.x = ARENA.leftWall + bounds.left;
+        // Left wall collision
+        const leftLimit = ARENA.leftWall + bounds.left;
+        if (this.x < leftLimit) {
+            this.x = leftLimit;
+            if (this.isWallcrawler && !this.onWall && this.grounded) {
+                // Wallcrawlers can grab the wall
+                this.onWall = true;
+                this.wallSide = 'left';
                 this.vx = 0;
+            } else {
+                this.vx = Math.abs(this.vx) * bounceFactor; // Bounce right
             }
-            if (this.x > ARENA.rightWall - bounds.right) {
-                this.x = ARENA.rightWall - bounds.right;
+        }
+
+        // Right wall collision
+        const rightLimit = ARENA.rightWall - bounds.right;
+        if (this.x > rightLimit) {
+            this.x = rightLimit;
+            if (this.isWallcrawler && !this.onWall && this.grounded) {
+                // Wallcrawlers can grab the wall
+                this.onWall = true;
+                this.wallSide = 'right';
                 this.vx = 0;
+            } else {
+                this.vx = -Math.abs(this.vx) * bounceFactor; // Bounce left
             }
         }
 
