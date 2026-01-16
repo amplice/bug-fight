@@ -8,12 +8,10 @@
 const ARENA = {
     width: 900,
     height: 600,
-    groundY: 520,      // Ground level (floor of cage)
-    ceilingY: 100,     // Top of cage
-    leftWall: 50,      // Left boundary
-    rightWall: 850,    // Right boundary
-    fightZoneTop: 400, // Where ground bugs fight
-    fightZoneBottom: 530
+    floorY: 550,       // Floor level (bottom of enclosure)
+    ceilingY: 80,      // Top of enclosure
+    leftWall: 50,      // Left wall
+    rightWall: 850,    // Right wall
 };
 
 // ============================================
@@ -56,6 +54,9 @@ class Fighter {
         this.spriteSize = bug.size || 24; // Dynamic sprite size
         this.side = side;
 
+        // Calculate actual pixel bounds from sprite
+        this.calculateSpriteBounds();
+
         // Mobility type
         this.isFlying = this.genome.mobility === 'winged';
         this.isWallcrawler = this.genome.mobility === 'wallcrawler';
@@ -88,33 +89,101 @@ class Fighter {
         this.squash = 1;
         this.stretch = 1;
 
-        // Movement
-        this.circleAngle = side === 'left' ? 0 : Math.PI;
-        this.moveTimer = 0;
+        // Physics
+        this.vx = 0;
+        this.vy = 0;
+        this.mass = 0.5 + (this.genome.bulk / 100) * 1.5; // Mass from 0.5 to 2.0
+        this.grounded = !this.isFlying;
+        this.gravity = this.isFlying ? 0.05 : 0.6; // Flyers have minimal gravity
+        this.friction = 0.85;
+        this.airFriction = 0.95;
+
+        // Jump properties based on leg style
+        this.jumpPower = this.calculateJumpPower();
+        this.jumpCooldown = 0;
+
+        // Combat AI state
+        this.aiState = 'aggressive'; // aggressive, circling, lunging, stunned, retreating
+        this.aiStateTimer = 0;
+        this.aiTarget = null;
+        this.stunTimer = 0;
+
+        // Wall climbing
         this.onWall = false;
         this.wallSide = null;
+        this.climbDirection = 1; // 1 = up, -1 = down
+        this.wallTransitionTimer = 0;
+
+        // Legacy (keeping for compatibility)
+        this.circleAngle = side === 'left' ? 0 : Math.PI;
+        this.moveTimer = 0;
+    }
+
+    calculateJumpPower() {
+        const legStyle = this.genome.legStyle;
+        const baseJump = 8 + (this.genome.speed / 20); // Speed helps jumping
+
+        switch (legStyle) {
+            case 'curved-back':
+            case 'curved-forward':
+                return baseJump * 1.5; // Spring-loaded legs jump highest
+            case 'straight':
+                return baseJump * 1.0; // Normal jump
+            case 'short':
+                return baseJump * 0.5; // Small hop only
+            default:
+                return baseJump;
+        }
+    }
+
+    calculateSpriteBounds() {
+        // Find actual bounds of non-transparent pixels in sprite
+        const frame = this.sprite.idle[0]; // Use first idle frame
+        let minX = this.spriteSize, maxX = 0;
+        let minY = this.spriteSize, maxY = 0;
+
+        for (let y = 0; y < this.spriteSize; y++) {
+            for (let x = 0; x < this.spriteSize; x++) {
+                const colorIdx = parseInt(frame[y][x]);
+                if (colorIdx !== 0) { // Non-transparent pixel
+                    minX = Math.min(minX, x);
+                    maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+        }
+
+        // Store bounds relative to sprite center
+        const centerX = this.spriteSize / 2;
+        const centerY = this.spriteSize / 2;
+
+        this.bounds = {
+            left: centerX - minX,      // Distance from center to left edge
+            right: maxX - centerX,     // Distance from center to right edge
+            top: centerY - minY,       // Distance from center to top edge
+            bottom: maxY - centerY,    // Distance from center to bottom edge (feet)
+            width: maxX - minX + 1,
+            height: maxY - minY + 1
+        };
     }
 
     initializePosition() {
+        const bounds = this.getScaledBounds();
+
         // Position based on mobility type
         if (this.isGround) {
-            // Ground bugs stay on the ground
+            // Ground bugs stay on the floor
             this.x = this.side === 'left' ? 200 : 700;
-            this.y = ARENA.groundY - 20;
-            this.targetX = this.x;
-            this.targetY = this.y;
+            this.y = ARENA.floorY - bounds.bottom;
         } else if (this.isFlying) {
-            // Flying bugs can be anywhere in the air
+            // Flying bugs start in the air
             this.x = this.side === 'left' ? 200 : 700;
-            this.y = 250 + Math.random() * 150;
-            this.targetX = this.x;
-            this.targetY = this.y;
+            this.y = ARENA.ceilingY + 100 + Math.random() * 150;
         } else if (this.isWallcrawler) {
-            // Wallcrawlers start on ground but can climb walls
+            // Wallcrawlers start on floor
             this.x = this.side === 'left' ? 150 : 750;
-            this.y = ARENA.groundY - 20;
-            this.targetX = this.x;
-            this.targetY = this.y;
+            this.y = ARENA.floorY - bounds.bottom;
         }
     }
 
@@ -132,7 +201,7 @@ class Fighter {
 
         // Defense bonuses
         if (g.defense === 'shell') rating += 10;
-        if (g.defense === 'agility') rating += g.speed * 0.1;
+        // 'none' defense has no rating bonus
 
         // Mobility bonuses
         if (g.mobility === 'winged') rating += 15;
@@ -212,24 +281,49 @@ class Fighter {
 
         this.setState('attack');
 
-        // Lunge
+        // Lunge with velocity
         const lungeStrength = 25 + this.genome.fury / 10;
         this.lungeX = (dx / dist) * lungeStrength;
         this.lungeY = (dy / dist) * lungeStrength * 0.5;
+        this.vx += (dx / dist) * 5; // Add momentum to lunge
         this.squash = 0.7;
         this.stretch = 1.3;
 
+        // === POSITIONING BONUSES ===
+
+        // Height advantage: attacking from above
+        const heightAdvantage = this.y < target.y - 20;
+
+        // Facing advantage: attacking from behind (target facing away from attacker)
+        const attackingFromRight = dx < 0; // Attacker is to the right of target
+        const targetFacingRight = target.facingRight;
+        const backstab = (attackingFromRight && targetFacingRight) || (!attackingFromRight && !targetFacingRight);
+
         // Hit check: SPEED vs INSTINCT + evasion
-        const hitRoll = rollDice(100) + this.genome.speed;
+        let hitRoll = rollDice(100) + this.genome.speed;
         let dodgeRoll = rollDice(100) + target.genome.instinct;
 
+        // Positioning affects hit chance
+        if (heightAdvantage) hitRoll += 15;
+        if (backstab) hitRoll += 20; // Hard to dodge attacks from behind
+
         // Evasion bonuses
-        if (target.genome.defense === 'agility') dodgeRoll += 20;
         if (target.isFlying) dodgeRoll += 15;
+        if (target.stunTimer > 0) dodgeRoll -= 30; // Stunned targets can't dodge well
 
         if (hitRoll > dodgeRoll) {
             // Calculate damage: BULK + FURY
             let damage = Math.floor((this.genome.bulk + this.genome.fury) / 10) + rollDice(6);
+
+            // Positioning damage bonuses
+            if (heightAdvantage) {
+                damage += 2;
+                addCommentary(`Height advantage!`, '#8af');
+            }
+            if (backstab) {
+                damage = Math.floor(damage * 1.3);
+                addCommentary(`Backstab!`, '#f8a');
+            }
 
             // Weapon effects
             if (this.genome.weapon === 'mandibles' && target.genome.defense === 'shell') {
@@ -244,8 +338,10 @@ class Fighter {
                 damage = Math.max(1, damage - Math.floor(target.genome.bulk / 20));
             }
 
-            // Crit check based on FURY
-            let isCrit = rollDice(100) <= this.genome.fury / 2;
+            // Crit check based on FURY (higher chance on backstab)
+            let critChance = this.genome.fury / 2;
+            if (backstab) critChance += 15;
+            let isCrit = rollDice(100) <= critChance;
             if (isCrit) {
                 damage = Math.floor(damage * 1.5);
                 addCommentary(`CRITICAL HIT!`, '#ff0');
@@ -279,6 +375,10 @@ class Fighter {
         target.hp -= damage;
         target.setState('hit');
 
+        // Stun the target briefly
+        target.stunTimer = isCrit ? 25 : 15;
+        target.aiState = 'stunned';
+
         // Hit pause
         hitPause = Math.max(hitPause, isCrit ? 12 : (target.hp <= 0 ? 20 : 8));
         screenShake.intensity = isCrit ? 15 : 8;
@@ -296,16 +396,18 @@ class Fighter {
         target.squash = 1.4;
         target.stretch = 0.6;
 
-        // Knockback
+        // Physics-based knockback - apply velocity, not position
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const knockbackForce = isCrit ? 25 : 15;
-        target.x += (dx / dist) * knockbackForce;
-        target.y += (dy / dist) * knockbackForce * 0.5;
 
-        // Constrain to arena based on mobility
-        target.constrainToArena();
+        // Knockback force scales with attacker mass vs target mass
+        const massRatio = this.mass / target.mass;
+        const baseKnockback = isCrit ? 12 : 7;
+        const knockbackForce = baseKnockback * Math.sqrt(massRatio);
+
+        target.vx += (dx / dist) * knockbackForce;
+        target.vy += (dy / dist) * knockbackForce * 0.4 - 3; // Slight upward pop
 
         // Particles
         spawnParticles(target.x, target.y, 'blood', isCrit ? 15 : 8);
@@ -342,113 +444,396 @@ class Fighter {
         }
     }
 
+    getScale() {
+        const baseScale = 1.0;
+        const sizeRatio = this.spriteSize / 24;
+        return baseScale * sizeRatio;
+    }
+
+    getRenderedSize() {
+        return this.spriteSize * this.getScale();
+    }
+
+    getHalfSize() {
+        return this.getRenderedSize() / 2;
+    }
+
+    // Get actual bounds scaled for rendering
+    getScaledBounds() {
+        const scale = this.getScale();
+        return {
+            left: this.bounds.left * scale,
+            right: this.bounds.right * scale,
+            top: this.bounds.top * scale,
+            bottom: this.bounds.bottom * scale,  // Distance from center to feet
+            width: this.bounds.width * scale,
+            height: this.bounds.height * scale
+        };
+    }
+
     constrainToArena() {
+        const bounds = this.getScaledBounds();
+
         if (this.isGround) {
-            // Ground bugs stay on the ground
-            this.x = Math.max(ARENA.leftWall + 50, Math.min(ARENA.rightWall - 50, this.x));
-            this.y = Math.max(ARENA.fightZoneTop, Math.min(ARENA.groundY - 10, this.y));
+            // Ground bugs stay on the floor - actual feet touch floor
+            this.x = Math.max(ARENA.leftWall + bounds.left, Math.min(ARENA.rightWall - bounds.right, this.x));
+            this.y = ARENA.floorY - bounds.bottom;
         } else if (this.isFlying) {
-            // Flyers can go anywhere in the cage
-            this.x = Math.max(ARENA.leftWall + 30, Math.min(ARENA.rightWall - 30, this.x));
-            this.y = Math.max(ARENA.ceilingY + 50, Math.min(ARENA.groundY - 30, this.y));
+            // Flyers can go anywhere in the enclosure
+            this.x = Math.max(ARENA.leftWall + bounds.left, Math.min(ARENA.rightWall - bounds.right, this.x));
+            this.y = Math.max(ARENA.ceilingY + bounds.top, Math.min(ARENA.floorY - bounds.bottom, this.y));
         } else if (this.isWallcrawler) {
-            // Wallcrawlers can be on ground or walls
-            this.x = Math.max(ARENA.leftWall, Math.min(ARENA.rightWall, this.x));
-            this.y = Math.max(ARENA.ceilingY + 30, Math.min(ARENA.groundY - 10, this.y));
+            // Wallcrawlers can be on floor or walls
+            if (this.onWall) {
+                // On wall: rotated 90°, so bounds swap (height becomes width)
+                // bounds.bottom is distance from center to feet, which now points toward wall
+                const wallOffset = bounds.bottom + 2; // Feet touching wall
+                this.x = this.wallSide === 'left' ? ARENA.leftWall + wallOffset : ARENA.rightWall - wallOffset;
+                // Vertical bounds: original left/right become top/bottom when rotated
+                this.y = Math.max(ARENA.ceilingY + bounds.right + 5, Math.min(ARENA.floorY - bounds.left - 5, this.y));
+            } else {
+                this.x = Math.max(ARENA.leftWall + bounds.left, Math.min(ARENA.rightWall - bounds.right, this.x));
+                this.y = ARENA.floorY - bounds.bottom;
+            }
         }
     }
 
-    updateMovement(opponent) {
+    // ==================== PHYSICS ====================
+
+    updatePhysics() {
+        if (hitPause > 0) return;
+        if (!this.isAlive || this.state === 'death') return;
+
+        const bounds = this.getScaledBounds();
+
+        // Apply gravity (reduced for flyers, zero when on wall)
+        if (!this.onWall) {
+            this.vy += this.gravity * slowMotion;
+        }
+
+        // Apply velocity
+        this.x += this.vx * slowMotion;
+        this.y += this.vy * slowMotion;
+
+        // Ground check
+        const floorLevel = ARENA.floorY - bounds.bottom;
+        if (this.y >= floorLevel && !this.isFlying) {
+            this.y = floorLevel;
+            this.vy = 0;
+            this.grounded = true;
+            if (this.onWall) {
+                this.onWall = false; // Left wall, now on ground
+            }
+        } else if (!this.onWall) {
+            this.grounded = false;
+        }
+
+        // Ceiling check for flyers
+        if (this.isFlying && this.y < ARENA.ceilingY + bounds.top) {
+            this.y = ARENA.ceilingY + bounds.top;
+            this.vy = 0;
+        }
+
+        // Wall collision for non-wallcrawlers
+        if (!this.isWallcrawler || !this.onWall) {
+            if (this.x < ARENA.leftWall + bounds.left) {
+                this.x = ARENA.leftWall + bounds.left;
+                this.vx = 0;
+            }
+            if (this.x > ARENA.rightWall - bounds.right) {
+                this.x = ARENA.rightWall - bounds.right;
+                this.vx = 0;
+            }
+        }
+
+        // Friction
+        const frictionFactor = this.grounded ? this.friction : this.airFriction;
+        this.vx *= frictionFactor;
+
+        // Flyers have air friction on Y too
+        if (this.isFlying) {
+            this.vy *= this.airFriction;
+        }
+
+        // Cooldowns
+        if (this.jumpCooldown > 0) this.jumpCooldown--;
+        if (this.stunTimer > 0) this.stunTimer--;
+    }
+
+    jump(power = 1.0) {
+        if (this.jumpCooldown > 0) return false;
+        if (!this.grounded && !this.onWall && !this.isFlying) return false;
+
+        const jumpForce = this.jumpPower * power;
+
+        if (this.onWall) {
+            // Wall jump - jump away from wall
+            this.vy = -jumpForce * 0.8;
+            this.vx = this.wallSide === 'left' ? 6 : -6;
+            this.onWall = false;
+            this.grounded = false;
+        } else {
+            this.vy = -jumpForce;
+            this.grounded = false;
+        }
+
+        this.jumpCooldown = 20;
+        this.squash = 0.7;
+        this.stretch = 1.3;
+        return true;
+    }
+
+    // ==================== AI STATE MACHINE ====================
+
+    updateAI(opponent) {
         if (hitPause > 0) return;
         if (!this.isAlive || this.state === 'death') return;
         if (this.state === 'windup' || this.state === 'attack') return;
 
         this.moveTimer++;
+        this.aiStateTimer++;
 
         const dx = opponent.x - this.x;
         const dy = opponent.y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+        const bounds = this.getScaledBounds();
+        const oppBounds = opponent.getScaledBounds();
+        const attackRange = bounds.right + oppBounds.left + 40;
 
-        if (this.state === 'idle') this.facingRight = dx > 0;
-
-        // Speed affects movement
-        const moveSpeed = (0.3 + this.genome.speed / 200) * slowMotion;
-        const preferredDist = 80 + (100 - this.genome.fury) / 3;
-
-        if (this.moveTimer % 3 === 0) {
-            this.circleAngle += (this.side === 'left' ? 0.02 : -0.02) * (this.genome.speed / 50);
+        // Update facing (except when on wall)
+        if (this.state === 'idle' && !this.onWall) {
+            this.facingRight = dx > 0;
+        } else if (this.onWall) {
+            this.facingRight = this.wallSide === 'right';
         }
 
-        // Movement behavior based on mobility
-        if (this.isGround) {
-            this.updateGroundMovement(opponent, dist, dx, dy, moveSpeed, preferredDist);
-        } else if (this.isFlying) {
-            this.updateFlyingMovement(opponent, dist, dx, dy, moveSpeed, preferredDist);
-        } else if (this.isWallcrawler) {
-            this.updateWallcrawlerMovement(opponent, dist, dx, dy, moveSpeed, preferredDist);
+        // Stunned state - can't do anything
+        if (this.stunTimer > 0) {
+            this.aiState = 'stunned';
+            return;
         }
 
-        this.constrainToArena();
+        // State transitions
+        this.updateAIStateTransitions(opponent, dist, attackRange);
 
-        this.x += (this.targetX - this.x) * moveSpeed * 0.1;
-        this.y += (this.targetY - this.y) * moveSpeed * 0.1;
+        // Execute current state behavior
+        switch (this.aiState) {
+            case 'aggressive':
+                this.executeAggressiveAI(opponent, dx, dy, dist, attackRange);
+                break;
+            case 'circling':
+                this.executeCirclingAI(opponent, dx, dy, dist);
+                break;
+            case 'lunging':
+                this.executeLungingAI(opponent, dx, dy, dist);
+                break;
+            case 'retreating':
+                this.executeRetreatingAI(opponent, dx, dy, dist);
+                break;
+            case 'stunned':
+                // Do nothing while stunned
+                break;
+        }
+
+        // Wallcrawler-specific climbing behavior
+        if (this.isWallcrawler) {
+            this.updateWallClimbing(opponent, dist);
+        }
     }
 
-    updateGroundMovement(opponent, dist, dx, dy, moveSpeed, preferredDist) {
-        // Ground bugs move left/right, slight vertical for depth
-        if (dist < preferredDist - 20) {
-            this.targetX = this.x - dx * 0.1;
-        } else if (dist > preferredDist + 20) {
-            this.targetX = this.x + dx * 0.1;
+    updateAIStateTransitions(opponent, dist, attackRange) {
+        const hpPercent = this.hp / this.maxHp;
+        const furyFactor = this.genome.fury / 100;
+        const instinctFactor = this.genome.instinct / 100;
+
+        // Low HP + high instinct = more likely to retreat (flyers/wallcrawlers only)
+        if (hpPercent < 0.3 && (this.isFlying || this.isWallcrawler) && Math.random() < instinctFactor * 0.1) {
+            this.aiState = 'retreating';
+            this.aiStateTimer = 0;
+        }
+        // In attack range + high fury = aggressive
+        else if (dist < attackRange * 1.2 && Math.random() < furyFactor * 0.15) {
+            this.aiState = 'aggressive';
+            this.aiStateTimer = 0;
+        }
+        // Sometimes circle to find opening
+        else if (dist < attackRange * 1.5 && this.aiStateTimer > 60 && Math.random() < instinctFactor * 0.05) {
+            this.aiState = 'circling';
+            this.aiStateTimer = 0;
+            this.circleAngle = Math.atan2(this.y - opponent.y, this.x - opponent.x);
+        }
+        // Far away = aggressive approach
+        else if (dist > attackRange * 2 && this.aiStateTimer > 30) {
+            this.aiState = 'aggressive';
+            this.aiStateTimer = 0;
+        }
+    }
+
+    executeAggressiveAI(opponent, dx, dy, dist, attackRange) {
+        const speed = 0.3 + (this.genome.speed / 150);
+
+        if (this.isFlying) {
+            // Flyers thrust toward opponent
+            this.vx += Math.sign(dx) * speed * 1.2;
+            this.vy += Math.sign(dy) * speed * 0.8;
+
+            // Bobbing motion
+            this.vy += Math.sin(this.moveTimer / 8) * 0.3;
+        } else if (this.onWall) {
+            // Wall climbing - move toward opponent's height
+            this.vy = Math.sign(dy) * speed * 3;
+
+            // Jump off wall to attack if close enough horizontally
+            const horizDist = Math.abs(dx);
+            if (horizDist < 150 && Math.abs(dy) < 50 && Math.random() < 0.05) {
+                this.jump(1.0);
+                this.vx = Math.sign(dx) * 8;
+            }
         } else {
-            this.targetX = opponent.x + Math.cos(this.circleAngle) * preferredDist;
-        }
+            // Ground movement - accelerate toward opponent
+            this.vx += Math.sign(dx) * speed;
 
-        // Stay on ground level
-        this.targetY = ARENA.groundY - 20 + Math.sin(this.moveTimer / 15) * 5;
+            // Jump to reach flying opponents
+            if (opponent.isFlying || opponent.onWall || opponent.y < this.y - 50) {
+                if (this.grounded && dist < attackRange * 2 && Math.random() < 0.08) {
+                    this.jump(1.0);
+                    // Add horizontal velocity toward opponent
+                    this.vx += Math.sign(dx) * 3;
+                }
+            }
+        }
     }
 
-    updateFlyingMovement(opponent, dist, dx, dy, moveSpeed, preferredDist) {
-        // Flying bugs bob and weave in 3D space
-        if (dist < preferredDist - 20) {
-            this.targetX = this.x - dx * 0.1;
-            this.targetY = this.y - dy * 0.1;
-        } else if (dist > preferredDist + 20) {
-            this.targetX = this.x + dx * 0.1;
-            this.targetY = this.y + dy * 0.1;
+    executeCirclingAI(opponent, dx, dy, dist) {
+        const speed = 0.2 + (this.genome.speed / 200);
+        const circleRadius = 80 + (100 - this.genome.fury) / 2;
+
+        this.circleAngle += (this.side === 'left' ? 0.04 : -0.04) * (this.genome.speed / 50);
+
+        if (this.isFlying) {
+            const targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
+            const targetY = opponent.y + Math.sin(this.circleAngle) * circleRadius * 0.6;
+            this.vx += (targetX - this.x) * 0.02;
+            this.vy += (targetY - this.y) * 0.02;
         } else {
-            this.targetX = opponent.x + Math.cos(this.circleAngle) * preferredDist;
-            this.targetY = opponent.y + Math.sin(this.circleAngle) * preferredDist * 0.5;
+            // Ground bugs strafe side to side
+            this.vx += Math.cos(this.circleAngle) * speed * 2;
+
+            // Occasionally jump while circling
+            if (this.grounded && Math.random() < 0.02) {
+                this.jump(0.5);
+            }
         }
 
-        // Bobbing motion
-        this.targetY += Math.sin(this.moveTimer / 10) * 15;
+        // Exit circling after a while and go aggressive
+        if (this.aiStateTimer > 90) {
+            this.aiState = 'aggressive';
+            this.aiStateTimer = 0;
+        }
     }
 
-    updateWallcrawlerMovement(opponent, dist, dx, dy, moveSpeed, preferredDist) {
-        // Wallcrawlers can climb to walls and attack from there
-        if (Math.random() < 0.01 && !this.onWall) {
-            // Occasionally climb to wall
-            this.onWall = true;
-            this.wallSide = this.x < ARENA.width / 2 ? 'left' : 'right';
-        } else if (Math.random() < 0.02 && this.onWall) {
-            // Return to ground
-            this.onWall = false;
+    executeLungingAI(opponent, dx, dy, dist) {
+        // Committed forward attack - big burst of speed
+        const lungeSpeed = 0.8 + (this.genome.fury / 100);
+
+        if (this.isFlying) {
+            this.vx += Math.sign(dx) * lungeSpeed;
+            this.vy += Math.sign(dy) * lungeSpeed * 0.5;
+        } else {
+            this.vx += Math.sign(dx) * lungeSpeed * 1.5;
+            if (this.grounded && Math.abs(dy) > 30) {
+                this.jump(0.7);
+            }
         }
+
+        // Lunge is brief
+        if (this.aiStateTimer > 20) {
+            this.aiState = 'aggressive';
+            this.aiStateTimer = 0;
+        }
+    }
+
+    executeRetreatingAI(opponent, dx, dy, dist) {
+        const speed = 0.25 + (this.genome.speed / 200);
+
+        if (this.isFlying) {
+            // Fly away and up
+            this.vx -= Math.sign(dx) * speed;
+            this.vy -= 0.3;
+        } else if (this.isWallcrawler && !this.onWall) {
+            // Try to get to a wall
+            const nearestWall = this.x < ARENA.width / 2 ? 'left' : 'right';
+            this.vx += nearestWall === 'left' ? -speed * 2 : speed * 2;
+        } else {
+            // Ground bugs back away and jump
+            this.vx -= Math.sign(dx) * speed;
+            if (this.grounded && Math.random() < 0.05) {
+                this.jump(0.6);
+                this.vx -= Math.sign(dx) * 3;
+            }
+        }
+
+        // Don't retreat forever
+        if (this.aiStateTimer > 60 || dist > 300) {
+            this.aiState = 'circling';
+            this.aiStateTimer = 0;
+        }
+    }
+
+    // ==================== WALL CLIMBING ====================
+
+    updateWallClimbing(opponent, dist) {
+        const bounds = this.getScaledBounds();
 
         if (this.onWall) {
-            // Move along wall
-            this.targetX = this.wallSide === 'left' ? ARENA.leftWall + 20 : ARENA.rightWall - 20;
-            // Move toward opponent's Y
-            this.targetY = opponent.y + Math.sin(this.circleAngle) * 50;
-        } else {
-            // Ground movement
-            if (dist < preferredDist - 20) {
-                this.targetX = this.x - dx * 0.1;
-            } else if (dist > preferredDist + 20) {
-                this.targetX = this.x + dx * 0.1;
+            // Currently on wall - handle wall movement
+            const wallOffset = bounds.bottom + 2;
+
+            // Snap to wall
+            if (this.wallSide === 'left') {
+                this.x = ARENA.leftWall + wallOffset;
+            } else {
+                this.x = ARENA.rightWall - wallOffset;
             }
-            this.targetY = ARENA.groundY - 20;
+
+            // Constrain to wall bounds
+            const minY = ARENA.ceilingY + bounds.right + 10;
+            const maxY = ARENA.floorY - bounds.left - 10;
+            this.y = Math.max(minY, Math.min(maxY, this.y));
+
+            // Zero out horizontal velocity on wall
+            this.vx = 0;
+            this.grounded = true; // Can jump from wall
+
+            // Occasionally change climb direction
+            if (Math.random() < 0.02) {
+                this.climbDirection *= -1;
+            }
+
+            // Drop off wall if opponent is far or to attack
+            if (dist > 350 || (dist < 100 && Math.random() < 0.03)) {
+                this.onWall = false;
+                this.grounded = false;
+            }
+        } else {
+            // Not on wall - check if should climb
+            // Near a wall and strategic reason to climb
+            const nearLeftWall = this.x < ARENA.leftWall + 60;
+            const nearRightWall = this.x > ARENA.rightWall - 60;
+
+            if ((nearLeftWall || nearRightWall) && this.grounded) {
+                // Climb if opponent is above or to gain height advantage
+                const shouldClimb = opponent.y < this.y - 30 ||
+                                   opponent.isFlying ||
+                                   (dist < 200 && Math.random() < 0.03);
+
+                if (shouldClimb) {
+                    this.onWall = true;
+                    this.wallSide = nearLeftWall ? 'left' : 'right';
+                    this.climbDirection = 1; // Start climbing up
+                    this.vy = 0;
+                }
+            }
         }
     }
 
@@ -458,8 +843,8 @@ class Fighter {
         const frame = frames[Math.min(this.animFrame, frames.length - 1)];
         const colors = this.sprite.colors;
 
-        // Scale based on sprite size - larger bugs render larger
-        const baseScale = 3;
+        // Scale based on sprite size - 1x scale
+        const baseScale = 1.0;
         const sizeRatio = this.spriteSize / 24;
         const scale = baseScale * sizeRatio;
 
@@ -478,6 +863,28 @@ class Fighter {
 
         if (this.flashTimer > 0) {
             ctx.globalAlpha = 0.5 + (this.flashTimer / 16);
+        } else if (this.genome.defense === 'camouflage') {
+            // Camouflage bugs are semi-transparent
+            ctx.globalAlpha = 0.6;
+        }
+
+        // Wallcrawlers on walls: full 90° rotation, feet on wall, head pointing up
+        let rotation = 0;
+        if (this.isWallcrawler && this.onWall) {
+            if (this.wallSide === 'left') {
+                // Sprite is flipped (facingRight=false), rotate 90° CW to get head up, feet left
+                rotation = Math.PI / 2;
+            } else {
+                // Normal sprite, rotate 90° CCW to get head up, feet right
+                rotation = -Math.PI / 2;
+            }
+        }
+
+        // Apply rotation around bug center
+        if (rotation !== 0) {
+            ctx.translate(renderX, renderY);
+            ctx.rotate(rotation);
+            ctx.translate(-renderX, -renderY);
         }
 
         // Draw each pixel
@@ -638,6 +1045,53 @@ function processCombatTick() {
         }
     });
 
+    // Physics-based collision - mass determines who pushes who
+    if (f1.isAlive && f2.isAlive) {
+        const dx = f2.x - f1.x;
+        const dy = f2.y - f1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Use actual sprite bounds for collision
+        const bounds1 = f1.getScaledBounds();
+        const bounds2 = f2.getScaledBounds();
+        const minDist = (bounds1.width / 2) + (bounds2.width / 2);
+
+        if (dist < minDist && dist > 0) {
+            // Calculate push based on mass - heavier bugs push lighter bugs more
+            const totalMass = f1.mass + f2.mass;
+            const f1Push = f2.mass / totalMass; // f1 gets pushed proportional to f2's mass
+            const f2Push = f1.mass / totalMass; // f2 gets pushed proportional to f1's mass
+
+            const overlap = minDist - dist;
+            const pushStrength = 0.8; // How strongly to resolve collision
+            const nx = dx / dist; // Normalized direction
+            const ny = dy / dist;
+
+            // Apply position correction
+            f1.x -= nx * overlap * f1Push * pushStrength;
+            f2.x += nx * overlap * f2Push * pushStrength;
+
+            // Apply velocity impulse - bugs bounce off each other
+            const relVelX = f2.vx - f1.vx;
+            const relVelY = f2.vy - f1.vy;
+            const relVelDotNormal = relVelX * nx + relVelY * ny;
+
+            // Only resolve if moving toward each other
+            if (relVelDotNormal < 0) {
+                const impulse = relVelDotNormal * 0.5;
+                f1.vx += nx * impulse * f1Push;
+                f1.vy += ny * impulse * f1Push * 0.3; // Less vertical push
+                f2.vx -= nx * impulse * f2Push;
+                f2.vy -= ny * impulse * f2Push * 0.3;
+            }
+
+            // Spawn dust on collision
+            if (overlap > 3) {
+                spawnParticles((f1.x + f2.x) / 2, Math.max(f1.y, f2.y), 'dust', 2);
+            }
+        }
+    }
+
     // Attack timing
     fighters.forEach((f, i) => {
         if (!f.isAlive || f.state !== 'idle') return;
@@ -649,8 +1103,10 @@ function processCombatTick() {
             const dy = opponent.y - f.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
 
-            // Attack range scales with bug size
-            const attackRange = 100 + (f.spriteSize * 2);
+            // Attack range based on actual sprite bounds
+            const bounds = f.getScaledBounds();
+            const oppBounds = opponent.getScaledBounds();
+            const attackRange = bounds.right + oppBounds.left + 30;
             if (dist < attackRange) {
                 f.startAttack(opponent);
                 const cooldown = Math.max(25, 80 - f.genome.speed / 2);
@@ -862,36 +1318,30 @@ function renderArena() {
     ctx.save();
     ctx.translate(screenShake.x, screenShake.y);
 
-    // Background - cage/enclosure view
+    // Background - 2D side-view enclosure
     const gradient = ctx.createLinearGradient(0, 0, 0, ARENA.height);
-    gradient.addColorStop(0, '#2a2a2a');
-    gradient.addColorStop(0.7, '#1a1510');
-    gradient.addColorStop(1, '#0a0805');
+    gradient.addColorStop(0, '#1a1a2a');
+    gradient.addColorStop(1, '#0a0a15');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Ground (dirt/sand floor)
-    const groundGradient = ctx.createLinearGradient(0, ARENA.fightZoneTop, 0, ARENA.height);
-    groundGradient.addColorStop(0, '#4a3828');
-    groundGradient.addColorStop(0.3, '#5a4838');
-    groundGradient.addColorStop(1, '#3a2818');
-    ctx.fillStyle = groundGradient;
-    ctx.fillRect(0, ARENA.fightZoneTop, canvas.width, canvas.height - ARENA.fightZoneTop);
+    // Enclosure interior (lighter area)
+    ctx.fillStyle = '#151520';
+    ctx.fillRect(ARENA.leftWall, ARENA.ceilingY, ARENA.rightWall - ARENA.leftWall, ARENA.floorY - ARENA.ceilingY);
 
-    // Cage frame
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 8;
-    ctx.strokeRect(30, 70, canvas.width - 60, canvas.height - 100);
+    // Floor (bottom of enclosure)
+    ctx.fillStyle = '#3a3020';
+    ctx.fillRect(ARENA.leftWall, ARENA.floorY, ARENA.rightWall - ARENA.leftWall, 20);
 
-    // Glass/mesh pattern on walls
-    ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
-    ctx.lineWidth = 1;
-    for (let y = 80; y < canvas.height - 40; y += 30) {
-        ctx.beginPath();
-        ctx.moveTo(35, y);
-        ctx.lineTo(canvas.width - 35, y);
-        ctx.stroke();
-    }
+    // Enclosure frame (thick border)
+    ctx.strokeStyle = '#0a0a0a';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(ARENA.leftWall - 5, ARENA.ceilingY - 5, ARENA.rightWall - ARENA.leftWall + 10, ARENA.floorY - ARENA.ceilingY + 30);
+
+    // Inner frame highlight
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ARENA.leftWall, ARENA.ceilingY, ARENA.rightWall - ARENA.leftWall, ARENA.floorY - ARENA.ceilingY)
 
     // Blood stains
     bloodStains.forEach(s => {
@@ -984,7 +1434,8 @@ function gameLoopFn() {
     fighters.forEach(f => {
         f.updateAnimation();
         if (gameState === 'fighting') {
-            f.updateMovement(fighters.find(o => o !== f));
+            f.updatePhysics();
+            f.updateAI(fighters.find(o => o !== f));
         }
     });
 

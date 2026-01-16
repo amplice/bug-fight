@@ -391,7 +391,7 @@
                             <h4>Defense</h4>
                             <div class="option-buttons" id="defense-options">
                                 <button class="option-btn selected" data-value="shell">Shell</button>
-                                <button class="option-btn" data-value="agility">Agility</button>
+                                <button class="option-btn" data-value="none">None</button>
                                 <button class="option-btn" data-value="toxic">Toxic</button>
                                 <button class="option-btn" data-value="camouflage">Camo</button>
                             </div>
@@ -564,6 +564,11 @@
             const startX = (canvas.width - size * scale) / 2;
             const startY = (canvas.height - size * scale) / 2;
 
+            // Camouflage defense: semi-transparent
+            if (currentBug.genome.defense === 'camouflage') {
+                ctx.globalAlpha = 0.6;
+            }
+
             // Draw pixels
             for (let py = 0; py < size; py++) {
                 for (let px = 0; px < size; px++) {
@@ -579,6 +584,9 @@
                     );
                 }
             }
+
+            // Reset alpha
+            ctx.globalAlpha = 1.0;
 
             // Size indicator
             ctx.fillStyle = '#666';

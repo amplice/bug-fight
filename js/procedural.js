@@ -16,23 +16,40 @@ class BugGenome {
     }
 
     randomize() {
-        // Distribute exactly 350 points across 4 stats (min 10, max 100 each)
-        const TOTAL = 350, MIN = 10, MAX = 100;
-        const stats = [MIN, MIN, MIN, MIN];
-        let remaining = TOTAL - MIN * 4;
+        // Stats are normally distributed (mean ~55, stddev ~20)
+        // If total exceeds cap, scale down proportionally
+        const STAT_CAP = 350, MIN = 10, MAX = 100;
 
-        while (remaining > 0) {
-            const available = stats.map((s, i) => s < MAX ? i : -1).filter(i => i >= 0);
-            if (!available.length) break;
-            const idx = available[Math.floor(Math.random() * available.length)];
-            const add = Math.min(remaining, MAX - stats[idx], Math.floor(Math.random() * 25) + 1);
-            stats[idx] += add;
-            remaining -= add;
-        }
+        // Generate normally distributed stats
+        const normalRandom = () => {
+            // Box-Muller transform for normal distribution
+            const u1 = Math.random();
+            const u2 = Math.random();
+            return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        };
 
-        for (let i = stats.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [stats[i], stats[j]] = [stats[j], stats[i]];
+        const generateStat = () => {
+            const mean = 55;
+            const stdDev = 20;
+            let value = Math.round(mean + normalRandom() * stdDev);
+            return Math.max(MIN, Math.min(MAX, value)); // Clamp to valid range
+        };
+
+        let stats = [generateStat(), generateStat(), generateStat(), generateStat()];
+
+        // If total exceeds cap, scale down proportionally
+        const total = stats.reduce((a, b) => a + b, 0);
+        if (total > STAT_CAP) {
+            const scale = STAT_CAP / total;
+            stats = stats.map(s => Math.max(MIN, Math.round(s * scale)));
+
+            // Adjust for rounding errors - remove from highest stat
+            let newTotal = stats.reduce((a, b) => a + b, 0);
+            while (newTotal > STAT_CAP) {
+                const maxIdx = stats.indexOf(Math.max(...stats));
+                stats[maxIdx]--;
+                newTotal--;
+            }
         }
 
         [this.bulk, this.speed, this.fury, this.instinct] = stats;
@@ -51,7 +68,7 @@ class BugGenome {
 
         // Combat types
         this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
-        this.defense = ['shell', 'agility', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
+        this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
 
         // Color
@@ -168,7 +185,8 @@ class BugSpriteGenerator {
             this.hslToHex(h, s, l),              // 3: Base color
             this.hslToHex(h, s * 0.8, l * 1.3),  // 4: Highlight
             this.hslToHex(0, 0, 0.15),           // 5: Dark pattern
-            this.hslToHex(0, 0, 0.9)             // 6: Light pattern
+            this.hslToHex(0, 0, 0.9),            // 6: Light pattern
+            this.hslToHex(120, 0.9, 0.45)        // 7: Toxic green
         ];
     }
 
@@ -200,7 +218,19 @@ class BugSpriteGenerator {
         const gap = Math.ceil(scale);
         const thoraxX = Math.floor(16 * scale);
         const abdomenX = Math.floor(10 * scale);
-        const headX = Math.floor(24 * scale);
+
+        // Adjust head position based on thorax/head combo to reduce gaps
+        let headOffset = 0;
+        const g = this.genome;
+        const smallerThoraxes = ['compact', 'humped', 'wide'];
+        if (smallerThoraxes.includes(g.thoraxType)) {
+            if (g.headType === 'round' || g.headType === 'square') {
+                headOffset = -Math.floor(2 * scale);
+            } else if (g.headType === 'triangular') {
+                headOffset = g.thoraxType === 'compact' ? -Math.floor(2 * scale) : -Math.floor(1 * scale);
+            }
+        }
+        const headX = Math.floor(24 * scale) + headOffset;
 
         // Animation offsets
         const breathe = Math.sin(frameNum * Math.PI / 2) * scale * 0.5;
@@ -224,6 +254,11 @@ class BugSpriteGenerator {
 
         if (this.genome.weapon === 'stinger') {
             this.drawStinger(grid, abdomenX, centerY, scale, state, frameNum);
+        }
+
+        // Toxic defense: add dripping venom
+        if (this.genome.defense === 'toxic') {
+            this.drawToxicDrip(grid, headX, centerY, scale, frameNum);
         }
 
         // Apply pattern
@@ -336,6 +371,43 @@ class BugSpriteGenerator {
             case 'humped':
                 this.drawHumpedThorax(grid, cx, cy, scale);
                 break;
+        }
+
+        // Shell defense: add armor plates
+        if (g.defense === 'shell') {
+            this.drawShellArmor(grid, cx, cy, scale);
+        }
+    }
+
+    drawShellArmor(grid, cx, cy, scale) {
+        // Shell defense: add extra dark pixel layer around thorax/abdomen
+        // Only apply to body area (above center + a bit), not legs
+        const centerY = Math.floor(this.size / 2);
+        const maxY = centerY + Math.floor(3 * scale); // Don't go too far below center
+
+        // First pass: find all empty pixels adjacent to body pixels
+        const shellPixels = [];
+        for (let y = 1; y < this.size - 1; y++) {
+            // Skip leg area (below body)
+            if (y > maxY) continue;
+
+            for (let x = 1; x < this.size - 1; x++) {
+                if (grid[y][x] === 0) {
+                    // Check if adjacent to any body pixel
+                    const hasBodyNeighbor =
+                        (grid[y-1][x] !== 0 && grid[y-1][x] !== 4) ||
+                        (grid[y+1][x] !== 0 && grid[y+1][x] !== 4) ||
+                        (grid[y][x-1] !== 0 && grid[y][x-1] !== 4) ||
+                        (grid[y][x+1] !== 0 && grid[y][x+1] !== 4);
+                    if (hasBodyNeighbor) {
+                        shellPixels.push({x, y});
+                    }
+                }
+            }
+        }
+        // Second pass: fill in shell pixels
+        for (const p of shellPixels) {
+            grid[p.y][p.x] = 1; // Dark shell color
         }
     }
 
@@ -816,6 +888,33 @@ class BugSpriteGenerator {
         }
     }
 
+    drawToxicDrip(grid, headX, cy, scale, frameNum) {
+        // Toxic bugs have green venom dripping from mouth area
+        const dripX = headX + Math.floor(2 * scale);
+        const dripStartY = cy + Math.floor(1 * scale);
+
+        // Animated drip that moves down over frames
+        const dripOffset = frameNum % 4;
+        const dripLen = 2 + Math.floor(scale);
+
+        for (let i = 0; i < dripLen; i++) {
+            const dy = dripStartY + i + dripOffset;
+            if (this.inBounds(dripX, dy)) {
+                grid[dy][dripX] = 7; // Toxic green
+            }
+        }
+
+        // Second smaller drip offset
+        const drip2X = dripX - Math.floor(1 * scale);
+        const drip2Offset = (frameNum + 2) % 4;
+        for (let i = 0; i < Math.floor(dripLen * 0.6); i++) {
+            const dy = dripStartY + i + drip2Offset;
+            if (this.inBounds(drip2X, dy)) {
+                grid[dy][drip2X] = 7; // Toxic green
+            }
+        }
+    }
+
     drawAntennae(grid, hx, cy, scale, state, frameNum) {
         const antennaLen = Math.floor((2 + this.genome.instinct / 40) * scale);
         const wave = Math.sin(frameNum * Math.PI / 2) * scale * 0.5;
@@ -847,10 +946,15 @@ class BugSpriteGenerator {
     }
 
     applyStripes(grid) {
+        // Ridge-style vertical stripes - dark lines through the body
+        const stripeSpacing = Math.max(3, Math.floor(this.size / 8));
         for (let x = 0; x < this.size; x++) {
-            if (x % 4 < 2) {
+            if (x % stripeSpacing === 0) {
                 for (let y = 0; y < this.size; y++) {
-                    if (grid[y][x] === 3) grid[y][x] = 5;
+                    // Only apply to body pixels (not background)
+                    if (grid[y][x] !== 0) {
+                        grid[y][x] = 1; // Dark outline color for stripe
+                    }
                 }
             }
         }
