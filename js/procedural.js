@@ -79,6 +79,56 @@ class BugGenome {
         };
         this.accentHue = (this.color.hue + 30 + Math.random() * 60) % 360;
         this.patternSeed = Math.floor(Math.random() * 10000);
+
+        // Rarity system - determines special variants
+        this.rarity = this.determineRarity();
+        this.variant = this.determineVariant();
+    }
+
+    determineRarity() {
+        const roll = Math.random() * 100;
+        if (roll < 0.5) return 'legendary';      // 0.5% chance
+        if (roll < 2) return 'epic';             // 1.5% chance
+        if (roll < 7) return 'rare';             // 5% chance
+        if (roll < 20) return 'uncommon';        // 13% chance
+        return 'common';                          // 80% chance
+    }
+
+    determineVariant() {
+        if (this.rarity === 'common') return null;
+
+        const variants = {
+            uncommon: ['shiny', 'albino', 'melanistic'],
+            rare: ['golden', 'crystalline', 'phantom'],
+            epic: ['infernal', 'glacial', 'electric', 'toxic'],
+            legendary: ['celestial', 'void', 'prismatic', 'ancient']
+        };
+
+        const options = variants[this.rarity] || [];
+        return options[Math.floor(Math.random() * options.length)];
+    }
+
+    getRarityColor() {
+        const colors = {
+            common: '#888888',
+            uncommon: '#2ecc71',
+            rare: '#3498db',
+            epic: '#9b59b6',
+            legendary: '#f39c12'
+        };
+        return colors[this.rarity] || colors.common;
+    }
+
+    getStatBonus() {
+        // Rare bugs get stat bonuses
+        const bonuses = {
+            common: 1.0,
+            uncommon: 1.05,
+            rare: 1.10,
+            epic: 1.15,
+            legendary: 1.25
+        };
+        return bonuses[this.rarity] || 1.0;
     }
 
     breed(other) {
@@ -113,6 +163,17 @@ class BugGenome {
         child.accentHue = this.blendHue(this.accentHue, other.accentHue);
         child.patternSeed = Math.floor(Math.random() * 10000);
 
+        // Rarity inheritance - slight boost if both parents are rare
+        const parentBoost = (this.rarity !== 'common' && other.rarity !== 'common') ? 5 : 0;
+        const roll = Math.random() * 100 - parentBoost;
+        if (roll < 0.5) child.rarity = 'legendary';
+        else if (roll < 2) child.rarity = 'epic';
+        else if (roll < 7) child.rarity = 'rare';
+        else if (roll < 20) child.rarity = 'uncommon';
+        else child.rarity = 'common';
+
+        child.variant = child.determineVariant();
+
         return child;
     }
 
@@ -144,8 +205,32 @@ class BugGenome {
             bulbous: ['Bulk', 'Mass', 'Tank', 'Heavy'],
             segmented: ['Crawler', 'Creep', 'Chain', 'Link']
         };
-        return prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +
+
+        const variantPrefixes = {
+            shiny: 'Shiny',
+            albino: 'Albino',
+            melanistic: 'Shadow',
+            golden: 'Golden',
+            crystalline: 'Crystal',
+            phantom: 'Phantom',
+            infernal: 'Infernal',
+            glacial: 'Glacial',
+            electric: 'Storm',
+            toxic: 'Venomous',
+            celestial: 'Celestial',
+            void: 'Void',
+            prismatic: 'Prismatic',
+            ancient: 'Ancient'
+        };
+
+        let baseName = prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +
                suffixes[this.abdomenType][Math.floor(Math.random() * 4)];
+
+        if (this.variant && variantPrefixes[this.variant]) {
+            baseName = variantPrefixes[this.variant] + ' ' + baseName;
+        }
+
+        return baseName;
     }
 
     getSizeMultiplier() {
@@ -1058,18 +1143,23 @@ class BugFactory {
         const generator = new BugSpriteGenerator(genome);
         const sprite = generator.generateAllFrames();
 
+        // Apply stat bonuses for rare variants
+        const bonus = genome.getStatBonus ? genome.getStatBonus() : 1.0;
+
         return {
             genome: genome,
             name: genome.getName(),
             sprite: sprite,
             size: sprite.size,
+            rarity: genome.rarity || 'common',
+            variant: genome.variant || null,
             data: {
                 name: genome.getName(),
                 stats: {
-                    BULK: genome.bulk,
-                    SPEED: genome.speed,
-                    FURY: genome.fury,
-                    INSTINCT: genome.instinct
+                    BULK: Math.round(genome.bulk * bonus),
+                    SPEED: Math.round(genome.speed * bonus),
+                    FURY: Math.round(genome.fury * bonus),
+                    INSTINCT: Math.round(genome.instinct * bonus)
                 },
                 abdomenType: genome.abdomenType,
                 thoraxType: genome.thoraxType,
@@ -1078,7 +1168,9 @@ class BugFactory {
                 pattern: genome.pattern,
                 weapon: genome.weapon,
                 defense: genome.defense,
-                mobility: genome.mobility
+                mobility: genome.mobility,
+                rarity: genome.rarity || 'common',
+                variant: genome.variant || null
             }
         };
     }
