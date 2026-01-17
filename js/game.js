@@ -42,6 +42,269 @@ let hitPause = 0;
 let impactFlash = { active: false, x: 0, y: 0, radius: 0, alpha: 0 };
 let slowMotion = 1;
 
+// Floating damage numbers
+let floatingNumbers = [];
+
+// Terrarium decorations (generated once per fight)
+let terrarium = {
+    plants: [],
+    rocks: [],
+    substrate: [],
+    initialized: false
+};
+
+function generateTerrariumDecorations() {
+    terrarium.plants = [];
+    terrarium.rocks = [];
+    terrarium.substrate = [];
+
+    // Generate substrate particles (dirt/sand texture)
+    for (let i = 0; i < 150; i++) {
+        terrarium.substrate.push({
+            x: ARENA.leftWall + Math.random() * (ARENA.rightWall - ARENA.leftWall),
+            y: ARENA.floorY + Math.random() * 18,
+            size: 1 + Math.random() * 3,
+            color: ['#4a3a28', '#5a4a35', '#3a2a18', '#6a5a45'][Math.floor(Math.random() * 4)]
+        });
+    }
+
+    // Generate rocks (2-4 rocks)
+    const numRocks = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < numRocks; i++) {
+        const baseX = ARENA.leftWall + 80 + Math.random() * (ARENA.rightWall - ARENA.leftWall - 160);
+        const rockWidth = 20 + Math.random() * 40;
+        const rockHeight = 15 + Math.random() * 25;
+        terrarium.rocks.push({
+            x: baseX,
+            y: ARENA.floorY - rockHeight * 0.7,
+            width: rockWidth,
+            height: rockHeight,
+            color: ['#4a4a4a', '#5a5a5a', '#3a3a3a', '#606060'][Math.floor(Math.random() * 4)],
+            highlight: ['#6a6a6a', '#7a7a7a', '#5a5a5a'][Math.floor(Math.random() * 3)]
+        });
+    }
+
+    // Generate plants (3-6 plants on sides)
+    const numPlants = 3 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < numPlants; i++) {
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        const baseX = side === 'left'
+            ? ARENA.leftWall + 10 + Math.random() * 80
+            : ARENA.rightWall - 90 + Math.random() * 80;
+
+        const plantType = Math.floor(Math.random() * 3); // 0=grass, 1=fern, 2=succulent
+        const height = 30 + Math.random() * 50;
+        const leaves = [];
+
+        if (plantType === 0) {
+            // Grass - multiple blades
+            const numBlades = 5 + Math.floor(Math.random() * 5);
+            for (let j = 0; j < numBlades; j++) {
+                leaves.push({
+                    offsetX: (Math.random() - 0.5) * 15,
+                    height: height * (0.6 + Math.random() * 0.4),
+                    curve: (Math.random() - 0.5) * 20,
+                    width: 2 + Math.random() * 2
+                });
+            }
+        } else if (plantType === 1) {
+            // Fern - drooping fronds
+            const numFronds = 4 + Math.floor(Math.random() * 3);
+            for (let j = 0; j < numFronds; j++) {
+                const angle = -Math.PI/2 + (j / (numFronds-1) - 0.5) * Math.PI * 0.8;
+                leaves.push({
+                    angle: angle,
+                    length: height * (0.5 + Math.random() * 0.5),
+                    droop: 0.3 + Math.random() * 0.3
+                });
+            }
+        } else {
+            // Succulent - rosette
+            const numLeaves = 6 + Math.floor(Math.random() * 4);
+            for (let j = 0; j < numLeaves; j++) {
+                const angle = (j / numLeaves) * Math.PI * 2;
+                leaves.push({
+                    angle: angle,
+                    length: 10 + Math.random() * 15,
+                    width: 5 + Math.random() * 5
+                });
+            }
+        }
+
+        terrarium.plants.push({
+            x: baseX,
+            y: ARENA.floorY,
+            type: plantType,
+            height: height,
+            leaves: leaves,
+            color: ['#2d5a2d', '#3d6a3d', '#4d7a4d', '#2a4a2a'][Math.floor(Math.random() * 4)],
+            darkColor: ['#1a3a1a', '#2a4a2a', '#1a2a1a'][Math.floor(Math.random() * 3)]
+        });
+    }
+
+    terrarium.initialized = true;
+}
+
+function renderTerrarium(ctx) {
+    // Render substrate texture
+    terrarium.substrate.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+
+    // Render rocks
+    terrarium.rocks.forEach(rock => {
+        // Rock shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(rock.x + rock.width/2, ARENA.floorY + 2, rock.width/2 + 5, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rock body
+        ctx.fillStyle = rock.color;
+        ctx.beginPath();
+        ctx.ellipse(rock.x + rock.width/2, rock.y + rock.height/2, rock.width/2, rock.height/2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rock highlight
+        ctx.fillStyle = rock.highlight;
+        ctx.beginPath();
+        ctx.ellipse(rock.x + rock.width/2 - rock.width*0.15, rock.y + rock.height*0.3, rock.width/4, rock.height/4, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Render plants
+    terrarium.plants.forEach(plant => {
+        ctx.save();
+        ctx.translate(plant.x, plant.y);
+
+        if (plant.type === 0) {
+            // Grass blades
+            plant.leaves.forEach(leaf => {
+                ctx.strokeStyle = plant.color;
+                ctx.lineWidth = leaf.width;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(leaf.offsetX, 0);
+                ctx.quadraticCurveTo(
+                    leaf.offsetX + leaf.curve,
+                    -leaf.height/2,
+                    leaf.offsetX + leaf.curve * 1.5,
+                    -leaf.height
+                );
+                ctx.stroke();
+            });
+        } else if (plant.type === 1) {
+            // Fern fronds
+            plant.leaves.forEach(leaf => {
+                ctx.strokeStyle = plant.color;
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+
+                const endX = Math.cos(leaf.angle) * leaf.length;
+                const endY = Math.sin(leaf.angle) * leaf.length + leaf.droop * leaf.length;
+
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(
+                    endX * 0.5,
+                    Math.sin(leaf.angle) * leaf.length * 0.5,
+                    endX,
+                    endY
+                );
+                ctx.stroke();
+
+                // Frond leaflets
+                ctx.lineWidth = 1;
+                for (let i = 0.2; i < 1; i += 0.15) {
+                    const px = endX * i;
+                    const py = Math.sin(leaf.angle) * leaf.length * i + leaf.droop * leaf.length * i * i;
+                    ctx.beginPath();
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px + 5, py + 3);
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px - 5, py + 3);
+                    ctx.stroke();
+                }
+            });
+        } else {
+            // Succulent rosette
+            plant.leaves.forEach(leaf => {
+                ctx.fillStyle = plant.color;
+                ctx.beginPath();
+                const tipX = Math.cos(leaf.angle) * leaf.length;
+                const tipY = Math.sin(leaf.angle) * leaf.length - 10;
+                ctx.ellipse(tipX/2, tipY/2 - 5, leaf.width, leaf.length/2, leaf.angle, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Highlight
+                ctx.fillStyle = plant.darkColor;
+                ctx.beginPath();
+                ctx.ellipse(tipX/2, tipY/2 - 5, leaf.width * 0.5, leaf.length/3, leaf.angle, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        ctx.restore();
+    });
+}
+
+// Floating damage number class
+class FloatingNumber {
+    constructor(x, y, value, color, isCrit = false) {
+        this.x = x;
+        this.y = y;
+        this.value = value;
+        this.color = color;
+        this.isCrit = isCrit;
+        this.vy = -3;
+        this.life = 1;
+        this.scale = isCrit ? 1.5 : 1;
+    }
+
+    update() {
+        this.y += this.vy;
+        this.vy += 0.1; // Gravity
+        this.life -= 0.02;
+        if (this.isCrit) {
+            this.scale *= 0.98;
+        }
+    }
+
+    render(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.font = `bold ${Math.floor(16 * this.scale)}px monospace`;
+        ctx.textAlign = 'center';
+
+        // Shadow
+        ctx.fillStyle = '#000';
+        ctx.fillText(this.value, this.x + 1, this.y + 1);
+
+        // Main text
+        ctx.fillStyle = this.color;
+        ctx.fillText(this.value, this.x, this.y);
+
+        if (this.isCrit) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.strokeText(this.value, this.x, this.y);
+        }
+        ctx.restore();
+    }
+}
+
+function spawnFloatingNumber(x, y, value, color = '#fff', isCrit = false) {
+    floatingNumbers.push(new FloatingNumber(
+        x + (Math.random() - 0.5) * 20,
+        y - 20,
+        (isCrit ? '!' : '') + value,
+        color,
+        isCrit
+    ));
+}
+
 // ============================================
 // FIGHTER CLASS
 // ============================================
@@ -79,6 +342,14 @@ class Fighter {
         this.animFrame = 0;
         this.stateTimer = 0;
 
+        // Intro animation
+        this.introState = 'waiting'; // waiting, entering, ready
+        this.introTimer = 0;
+        this.targetX = this.x; // Store final position
+        this.targetY = this.y;
+        this.introOffsetX = 0;
+        this.introScale = 0;
+
         // Attack
         this.attackTarget = null;
         this.lungeX = 0;
@@ -88,6 +359,11 @@ class Fighter {
         this.flashTimer = 0;
         this.squash = 1;
         this.stretch = 1;
+
+        // Death/victory animation
+        this.deathRotation = 0;
+        this.deathAlpha = 1;
+        this.victoryBounce = 0;
 
         // Physics
         this.vx = 0;
@@ -219,6 +495,45 @@ class Fighter {
         }
     }
 
+    startIntro(delay) {
+        this.introState = 'waiting';
+        this.introTimer = delay;
+        // Start off-screen
+        this.introOffsetX = this.side === 'left' ? -200 : 200;
+        this.introScale = 0.3;
+    }
+
+    updateIntro() {
+        if (this.introState === 'waiting') {
+            this.introTimer--;
+            if (this.introTimer <= 0) {
+                this.introState = 'entering';
+                // Spawn entry dust
+                const dustX = this.side === 'left' ? ARENA.leftWall + 30 : ARENA.rightWall - 30;
+                spawnParticles(dustX, ARENA.floorY - 10, 'dust', 10);
+            }
+        } else if (this.introState === 'entering') {
+            // Smoothly move toward target position
+            this.introOffsetX *= 0.85;
+            this.introScale += (1 - this.introScale) * 0.12;
+
+            // Check if intro is complete
+            if (Math.abs(this.introOffsetX) < 2 && Math.abs(1 - this.introScale) < 0.05) {
+                this.introState = 'ready';
+                this.introOffsetX = 0;
+                this.introScale = 1;
+                // Ready pose - slight bounce
+                this.squash = 0.8;
+                this.stretch = 1.2;
+                spawnParticles(this.x, this.y, 'landing', 4);
+            }
+        }
+    }
+
+    isIntroComplete() {
+        return this.introState === 'ready';
+    }
+
     updateAnimation() {
         if (hitPause > 0) return;
 
@@ -258,9 +573,42 @@ class Fighter {
             if (this.stateTimer >= 12) this.executeAttack();
         }
 
+        // Victory celebration - bouncing and spinning
         if (this.state === 'victory') {
-            this.squash = this.stateTimer % 20 < 10 ? 0.9 : 1.1;
-            this.stretch = this.stateTimer % 20 < 10 ? 1.1 : 0.9;
+            this.victoryBounce = Math.sin(this.stateTimer / 8) * 10;
+            this.squash = 0.85 + Math.sin(this.stateTimer / 6) * 0.15;
+            this.stretch = 1.15 - Math.sin(this.stateTimer / 6) * 0.15;
+
+            // Occasional victory particles
+            if (this.stateTimer % 30 === 0) {
+                spawnParticles(this.x, this.y - 15, 'spark', 5);
+            }
+        }
+
+        // Death animation - fall over and fade
+        if (this.state === 'death') {
+            // Rotate toward the ground
+            const targetRotation = this.facingRight ? Math.PI / 2 : -Math.PI / 2;
+            this.deathRotation += (targetRotation - this.deathRotation) * 0.1;
+
+            // Flatten
+            this.squash = Math.min(1.3, this.squash + 0.02);
+            this.stretch = Math.max(0.5, this.stretch - 0.02);
+
+            // Twitch occasionally
+            if (this.stateTimer < 60 && Math.random() < 0.1) {
+                this.lungeX = (Math.random() - 0.5) * 3;
+                this.lungeY = (Math.random() - 0.5) * 2;
+            }
+
+            // Fade out gradually
+            if (this.stateTimer > 120) {
+                this.deathAlpha = Math.max(0.3, this.deathAlpha - 0.005);
+            }
+        } else {
+            this.deathRotation = 0;
+            this.deathAlpha = 1;
+            this.victoryBounce = 0;
         }
     }
 
@@ -269,6 +617,91 @@ class Fighter {
         this.attackTarget = target;
         this.setState('windup');
         this.facingRight = target.x > this.x;
+    }
+
+    getWeaponBehavior(dx, dy, dist) {
+        const weapon = this.genome.weapon;
+        const fury = this.genome.fury;
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+
+        switch (weapon) {
+            case 'mandibles':
+                // Crushing grip - strong lunge forward, wide stance
+                return {
+                    lungeX: dirX * (30 + fury / 8),
+                    lungeY: dirY * 15,
+                    momentumX: dirX * 8,
+                    momentumY: 0,
+                    squash: 1.2, // Wide grip stance
+                    stretch: 0.8,
+                    particles: 'dust',
+                    particleCount: 3
+                };
+
+            case 'claws':
+                // Quick slashing - fast, multi-directional
+                return {
+                    lungeX: dirX * (20 + fury / 12),
+                    lungeY: dirY * 20 + (Math.random() - 0.5) * 10, // Varied slash angle
+                    momentumX: dirX * 4,
+                    momentumY: (Math.random() - 0.5) * 3,
+                    squash: 0.6, // Coiled for slash
+                    stretch: 1.4,
+                    particles: 'spark',
+                    particleCount: 4
+                };
+
+            case 'stinger':
+                // Precise thrust - straight line attack
+                return {
+                    lungeX: dirX * (35 + fury / 6),
+                    lungeY: dirY * 25,
+                    momentumX: dirX * 6,
+                    momentumY: dirY * 2,
+                    squash: 0.5, // Extended thrust
+                    stretch: 1.6,
+                    particles: null // Silent deadly strike
+                };
+
+            case 'fangs':
+                // Venomous bite - quick lunge then clamp
+                return {
+                    lungeX: dirX * (28 + fury / 10),
+                    lungeY: dirY * 18,
+                    momentumX: dirX * 5,
+                    momentumY: -2, // Slight upward for bite angle
+                    squash: 0.65,
+                    stretch: 1.35,
+                    particles: 'poison',
+                    particleCount: 3
+                };
+
+            case 'horns':
+                // Charging ram - heavy forward momentum
+                return {
+                    lungeX: dirX * (40 + fury / 5),
+                    lungeY: dirY * 10,
+                    momentumX: dirX * 12, // Heavy charge momentum
+                    momentumY: -3, // Slight lift from impact
+                    squash: 0.9,
+                    stretch: 1.15,
+                    particles: 'dust',
+                    particleCount: 8
+                };
+
+            default:
+                // Generic attack
+                return {
+                    lungeX: dirX * (25 + fury / 10),
+                    lungeY: dirY * 15,
+                    momentumX: dirX * 5,
+                    momentumY: 0,
+                    squash: 0.7,
+                    stretch: 1.3,
+                    particles: null
+                };
+        }
     }
 
     executeAttack() {
@@ -281,13 +714,20 @@ class Fighter {
 
         this.setState('attack');
 
-        // Lunge with velocity
-        const lungeStrength = 25 + this.genome.fury / 10;
-        this.lungeX = (dx / dist) * lungeStrength;
-        this.lungeY = (dy / dist) * lungeStrength * 0.5;
-        this.vx += (dx / dist) * 5; // Add momentum to lunge
-        this.squash = 0.7;
-        this.stretch = 1.3;
+        // Weapon-specific attack animations and effects
+        const weaponBehavior = this.getWeaponBehavior(dx, dy, dist);
+
+        this.lungeX = weaponBehavior.lungeX;
+        this.lungeY = weaponBehavior.lungeY;
+        this.vx += weaponBehavior.momentumX;
+        this.vy += weaponBehavior.momentumY || 0;
+        this.squash = weaponBehavior.squash;
+        this.stretch = weaponBehavior.stretch;
+
+        // Spawn weapon-specific particles
+        if (weaponBehavior.particles) {
+            spawnParticles(this.x + dx * 0.3, this.y + dy * 0.3, weaponBehavior.particles, weaponBehavior.particleCount || 5);
+        }
 
         // === POSITIONING BONUSES ===
 
@@ -318,11 +758,11 @@ class Fighter {
             // Positioning damage bonuses
             if (heightAdvantage) {
                 damage += 2;
-                addCommentary(`Height advantage!`, '#8af');
+                addCommentary(getRandomPhrase('heightAdvantage'), '#8af');
             }
             if (backstab) {
                 damage = Math.floor(damage * 1.3);
-                addCommentary(`Backstab!`, '#f8a');
+                addCommentary(getRandomPhrase('backstab'), '#f8a');
             }
 
             // Weapon effects
@@ -344,7 +784,7 @@ class Fighter {
             let isCrit = rollDice(100) <= critChance;
             if (isCrit) {
                 damage = Math.floor(damage * 1.5);
-                addCommentary(`CRITICAL HIT!`, '#ff0');
+                addCommentary(getRandomPhrase('criticalHit'), '#ff0');
             }
 
             damage = Math.max(1, damage);
@@ -353,7 +793,7 @@ class Fighter {
             let strikes = 1;
             if (this.genome.weapon === 'claws' && rollDice(4) === 4) {
                 strikes = 2;
-                addCommentary(`Double slash!`, '#ff0');
+                addCommentary(getRandomPhrase('doubleslash'), '#ff0');
             }
 
             setTimeout(() => {
@@ -363,7 +803,7 @@ class Fighter {
             }, 50);
         } else {
             spawnParticles(this.x + dx * 0.7, this.y + dy * 0.7, 'dust', 5);
-            addCommentary(`${this.bug.name} misses!`, '#888');
+            addCommentary(getRandomPhrase('miss', { name: this.bug.name }), '#888');
         }
 
         this.attackTarget = null;
@@ -411,13 +851,20 @@ class Fighter {
 
         // Particles
         spawnParticles(target.x, target.y, 'blood', isCrit ? 15 : 8);
-        if (isCrit) spawnParticles(target.x, target.y, 'spark', 10);
+        if (isCrit) {
+            spawnParticles(target.x, target.y, 'spark', 10);
+            spawnParticles(target.x, target.y, 'shockwave', 1);
+            spawnParticles(target.x, target.y, 'impact', 6);
+        }
         addBloodStain(target.x, target.y + 15);
+
+        // Floating damage number
+        spawnFloatingNumber(target.x, target.y, damage, isCrit ? '#ff0' : '#f80', isCrit);
 
         // Venom from fangs
         if (this.genome.weapon === 'fangs' && rollDice(3) === 3) {
             target.poisoned = 4;
-            addCommentary(`${target.bug.name} is poisoned!`, '#0f0');
+            addCommentary(getRandomPhrase('poison', { name: target.bug.name }), '#0f0');
             spawnParticles(target.x, target.y, 'poison', 10);
         }
 
@@ -427,11 +874,22 @@ class Fighter {
             if (toxicDamage > 0) {
                 this.hp -= toxicDamage;
                 this.flashTimer = 4;
-                addCommentary(`${this.bug.name} takes ${toxicDamage} toxic damage!`, '#0f0');
+                spawnFloatingNumber(this.x, this.y, toxicDamage, '#0f0', false);
+                addCommentary(getRandomPhrase('toxic', { name: this.bug.name, dmg: toxicDamage }), '#0f0');
             }
         }
 
-        addCommentary(`${this.bug.name} deals ${damage} damage!`, isCrit ? '#ff0' : '#f80');
+        // Use weapon-specific commentary sometimes, generic damage otherwise
+        if (Math.random() < 0.4) {
+            const weaponPhrase = getWeaponPhrase(this.genome.weapon, this.bug.name);
+            if (weaponPhrase) {
+                addCommentary(weaponPhrase, isCrit ? '#ff0' : '#f80');
+            } else {
+                addCommentary(getRandomPhrase('damage', { name: this.bug.name, dmg: damage }), isCrit ? '#ff0' : '#f80');
+            }
+        } else {
+            addCommentary(getRandomPhrase('damage', { name: this.bug.name, dmg: damage }), isCrit ? '#ff0' : '#f80');
+        }
 
         if (target.hp <= 0) {
             target.hp = 0;
@@ -439,7 +897,7 @@ class Fighter {
             hitPause = 25;
             slowMotion = 0.3;
             setTimeout(() => { slowMotion = 1; }, 500);
-            addCommentary(`${target.bug.name} is DEFEATED!`, '#f00');
+            addCommentary(getRandomPhrase('defeat', { name: target.bug.name }), '#f00');
             spawnParticles(target.x, target.y, 'blood', 30);
         }
     }
@@ -520,12 +978,20 @@ class Fighter {
 
         // Floor collision
         const floorLevel = ARENA.floorY - bounds.bottom;
+        const wasAirborne = !this.grounded && !this.onWall;
         if (this.y >= floorLevel) {
             this.y = floorLevel;
             if (this.isFlying) {
                 // Flyers bounce off floor
+                if (Math.abs(this.vy) > 3) {
+                    spawnParticles(this.x, this.y + bounds.bottom, 'landing', 4);
+                }
                 this.vy = -Math.abs(this.vy) * bounceFactor;
             } else {
+                // Landing dust for ground bugs
+                if (wasAirborne && Math.abs(this.vy) > 2) {
+                    spawnParticles(this.x, this.y + bounds.bottom, 'landing', 6);
+                }
                 this.vy = 0;
                 this.grounded = true;
                 if (this.onWall) {
@@ -871,10 +1337,17 @@ class Fighter {
         // Scale based on sprite size - 1x scale
         const baseScale = 1.0;
         const sizeRatio = this.spriteSize / 24;
-        const scale = baseScale * sizeRatio;
+        let scale = baseScale * sizeRatio;
 
-        const renderX = this.x + this.lungeX;
-        const renderY = this.y + this.lungeY;
+        // Apply intro animation scaling
+        if (this.introState !== 'ready') {
+            scale *= this.introScale;
+        }
+
+        // Apply intro offset to render position
+        const renderX = this.x + this.lungeX + this.introOffsetX;
+        // Victory bounce affects Y position
+        const renderY = this.y + this.lungeY - this.victoryBounce;
 
         const scaleX = scale * this.squash;
         const scaleY = scale * this.stretch;
@@ -886,21 +1359,28 @@ class Fighter {
 
         ctx.save();
 
-        if (this.flashTimer > 0) {
+        // Death fade
+        if (this.state === 'death') {
+            ctx.globalAlpha = this.deathAlpha;
+        } else if (this.flashTimer > 0) {
             ctx.globalAlpha = 0.5 + (this.flashTimer / 16);
         } else if (this.genome.defense === 'camouflage') {
             // Camouflage bugs are semi-transparent
             ctx.globalAlpha = 0.6;
         }
 
-        // Wallcrawlers on walls: full 90° rotation, feet on wall, head pointing up
+        // Calculate rotation
         let rotation = 0;
-        if (this.isWallcrawler && this.onWall) {
+
+        // Death rotation (falling over)
+        if (this.state === 'death') {
+            rotation = this.deathRotation;
+        }
+        // Wallcrawlers on walls: full 90° rotation, feet on wall, head pointing up
+        else if (this.isWallcrawler && this.onWall) {
             if (this.wallSide === 'left') {
-                // Sprite is flipped (facingRight=false), rotate 90° CW to get head up, feet left
                 rotation = Math.PI / 2;
             } else {
-                // Normal sprite, rotate 90° CCW to get head up, feet right
                 rotation = -Math.PI / 2;
             }
         }
@@ -965,6 +1445,8 @@ class Particle {
         this.type = type;
         this.life = 1;
         this.size = 2 + Math.random() * 3;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotSpeed = (Math.random() - 0.5) * 0.2;
 
         switch(type) {
             case 'blood':
@@ -996,6 +1478,56 @@ class Particle {
                 this.gravity = 0;
                 this.decay = 0.04;
                 break;
+            case 'landing':
+                // Dust cloud when landing
+                const angle = Math.random() * Math.PI;
+                const speed = 2 + Math.random() * 3;
+                this.vx = Math.cos(angle) * speed * (Math.random() < 0.5 ? 1 : -1);
+                this.vy = -Math.random() * 1.5;
+                this.color = ['#8a7a6a', '#9a8a7a', '#7a6a5a'][Math.floor(Math.random() * 3)];
+                this.gravity = 0.08;
+                this.decay = 0.03;
+                this.size = 4 + Math.random() * 6;
+                break;
+            case 'impact':
+                // Impact ring particle
+                const impAngle = Math.random() * Math.PI * 2;
+                const impSpeed = 5 + Math.random() * 8;
+                this.vx = Math.cos(impAngle) * impSpeed;
+                this.vy = Math.sin(impAngle) * impSpeed;
+                this.color = '#fff';
+                this.gravity = 0;
+                this.decay = 0.08;
+                this.size = 2 + Math.random() * 2;
+                break;
+            case 'trail':
+                // Movement trail
+                this.vx = (Math.random() - 0.5) * 1;
+                this.vy = (Math.random() - 0.5) * 1;
+                this.color = 'rgba(255,255,255,0.5)';
+                this.gravity = 0;
+                this.decay = 0.06;
+                this.size = 2 + Math.random() * 2;
+                break;
+            case 'shockwave':
+                // Expanding ring effect
+                this.vx = 0;
+                this.vy = 0;
+                this.radius = 5;
+                this.maxRadius = 40 + Math.random() * 20;
+                this.color = '#fff';
+                this.gravity = 0;
+                this.decay = 0.05;
+                break;
+            case 'confetti':
+                // Victory confetti
+                this.vx = (Math.random() - 0.5) * 6;
+                this.vy = -3 - Math.random() * 5;
+                this.color = ['#ff0', '#f0f', '#0ff', '#0f0', '#f80'][Math.floor(Math.random() * 5)];
+                this.gravity = 0.15;
+                this.decay = 0.008;
+                this.size = 4 + Math.random() * 4;
+                break;
         }
     }
 
@@ -1006,11 +1538,18 @@ class Particle {
         this.vy += this.gravity * slowMotion;
         this.life -= this.decay * slowMotion;
         this.vx *= 0.98;
+        this.rotation += this.rotSpeed;
+
+        // Shockwave expansion
+        if (this.type === 'shockwave') {
+            this.radius += 3;
+            if (this.radius > this.maxRadius) this.life = 0;
+        }
     }
 
     render(ctx) {
         ctx.globalAlpha = Math.max(0, this.life);
-        ctx.fillStyle = this.color;
+
         if (this.type === 'spark') {
             ctx.strokeStyle = this.color;
             ctx.lineWidth = 2;
@@ -1018,11 +1557,87 @@ class Particle {
             ctx.moveTo(this.x, this.y);
             ctx.lineTo(this.x - this.vx * 2, this.y - this.vy * 2);
             ctx.stroke();
+        } else if (this.type === 'shockwave') {
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 3 * this.life;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (this.type === 'confetti') {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            ctx.fillStyle = this.color;
+            ctx.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+            ctx.restore();
+        } else if (this.type === 'landing' || this.type === 'dust') {
+            // Soft circular dust
+            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
+            grad.addColorStop(0, this.color);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
         } else {
+            ctx.fillStyle = this.color;
             ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
         }
         ctx.globalAlpha = 1;
     }
+}
+
+// Ambient floating dust motes in the arena
+let ambientParticles = [];
+
+function initAmbientParticles() {
+    ambientParticles = [];
+    for (let i = 0; i < 20; i++) {
+        ambientParticles.push({
+            x: ARENA.leftWall + Math.random() * (ARENA.rightWall - ARENA.leftWall),
+            y: ARENA.ceilingY + Math.random() * (ARENA.floorY - ARENA.ceilingY),
+            size: 1 + Math.random() * 2,
+            speed: 0.1 + Math.random() * 0.3,
+            angle: Math.random() * Math.PI * 2,
+            wobble: Math.random() * Math.PI * 2
+        });
+    }
+}
+
+function updateAmbientParticles() {
+    ambientParticles.forEach(p => {
+        p.wobble += 0.02;
+        p.x += Math.sin(p.wobble) * 0.3;
+        p.y += p.speed;
+
+        // Reset at bottom
+        if (p.y > ARENA.floorY) {
+            p.y = ARENA.ceilingY;
+            p.x = ARENA.leftWall + Math.random() * (ARENA.rightWall - ARENA.leftWall);
+        }
+    });
+}
+
+function renderAmbientParticles(ctx) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ambientParticles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// Vignette effect for atmosphere
+function renderVignette(ctx) {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.max(canvas.width, canvas.height) * 0.7;
+
+    const vignette = ctx.createRadialGradient(centerX, centerY, radius * 0.5, centerX, centerY, radius);
+    vignette.addColorStop(0, 'transparent');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 function spawnParticles(x, y, type, count) {
@@ -1061,6 +1676,7 @@ function processCombatTick() {
             f.poisoned--;
             f.flashTimer = 4;
             spawnParticles(f.x, f.y, 'poison', 3);
+            spawnFloatingNumber(f.x, f.y, poisonDmg, '#0f0', false);
             if (f.hp <= 0) {
                 f.hp = 0;
                 f.setState('death');
@@ -1128,22 +1744,274 @@ function processCombatTick() {
             const dy = opponent.y - f.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
 
-            // Attack range based on actual sprite bounds
+            // Attack range based on actual sprite bounds + weapon-specific range
             const bounds = f.getScaledBounds();
             const oppBounds = opponent.getScaledBounds();
-            const attackRange = bounds.right + oppBounds.left + 30;
+            const weaponRange = getWeaponRange(f.genome.weapon);
+            const attackRange = bounds.right + oppBounds.left + weaponRange;
             if (dist < attackRange) {
                 f.startAttack(opponent);
-                const cooldown = Math.max(25, 80 - f.genome.speed / 2);
-                f.attackCooldown = cooldown + rollDice(30);
+                const baseCooldown = getWeaponCooldown(f.genome.weapon, f.genome.speed);
+                f.attackCooldown = baseCooldown + rollDice(20);
             }
         }
     });
 }
 
+// Weapon-specific attack ranges
+function getWeaponRange(weapon) {
+    switch (weapon) {
+        case 'horns': return 45;    // Charging range
+        case 'stinger': return 40;  // Extended reach
+        case 'mandibles': return 25; // Close grappling
+        case 'claws': return 35;    // Slashing range
+        case 'fangs': return 30;    // Bite range
+        default: return 30;
+    }
+}
+
+// Weapon-specific attack cooldowns
+function getWeaponCooldown(weapon, speed) {
+    const speedMod = speed / 2;
+    switch (weapon) {
+        case 'claws':
+            // Fast multi-hit weapon
+            return Math.max(20, 55 - speedMod);
+        case 'stinger':
+            // Precise but slower
+            return Math.max(30, 75 - speedMod);
+        case 'mandibles':
+            // Slow crushing attacks
+            return Math.max(35, 90 - speedMod);
+        case 'fangs':
+            // Medium speed bites
+            return Math.max(25, 65 - speedMod);
+        case 'horns':
+            // Charging takes time
+            return Math.max(40, 100 - speedMod);
+        default:
+            return Math.max(25, 80 - speedMod);
+    }
+}
+
 // ============================================
 // COMMENTARY
 // ============================================
+
+// Enhanced contextual commentary system
+const COMMENTARY = {
+    miss: [
+        "{name} whiffs completely!",
+        "{name} swings at nothing!",
+        "A clean miss by {name}!",
+        "{name}'s attack goes wide!",
+        "{name} misses the mark!",
+        "{name} can't connect!",
+        "Evasive maneuver dodges {name}!",
+        "{name} strikes the air!"
+    ],
+    damage: [
+        "{name} lands a solid hit!",
+        "{name} connects for {dmg} damage!",
+        "Ouch! {name} deals {dmg}!",
+        "{name} strikes true! {dmg} damage!",
+        "{name} delivers {dmg} damage!",
+        "That's gonna leave a mark! {dmg}!",
+        "{name} with a clean hit! {dmg}!"
+    ],
+    criticalHit: [
+        "DEVASTATING CRITICAL!",
+        "MASSIVE CRIT!",
+        "BRUTAL CRITICAL HIT!",
+        "CRITICAL! WHAT A HIT!",
+        "CRUSHING BLOW!",
+        "BONE-CRUSHING CRITICAL!"
+    ],
+    defeat: [
+        "{name} goes down HARD!",
+        "{name} is FINISHED!",
+        "IT'S OVER for {name}!",
+        "{name} has been DESTROYED!",
+        "{name} is OUT COLD!",
+        "That's it! {name} is DONE!",
+        "{name} has fallen!",
+        "DOWN GOES {name}!"
+    ],
+    heightAdvantage: [
+        "Attack from above!",
+        "Height advantage!",
+        "Diving strike!",
+        "Aerial assault!"
+    ],
+    backstab: [
+        "Backstab!",
+        "Attacked from behind!",
+        "Caught off guard!",
+        "Sneak attack!"
+    ],
+    poison: [
+        "{name} is poisoned!",
+        "Venom courses through {name}!",
+        "The poison takes hold of {name}!",
+        "{name} feels the toxin!"
+    ],
+    toxic: [
+        "{name} takes {dmg} toxic recoil!",
+        "Toxic defense! {name} takes {dmg}!",
+        "{name} hurt by toxic skin! {dmg}!"
+    ],
+    doubleslash: [
+        "Double slash!",
+        "Two quick strikes!",
+        "Rapid claw combo!",
+        "Flurry of claws!"
+    ],
+    lowHp: [
+        "{name} is on the ropes!",
+        "{name} is barely hanging on!",
+        "{name} looks wounded!",
+        "{name} is in trouble!"
+    ],
+    comeback: [
+        "What a comeback by {name}!",
+        "{name} turning it around!",
+        "The momentum shifts to {name}!"
+    ],
+    dominating: [
+        "{name} is dominating!",
+        "{name} is in complete control!",
+        "One-sided beatdown by {name}!"
+    ],
+    closeMatch: [
+        "This fight is neck and neck!",
+        "Anyone's match to win!",
+        "An even contest so far!"
+    ],
+    weaponAttack: {
+        mandibles: [
+            "{name}'s mandibles clamp down!",
+            "Crushing bite from {name}!",
+            "{name} tears with mandibles!"
+        ],
+        claws: [
+            "{name} slashes with claws!",
+            "Razor claws from {name}!",
+            "{name} swipes viciously!"
+        ],
+        stinger: [
+            "{name}'s stinger strikes!",
+            "Deadly sting from {name}!",
+            "{name} jabs with the stinger!"
+        ],
+        fangs: [
+            "{name} bites deep with fangs!",
+            "Venomous bite from {name}!",
+            "{name}'s fangs find their mark!"
+        ],
+        horns: [
+            "{name} gores with horns!",
+            "Horn charge from {name}!",
+            "{name} rams with brutal horns!"
+        ]
+    },
+    fightStart: [
+        "Let's get ready to rumble!",
+        "The battle begins!",
+        "They're off! Let's go!",
+        "Here we go! Fight!"
+    ],
+    victory: [
+        "{name} is VICTORIOUS!",
+        "{name} WINS!",
+        "WINNER: {name}!",
+        "{name} stands triumphant!",
+        "Victory goes to {name}!"
+    ]
+};
+
+function getRandomPhrase(category, replacements = {}) {
+    const phrases = COMMENTARY[category];
+    if (!phrases) return '';
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    let result = phrase;
+    for (const [key, value] of Object.entries(replacements)) {
+        result = result.replace(`{${key}}`, value);
+    }
+    return result;
+}
+
+function getWeaponPhrase(weapon, name) {
+    const weaponPhrases = COMMENTARY.weaponAttack[weapon];
+    if (weaponPhrases) {
+        const phrase = weaponPhrases[Math.floor(Math.random() * weaponPhrases.length)];
+        return phrase.replace('{name}', name);
+    }
+    return '';
+}
+
+// Track fight momentum for contextual commentary
+let fightMomentum = {
+    lastCommentTime: 0,
+    lastHpCheck: { f1: 100, f2: 100 },
+    dominatingAnnounced: false,
+    lowHpAnnounced: { f1: false, f2: false }
+};
+
+function checkFightContext() {
+    if (gameState !== 'fighting' || fighters.length !== 2) return;
+
+    const now = Date.now();
+    if (now - fightMomentum.lastCommentTime < 3000) return; // Rate limit
+
+    const f1 = fighters[0];
+    const f2 = fighters[1];
+    const hp1Pct = f1.hp / f1.maxHp;
+    const hp2Pct = f2.hp / f2.maxHp;
+
+    // Low HP warning
+    if (hp1Pct < 0.25 && !fightMomentum.lowHpAnnounced.f1) {
+        addCommentary(getRandomPhrase('lowHp', { name: f1.bug.name }), '#f80');
+        fightMomentum.lowHpAnnounced.f1 = true;
+        fightMomentum.lastCommentTime = now;
+        return;
+    }
+    if (hp2Pct < 0.25 && !fightMomentum.lowHpAnnounced.f2) {
+        addCommentary(getRandomPhrase('lowHp', { name: f2.bug.name }), '#f80');
+        fightMomentum.lowHpAnnounced.f2 = true;
+        fightMomentum.lastCommentTime = now;
+        return;
+    }
+
+    // Domination check (one fighter has 80%+ HP while other has less than 40%)
+    if (!fightMomentum.dominatingAnnounced) {
+        if (hp1Pct > 0.8 && hp2Pct < 0.4) {
+            addCommentary(getRandomPhrase('dominating', { name: f1.bug.name }), '#ff0');
+            fightMomentum.dominatingAnnounced = true;
+            fightMomentum.lastCommentTime = now;
+        } else if (hp2Pct > 0.8 && hp1Pct < 0.4) {
+            addCommentary(getRandomPhrase('dominating', { name: f2.bug.name }), '#ff0');
+            fightMomentum.dominatingAnnounced = true;
+            fightMomentum.lastCommentTime = now;
+        }
+    }
+
+    // Close match check (both between 30-60% HP)
+    if (hp1Pct > 0.3 && hp1Pct < 0.6 && hp2Pct > 0.3 && hp2Pct < 0.6) {
+        if (Math.random() < 0.02) { // Rare
+            addCommentary(getRandomPhrase('closeMatch'), '#8af');
+            fightMomentum.lastCommentTime = now;
+        }
+    }
+}
+
+function resetFightMomentum() {
+    fightMomentum = {
+        lastCommentTime: 0,
+        lastHpCheck: { f1: 100, f2: 100 },
+        dominatingAnnounced: false,
+        lowHpAnnounced: { f1: false, f2: false }
+    };
+}
 
 function addCommentary(text, color = '#fff') {
     commentary.unshift({ text, color, age: 0 });
@@ -1285,24 +2153,56 @@ function startFight() {
     ];
 
     particles = [];
+    floatingNumbers = [];
     combatTick = 0;
     hitPause = 0;
     slowMotion = 1;
-    gameState = 'fighting';
+
+    // Start with intro phase
+    gameState = 'intro';
+
+    // Initialize intro animations with staggered timing
+    fighters[0].startIntro(10);  // Left fighter enters first
+    fighters[1].startIntro(40);  // Right fighter enters slightly later
+
+    // Reset fight momentum tracking
+    resetFightMomentum();
+
+    // Generate new terrarium decorations for this fight
+    generateTerrariumDecorations();
+
+    // Initialize ambient particles
+    initAmbientParticles();
 
     document.getElementById('countdown-display').classList.add('hidden');
     document.getElementById('bet-buttons').classList.add('disabled');
 
     addCommentary(`${fighters[0].bug.name} vs ${fighters[1].bug.name}!`, '#ff0');
-    addCommentary("FIGHT!", '#f00');
+}
 
-    // Camouflage first strike
+function updateIntroPhase() {
+    if (gameState !== 'intro') return;
+
+    // Update intro animations for both fighters
     fighters.forEach(f => {
-        if (f.genome.defense === 'camouflage') {
-            f.attackCooldown = 5;
-            addCommentary(`${f.bug.name} strikes from the shadows!`, '#595');
-        }
+        f.updateIntro();
+        f.updateAnimation(); // Keep animation running during intro
     });
+
+    // Check if both intros are complete
+    if (fighters.every(f => f.isIntroComplete())) {
+        // Transition to fighting
+        gameState = 'fighting';
+        addCommentary(getRandomPhrase('fightStart'), '#f00');
+
+        // Camouflage first strike
+        fighters.forEach(f => {
+            if (f.genome.defense === 'camouflage') {
+                f.attackCooldown = 5;
+                addCommentary(`${f.bug.name} strikes from the shadows!`, '#595');
+            }
+        });
+    }
 }
 
 function endFight() {
@@ -1312,12 +2212,18 @@ function endFight() {
 
     if (winner) {
         winner.setState('victory');
-        addCommentary(`${winner.bug.name} WINS!`, '#ff0');
+        addCommentary(getRandomPhrase('victory', { name: winner.bug.name }), '#ff0');
         resolveBet(winnerSide);
 
+        // Victory effects - sparks and confetti
         for (let i = 0; i < 5; i++) {
-            setTimeout(() => spawnParticles(winner.x, winner.y - 20, 'spark', 8), i * 200);
+            setTimeout(() => {
+                spawnParticles(winner.x, winner.y - 20, 'spark', 8);
+                spawnParticles(winner.x + (Math.random() - 0.5) * 60, winner.y - 30, 'confetti', 5);
+            }, i * 200);
         }
+        // Shockwave on victory
+        spawnParticles(winner.x, winner.y, 'shockwave', 1);
     }
 
     setTimeout(startCountdown, 4000);
@@ -1326,6 +2232,223 @@ function endFight() {
 // ============================================
 // RENDERING
 // ============================================
+
+function renderPreFightPresentation(ctx) {
+    const b1 = nextBugs.bug1;
+    const b2 = nextBugs.bug2;
+    const centerX = canvas.width / 2;
+    const panelY = 100;
+    const panelHeight = 380;
+
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, panelY - 20, canvas.width, panelHeight + 40);
+
+    // Top border glow
+    const topGlow = ctx.createLinearGradient(0, panelY - 20, 0, panelY + 10);
+    topGlow.addColorStop(0, 'rgba(255, 200, 0, 0.5)');
+    topGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGlow;
+    ctx.fillRect(0, panelY - 20, canvas.width, 30);
+
+    // "VS" central emblem
+    const vsGlow = ctx.createRadialGradient(centerX, panelY + 80, 0, centerX, panelY + 80, 60);
+    vsGlow.addColorStop(0, 'rgba(255, 0, 0, 0.3)');
+    vsGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = vsGlow;
+    ctx.beginPath();
+    ctx.arc(centerX, panelY + 80, 60, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#f00';
+    ctx.font = 'bold 48px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('VS', centerX, panelY + 95);
+
+    // Fighter name banners
+    const bannerWidth = 320;
+    const bannerHeight = 40;
+
+    // Left fighter banner (blue theme)
+    const leftGrad = ctx.createLinearGradient(30, 0, 30 + bannerWidth, 0);
+    leftGrad.addColorStop(0, '#1a4a7a');
+    leftGrad.addColorStop(1, '#0a2a4a');
+    ctx.fillStyle = leftGrad;
+    ctx.fillRect(30, panelY + 10, bannerWidth, bannerHeight);
+    ctx.strokeStyle = '#4a8aff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, panelY + 10, bannerWidth, bannerHeight);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(b1.name.toUpperCase(), 45, panelY + 38);
+
+    // Right fighter banner (red theme)
+    const rightGrad = ctx.createLinearGradient(canvas.width - 30 - bannerWidth, 0, canvas.width - 30, 0);
+    rightGrad.addColorStop(0, '#4a1a1a');
+    rightGrad.addColorStop(1, '#7a2a2a');
+    ctx.fillStyle = rightGrad;
+    ctx.fillRect(canvas.width - 30 - bannerWidth, panelY + 10, bannerWidth, bannerHeight);
+    ctx.strokeStyle = '#ff4a4a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(canvas.width - 30 - bannerWidth, panelY + 10, bannerWidth, bannerHeight);
+
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'right';
+    ctx.fillText(b2.name.toUpperCase(), canvas.width - 45, panelY + 38);
+
+    // Stat comparison bars
+    const stats = [
+        { name: 'BULK', key: 'bulk', color1: '#4a8aff', color2: '#ff4a4a' },
+        { name: 'SPEED', key: 'speed', color1: '#4aff4a', color2: '#ff4aff' },
+        { name: 'FURY', key: 'fury', color1: '#ff8a4a', color2: '#ffff4a' },
+        { name: 'INSTINCT', key: 'instinct', color1: '#8a4aff', color2: '#4affff' }
+    ];
+
+    const barStartY = panelY + 130;
+    const barHeight = 18;
+    const barGap = 28;
+    const maxBarWidth = 280;
+
+    stats.forEach((stat, i) => {
+        const y = barStartY + i * barGap;
+        const val1 = b1.genome[stat.key];
+        const val2 = b2.genome[stat.key];
+
+        // Stat label (center)
+        ctx.fillStyle = '#888';
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(stat.name, centerX, y + 13);
+
+        // Left bar (grows from center to left)
+        const width1 = (val1 / 100) * maxBarWidth;
+        const leftBarGrad = ctx.createLinearGradient(centerX - width1 - 40, 0, centerX - 40, 0);
+        leftBarGrad.addColorStop(0, stat.color1);
+        leftBarGrad.addColorStop(1, 'rgba(255,255,255,0.2)');
+        ctx.fillStyle = leftBarGrad;
+        ctx.fillRect(centerX - width1 - 40, y, width1, barHeight);
+
+        // Left bar border
+        ctx.strokeStyle = stat.color1;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(centerX - maxBarWidth - 40, y, maxBarWidth, barHeight);
+
+        // Left value
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(val1, centerX - maxBarWidth - 50, y + 14);
+
+        // Right bar (grows from center to right)
+        const width2 = (val2 / 100) * maxBarWidth;
+        const rightBarGrad = ctx.createLinearGradient(centerX + 40, 0, centerX + width2 + 40, 0);
+        rightBarGrad.addColorStop(0, 'rgba(255,255,255,0.2)');
+        rightBarGrad.addColorStop(1, stat.color2);
+        ctx.fillStyle = rightBarGrad;
+        ctx.fillRect(centerX + 40, y, width2, barHeight);
+
+        // Right bar border
+        ctx.strokeStyle = stat.color2;
+        ctx.strokeRect(centerX + 40, y, maxBarWidth, barHeight);
+
+        // Right value
+        ctx.textAlign = 'left';
+        ctx.fillText(val2, centerX + maxBarWidth + 50, y + 14);
+
+        // Highlight advantage
+        if (val1 > val2) {
+            ctx.fillStyle = 'rgba(74, 138, 255, 0.3)';
+            ctx.fillRect(centerX - maxBarWidth - 40, y, maxBarWidth, barHeight);
+        } else if (val2 > val1) {
+            ctx.fillStyle = 'rgba(255, 74, 74, 0.3)';
+            ctx.fillRect(centerX + 40, y, maxBarWidth, barHeight);
+        }
+    });
+
+    // Attributes section
+    const attrY = barStartY + stats.length * barGap + 20;
+
+    // Left fighter attributes
+    ctx.textAlign = 'left';
+    renderAttributeTag(ctx, 50, attrY, b1.genome.weapon, '#ff6600', 'WEAPON');
+    renderAttributeTag(ctx, 50, attrY + 28, b1.genome.defense, '#00aa66', 'DEFENSE');
+    renderAttributeTag(ctx, 50, attrY + 56, b1.genome.mobility, '#6688ff', 'MOBILITY');
+
+    // Right fighter attributes
+    ctx.textAlign = 'right';
+    renderAttributeTag(ctx, canvas.width - 50, attrY, b2.genome.weapon, '#ff6600', 'WEAPON', true);
+    renderAttributeTag(ctx, canvas.width - 50, attrY + 28, b2.genome.defense, '#00aa66', 'DEFENSE', true);
+    renderAttributeTag(ctx, canvas.width - 50, attrY + 56, b2.genome.mobility, '#6688ff', 'MOBILITY', true);
+
+    // Countdown display
+    const countdownY = panelY + panelHeight - 60;
+
+    // Countdown circle
+    const countdownRadius = 45;
+    ctx.beginPath();
+    ctx.arc(centerX, countdownY, countdownRadius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fill();
+
+    // Countdown progress ring
+    const progress = countdownTimer / COUNTDOWN_SECONDS;
+    ctx.beginPath();
+    ctx.arc(centerX, countdownY, countdownRadius, -Math.PI / 2, -Math.PI / 2 + (1 - progress) * Math.PI * 2);
+    ctx.strokeStyle = countdownTimer <= 3 ? '#ff0000' : '#ffcc00';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Countdown number
+    ctx.fillStyle = countdownTimer <= 3 ? '#ff0000' : '#ffcc00';
+    ctx.font = 'bold 36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(countdownTimer, centerX, countdownY + 12);
+
+    // "Place your bets" text
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px monospace';
+    ctx.fillText('PLACE YOUR BETS', centerX, countdownY + 55);
+
+    // Pulsing effect when low time
+    if (countdownTimer <= 3) {
+        const pulse = Math.sin(Date.now() / 100) * 0.2 + 0.3;
+        ctx.fillStyle = `rgba(255, 0, 0, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(centerX, countdownY, countdownRadius + 10, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function renderAttributeTag(ctx, x, y, value, color, label, rightAlign = false) {
+    const tagWidth = 140;
+    const tagHeight = 22;
+
+    const drawX = rightAlign ? x - tagWidth : x;
+
+    // Tag background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(drawX, y, tagWidth, tagHeight);
+
+    // Tag border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(drawX, y, tagWidth, tagHeight);
+
+    // Label
+    ctx.fillStyle = '#888';
+    ctx.font = '9px monospace';
+    ctx.textAlign = rightAlign ? 'right' : 'left';
+    const labelX = rightAlign ? drawX + tagWidth - 5 : drawX + 5;
+    ctx.fillText(label, labelX, y + 9);
+
+    // Value
+    ctx.fillStyle = color;
+    ctx.font = 'bold 11px monospace';
+    const valueX = rightAlign ? drawX + tagWidth - 5 : drawX + 5;
+    ctx.fillText(value.toUpperCase(), valueX, y + 19);
+}
 
 function renderArena() {
     if (hitPause > 0) hitPause--;
@@ -1343,59 +2466,142 @@ function renderArena() {
     ctx.save();
     ctx.translate(screenShake.x, screenShake.y);
 
-    // Background - 2D side-view enclosure
-    const gradient = ctx.createLinearGradient(0, 0, 0, ARENA.height);
-    gradient.addColorStop(0, '#1a1a2a');
-    gradient.addColorStop(1, '#0a0a15');
-    ctx.fillStyle = gradient;
+    // === BACKGROUND ===
+    // Dark gradient backdrop
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, ARENA.height);
+    bgGradient.addColorStop(0, '#0d1117');
+    bgGradient.addColorStop(0.5, '#161b22');
+    bgGradient.addColorStop(1, '#0d1117');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Enclosure interior (lighter area)
-    ctx.fillStyle = '#151520';
-    ctx.fillRect(ARENA.leftWall, ARENA.ceilingY, ARENA.rightWall - ARENA.leftWall, ARENA.floorY - ARENA.ceilingY);
+    // === ENCLOSURE BACK WALL ===
+    // Interior gradient (subtle depth)
+    const interiorGradient = ctx.createLinearGradient(0, ARENA.ceilingY, 0, ARENA.floorY);
+    interiorGradient.addColorStop(0, '#1a1f25');
+    interiorGradient.addColorStop(0.3, '#12161a');
+    interiorGradient.addColorStop(1, '#0a0d10');
+    ctx.fillStyle = interiorGradient;
+    ctx.fillRect(ARENA.leftWall, ARENA.ceilingY, ARENA.rightWall - ARENA.leftWall, ARENA.floorY - ARENA.ceilingY + 20);
 
-    // Floor (bottom of enclosure)
-    ctx.fillStyle = '#3a3020';
-    ctx.fillRect(ARENA.leftWall, ARENA.floorY, ARENA.rightWall - ARENA.leftWall, 20);
+    // === SUBSTRATE/FLOOR ===
+    // Base dirt color
+    const floorGradient = ctx.createLinearGradient(0, ARENA.floorY - 5, 0, ARENA.floorY + 20);
+    floorGradient.addColorStop(0, '#4a3a28');
+    floorGradient.addColorStop(0.3, '#3d3020');
+    floorGradient.addColorStop(1, '#2a2018');
+    ctx.fillStyle = floorGradient;
+    ctx.fillRect(ARENA.leftWall, ARENA.floorY - 3, ARENA.rightWall - ARENA.leftWall, 25);
 
-    // Enclosure frame (thick border)
-    ctx.strokeStyle = '#0a0a0a';
-    ctx.lineWidth = 10;
-    ctx.strokeRect(ARENA.leftWall - 5, ARENA.ceilingY - 5, ARENA.rightWall - ARENA.leftWall + 10, ARENA.floorY - ARENA.ceilingY + 30);
+    // Render terrarium decorations (plants, rocks, substrate texture)
+    if (terrarium.initialized) {
+        renderTerrarium(ctx);
+    }
 
-    // Inner frame highlight
-    ctx.strokeStyle = '#2a2a2a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(ARENA.leftWall, ARENA.ceilingY, ARENA.rightWall - ARENA.leftWall, ARENA.floorY - ARENA.ceilingY)
-
-    // Blood stains
+    // === BLOOD STAINS ===
     bloodStains.forEach(s => {
-        ctx.globalAlpha = s.alpha * 0.6;
-        ctx.fillStyle = '#400';
+        ctx.globalAlpha = s.alpha * 0.7;
+        const bloodGradient = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size);
+        bloodGradient.addColorStop(0, '#600');
+        bloodGradient.addColorStop(0.7, '#400');
+        bloodGradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = bloodGradient;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, s.size * 1.5, 0, Math.PI * 2);
         ctx.fill();
     });
     ctx.globalAlpha = 1;
 
-    // Impact flash
+    // === GLASS ENCLOSURE ===
+    // Left wall glass
+    ctx.fillStyle = 'rgba(100, 120, 140, 0.1)';
+    ctx.fillRect(ARENA.leftWall - 8, ARENA.ceilingY - 5, 12, ARENA.floorY - ARENA.ceilingY + 28);
+
+    // Right wall glass
+    ctx.fillRect(ARENA.rightWall - 4, ARENA.ceilingY - 5, 12, ARENA.floorY - ARENA.ceilingY + 28);
+
+    // Top glass
+    ctx.fillRect(ARENA.leftWall - 5, ARENA.ceilingY - 8, ARENA.rightWall - ARENA.leftWall + 10, 10);
+
+    // Glass reflections (subtle shine)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 2;
+    // Left wall reflection
+    ctx.beginPath();
+    ctx.moveTo(ARENA.leftWall + 5, ARENA.ceilingY + 20);
+    ctx.lineTo(ARENA.leftWall + 5, ARENA.floorY - 20);
+    ctx.stroke();
+    // Right wall reflection
+    ctx.beginPath();
+    ctx.moveTo(ARENA.rightWall - 5, ARENA.ceilingY + 20);
+    ctx.lineTo(ARENA.rightWall - 5, ARENA.floorY - 20);
+    ctx.stroke();
+    // Top reflection
+    ctx.beginPath();
+    ctx.moveTo(ARENA.leftWall + 50, ARENA.ceilingY + 3);
+    ctx.lineTo(ARENA.rightWall - 50, ARENA.ceilingY + 3);
+    ctx.stroke();
+
+    // Frame (dark metal look)
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(ARENA.leftWall - 4, ARENA.ceilingY - 4, ARENA.rightWall - ARENA.leftWall + 8, ARENA.floorY - ARENA.ceilingY + 26);
+
+    // Inner frame edge
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ARENA.leftWall, ARENA.ceilingY, ARENA.rightWall - ARENA.leftWall, ARENA.floorY - ARENA.ceilingY + 18);
+
+    // === IMPACT FLASH ===
     if (impactFlash.active) {
         ctx.globalAlpha = impactFlash.alpha;
         const fg = ctx.createRadialGradient(impactFlash.x, impactFlash.y, 0, impactFlash.x, impactFlash.y, impactFlash.radius);
         fg.addColorStop(0, '#fff');
-        fg.addColorStop(0.5, '#ff8');
+        fg.addColorStop(0.3, '#ffa');
+        fg.addColorStop(0.6, '#f80');
         fg.addColorStop(1, 'transparent');
         ctx.fillStyle = fg;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1;
     }
 
-    // Fighters
+    // === FIGHTERS ===
+    // Draw shadows first
+    fighters.forEach(f => {
+        if (f.isAlive || f.state === 'death') {
+            const bounds = f.getScaledBounds();
+            const shadowY = ARENA.floorY + 2;
+            const shadowScale = Math.max(0.3, 1 - (shadowY - f.y) / 300);
+            ctx.globalAlpha = 0.3 * shadowScale;
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.ellipse(f.x + f.lungeX, shadowY, bounds.width * 0.4 * shadowScale, 4 * shadowScale, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    ctx.globalAlpha = 1;
+
+    // === AMBIENT PARTICLES (floating dust motes) ===
+    if (gameState === 'intro' || gameState === 'fighting' || gameState === 'victory') {
+        updateAmbientParticles();
+        renderAmbientParticles(ctx);
+    }
+
+    // Draw fighters
     fighters.forEach(f => f.render(ctx));
 
-    // Particles
+    // === PARTICLES ===
     particles.forEach(p => { p.update(); p.render(ctx); });
     particles = particles.filter(p => p.life > 0);
+
+    // === FLOATING DAMAGE NUMBERS ===
+    floatingNumbers.forEach(fn => { fn.update(); fn.render(ctx); });
+    floatingNumbers = floatingNumbers.filter(fn => fn.life > 0);
+
+    // === VIGNETTE EFFECT ===
+    if (gameState === 'intro' || gameState === 'fighting' || gameState === 'victory') {
+        renderVignette(ctx);
+    }
 
     ctx.restore();
 
@@ -1409,10 +2615,10 @@ function renderArena() {
     ctx.font = '12px monospace';
     ctx.fillText(`FIGHT #${fightNumber}`, canvas.width / 2, 55);
 
-    // VS display
-    if (fighters.length === 2 || gameState === 'countdown') {
-        const n1 = gameState === 'countdown' ? nextBugs.bug1.name : fighters[0].bug.name;
-        const n2 = gameState === 'countdown' ? nextBugs.bug2.name : fighters[1].bug.name;
+    // VS display during fighting
+    if (fighters.length === 2 && gameState !== 'countdown') {
+        const n1 = fighters[0].bug.name;
+        const n2 = fighters[1].bug.name;
 
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 16px monospace';
@@ -1427,17 +2633,9 @@ function renderArena() {
         ctx.fillText('VS', canvas.width / 2, 90);
     }
 
-    // Countdown
-    if (gameState === 'countdown') {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(canvas.width / 2 - 100, 250, 200, 120);
-        ctx.fillStyle = countdownTimer <= 3 ? '#f00' : '#ff0';
-        ctx.font = 'bold 64px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(countdownTimer, canvas.width / 2, 330);
-        ctx.fillStyle = '#fff';
-        ctx.font = '16px monospace';
-        ctx.fillText('PLACE YOUR BETS', canvas.width / 2, 360);
+    // Enhanced pre-fight presentation during countdown
+    if (gameState === 'countdown' && nextBugs.bug1 && nextBugs.bug2) {
+        renderPreFightPresentation(ctx);
     }
 
     // Commentary
@@ -1456,15 +2654,23 @@ function renderArena() {
 function gameLoopFn() {
     updateCountdown();
 
-    fighters.forEach(f => {
-        f.updateAnimation();
-        if (gameState === 'fighting') {
-            f.updatePhysics();
-            f.updateAI(fighters.find(o => o !== f));
-        }
-    });
+    // Handle intro phase
+    if (gameState === 'intro') {
+        updateIntroPhase();
+    } else {
+        fighters.forEach(f => {
+            f.updateAnimation();
+            if (gameState === 'fighting') {
+                f.updatePhysics();
+                f.updateAI(fighters.find(o => o !== f));
+            }
+        });
+    }
 
-    if (gameState === 'fighting') processCombatTick();
+    if (gameState === 'fighting') {
+        processCombatTick();
+        checkFightContext(); // Contextual commentary based on fight state
+    }
     renderArena();
     gameLoop = requestAnimationFrame(gameLoopFn);
 }
