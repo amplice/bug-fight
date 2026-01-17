@@ -1,63 +1,69 @@
 # Bug Fights
 
-## Vision
-A 24/7 streaming prediction market featuring procedurally generated insects fighting in a terrarium arena. Think "Fish Fight" meets gambling stream - endless autonomous entertainment where viewers bet on bug battles.
+## Core Philosophy
+**Emergent complexity from simple rules.** Like Conway's Game of Life - depth arises from interaction of simple mechanics, not from designed complexity. No scripted drama. No forced spectacle. The system creates the drama organically.
 
-## Project Status: Playable Alpha
-Core gameplay loop complete. Bugs fight, die, new bugs spawn. Rich visual effects and combat mechanics.
+Every feature must pass this test: "Does this add a simple rule that creates emergent behavior, or does it add complexity directly?"
+
+## Vision
+24/7 streaming bug fights. Procedurally generated insects with simple drives and behaviors that create legible, dramatic fights through emergence - not through particle effects or scripted finishing moves.
+
+## Design Principles
+1. **Simple rules, complex behavior** - Few mechanics, deep interactions
+2. **Legibility** - Viewers should read the fight: see intentions, understand decisions
+3. **Organic drama** - Momentum shifts emerge from the system, not from code
+4. **No spectacle for spectacle's sake** - Effects serve clarity, not flash
+
+## Current State
+Core fighting works but is too flashy and not deep enough. Combat is effects-driven rather than behavior-driven.
+
+### Needs Removal/Simplification
+- Finishing moves (scripted, forced drama)
+- Excessive particles (noise, not signal)
+- Rare variants system (complexity without depth, revisit after breeding)
+- Screen shake spam
+- Dramatic zoom overuse
+
+### Needs Implementation
+**Emergent Combat System:**
+- **Drives** - Simple 0-1 values (aggression, caution) that shift based on fight outcomes
+- **Stamina** - Actions cost energy. Low stamina forces disengagement. Natural fight rhythm emerges.
+- **Adaptation** - Weights shift based on what works. Bug "learns" during fight.
+- **Genome influence** - Stats affect response curves, not scripted behaviors
+  - Fury: get more aggressive when hurt vs more cautious
+  - Instinct: how fast drives adapt
+  - Bulk: stamina pool size
+  - Speed: stamina regen rate
+
+**What should emerge:**
+- Aggressive vs aggressive = bloody brawl, first to gas loses
+- Cautious vs cautious = tense spacing, explosive exchanges
+- Aggressive vs cautious = cat and mouse
+- Momentum shifts when drives flip
+- Natural rhythm: engage → exhaust → circle → recover → re-engage
 
 ## Architecture
 
 ### Files
-- `index.html` - Main page with canvas and betting UI
-- `js/game.js` - Game engine (~4000 lines)
-  - `Fighter` class - Bug instance with AI, physics, combat, abilities
-  - `Particle` class - Visual effects system
-  - Combat system with hits, crits, combos, finishing moves
-  - Dynamic camera with zoom/shake/focus
-  - Arena rendering (terrarium with plants, rocks, hazards)
-- `js/procedural.js` - Bug generation (~1200 lines)
-  - `BugGenome` class - Stats, body parts, colors, rarity
-  - `BugSpriteGenerator` - Pixel art sprite creation
-  - `BugFactory` - Creates bugs from genomes
+- `index.html` - Canvas and betting UI
+- `js/game.js` - Game engine, Fighter class, combat
+- `js/procedural.js` - BugGenome, sprite generation
 
-### Key Systems
-- **Stats**: Bulk (HP), Speed, Fury (damage), Instinct (dodge/crit)
-- **Weapons**: Mandibles, Stinger, Fangs, Claws (each has unique behaviors)
-- **Defense**: Shell, Toxic, Camouflage, Spikes
-- **Mobility**: Ground, Winged, Wallcrawler
-- **Special Abilities**: 12 unique charged moves based on loadout
-- **Rarity System**: Common/Uncommon/Rare/Epic/Legendary variants
-- **Combo System**: Chain hits for bonus damage
-- **Finishing Moves**: Dramatic kill animations per weapon type
+### Key Stats
+- **Bulk** - HP, stamina pool
+- **Speed** - Movement, stamina regen
+- **Fury** - Damage, aggression response curve
+- **Instinct** - Dodge, crit, adaptation rate
 
-## Recently Completed
-- Rare bug variants with visual effects (particles, glows, 14 variant types)
-- Dynamic camera (zoom on action, shake on impacts, dramatic moments)
-- Finishing moves (weapon-specific fatality animations)
-- Special abilities system (charged moves per bug)
-- Combo attack system with chain bonuses
-- Arena hazards (puddles, thorns, hot spots, spore clouds)
-- Fight statistics HUD
-- Terrarium visual overhaul
+### Weapons/Defense/Mobility
+Keep these simple. They affect range and damage type, not complex behaviors.
 
-## Next Priorities (Suggested)
-1. **Sound System** - Combat sounds, ambient, music
-2. **Breeding/Evolution** - Winners breed, create lineages
-3. **Tournament Mode** - Bracket-style competitions
-4. **Betting Improvements** - Odds calculation, streak bonuses
-5. **Bug Persistence** - Save/load champion bugs
-6. **Stream Overlay Mode** - OBS-friendly layout
-7. **Chat Integration** - Twitch/YouTube chat commands for betting
+## Next Steps
+1. Strip finishing moves, excess particles, rare variants
+2. Implement drive system (aggression/caution)
+3. Add stamina with natural regen
+4. Make drives shift based on combat outcomes
+5. Tune until fights are legible and dramatic through emergence
 
-## Design Principles
-- **Autonomous**: Should run forever without intervention
-- **Visually Exciting**: Every fight should have dramatic moments
-- **Fair Randomness**: Skill matters but upsets happen
-- **Readable**: Viewers should understand what's happening
-
-## Running the Game
-Just open `index.html` in a browser. No build step needed.
-
-## Git Workflow
-Commit frequently with descriptive messages. Push after completing features.
+## Running
+Open `index.html` in browser. No build step.
