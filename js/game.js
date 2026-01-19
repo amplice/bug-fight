@@ -20,7 +20,7 @@ const ARENA = {
 
 let canvas, ctx;
 let gameState = 'countdown';
-let player = { money: 1000 };
+let player = { money: parseInt(localStorage.getItem('bugfights_money')) || 1000 };
 let currentBet = { amount: 0, on: null };
 let nextBugs = { bug1: null, bug2: null };
 let fighters = [];
@@ -524,6 +524,24 @@ class Fighter {
         this.abilityTimer = 0;
         this.abilityCooldown = 0;
 
+        // Drive system - simple 0-1 values that shift based on fight outcomes
+        // Fury affects initial aggression, instinct affects how fast drives adapt
+        const furyNorm = this.genome.fury / 100;
+        const instinctNorm = this.genome.instinct / 100;
+        this.drives = {
+            aggression: 0.3 + furyNorm * 0.4,  // 0.3-0.7 based on fury
+            caution: 0.3 + (1 - furyNorm) * 0.4,  // inverse
+            adaptRate: 0.02 + instinctNorm * 0.03,  // how fast drives shift (0.02-0.05)
+            recentHits: 0,  // hits landed recently
+            recentDamage: 0  // damage taken recently
+        };
+
+        // Stamina system - energy for actions
+        // Bulk determines pool size, Speed determines regen rate
+        this.maxStamina = 50 + this.genome.bulk;  // 50-150 based on bulk
+        this.stamina = this.maxStamina;
+        this.staminaRegen = 0.3 + (this.genome.speed / 100) * 0.5;  // 0.3-0.8 per tick
+
         // Combo system
         this.comboCount = 0;
         this.comboTimer = 0;
@@ -543,72 +561,6 @@ class Fighter {
         // Legacy (keeping for compatibility)
         this.circleAngle = side === 'left' ? 0 : Math.PI;
         this.moveTimer = 0;
-
-        // Variant visual effects
-        this.rarity = bug.rarity || 'common';
-        this.variant = bug.variant || null;
-        this.variantParticleTimer = 0;
-        this.variantGlowPhase = Math.random() * Math.PI * 2;
-    }
-
-    getVariantParticleType() {
-        const variantParticles = {
-            shiny: 'sparkle',
-            albino: 'sparkle',
-            melanistic: 'void',
-            golden: 'sparkle',
-            crystalline: 'crystal',
-            phantom: 'phantom',
-            infernal: 'flame',
-            glacial: 'ice',
-            electric: 'electric',
-            toxic: 'toxicDrip',
-            celestial: 'celestial',
-            void: 'void',
-            prismatic: 'prismatic',
-            ancient: 'ancient'
-        };
-        return variantParticles[this.variant] || null;
-    }
-
-    getVariantGlowColor() {
-        const glowColors = {
-            shiny: 'rgba(255, 255, 200, 0.3)',
-            albino: 'rgba(255, 255, 255, 0.4)',
-            melanistic: 'rgba(50, 0, 80, 0.4)',
-            golden: 'rgba(255, 215, 0, 0.4)',
-            crystalline: 'rgba(200, 150, 255, 0.3)',
-            phantom: 'rgba(180, 180, 255, 0.3)',
-            infernal: 'rgba(255, 100, 0, 0.4)',
-            glacial: 'rgba(150, 220, 255, 0.4)',
-            electric: 'rgba(0, 200, 255, 0.4)',
-            toxic: 'rgba(100, 255, 100, 0.3)',
-            celestial: 'rgba(255, 255, 200, 0.5)',
-            void: 'rgba(80, 0, 120, 0.5)',
-            prismatic: null, // Special handling
-            ancient: 'rgba(200, 150, 50, 0.4)'
-        };
-        return glowColors[this.variant] || null;
-    }
-
-    emitVariantParticles() {
-        if (!this.variant || this.rarity === 'common') return;
-        if (!this.isAlive) return;
-
-        this.variantParticleTimer++;
-        const emitRate = this.rarity === 'legendary' ? 3 :
-                        this.rarity === 'epic' ? 5 :
-                        this.rarity === 'rare' ? 8 : 12;
-
-        if (this.variantParticleTimer >= emitRate) {
-            this.variantParticleTimer = 0;
-            const particleType = this.getVariantParticleType();
-            if (particleType) {
-                const offsetX = (Math.random() - 0.5) * this.spriteSize;
-                const offsetY = (Math.random() - 0.5) * this.spriteSize;
-                particles.push(new Particle(this.x + offsetX, this.y + offsetY, particleType));
-            }
-        }
     }
 
     determineSpecialAbility() {
@@ -767,7 +719,7 @@ class Fighter {
                 this.introState = 'entering';
                 // Spawn entry dust
                 const dustX = this.side === 'left' ? ARENA.leftWall + 30 : ARENA.rightWall - 30;
-                spawnParticles(dustX, ARENA.floorY - 10, 'dust', 10);
+                spawnParticles(dustX, ARENA.floorY - 10, 'dust', 3);
             }
         } else if (this.introState === 'entering') {
             // Smoothly move toward target position
@@ -871,9 +823,28 @@ class Fighter {
 
     startAttack(target) {
         if (this.state !== 'idle') return;
+
+        // Attacks cost stamina - heavier weapons cost more
+        const attackCost = this.getAttackStaminaCost();
+        if (!this.spendStamina(attackCost)) {
+            return; // Too tired to attack
+        }
+
         this.attackTarget = target;
         this.setState('windup');
         this.facingRight = target.x > this.x;
+    }
+
+    getAttackStaminaCost() {
+        // Different weapons have different stamina costs
+        switch (this.genome.weapon) {
+            case 'mandibles': return 15;  // Heavy crushing attacks
+            case 'horns': return 18;      // Charging attacks
+            case 'stinger': return 10;    // Precise thrusts
+            case 'claws': return 8;       // Quick slashes
+            case 'fangs': return 10;      // Biting attacks
+            default: return 10;
+        }
     }
 
     getWeaponBehavior(dx, dy, dist) {
@@ -1089,6 +1060,10 @@ class Fighter {
         // Update combo
         this.addComboHit();
 
+        // Update drives - attacker gains confidence, target responds based on fury
+        this.onHitLanded(damage);
+        target.onDamageTaken(damage);
+
         // Apply combo bonus damage
         let comboDamage = damage;
         if (this.comboCount >= 3) {
@@ -1103,55 +1078,28 @@ class Fighter {
         target.stunTimer = isCrit ? 25 : 15;
         target.aiState = 'stunned';
 
-        // Hit pause
-        hitPause = Math.max(hitPause, isCrit ? 12 : (target.hp <= 0 ? 20 : 8));
-        screenShake.intensity = isCrit ? 15 : 8;
+        // Brief hit pause for impact feel
+        hitPause = Math.max(hitPause, isCrit ? 6 : 3);
+        screenShake.intensity = isCrit ? 5 : 2;
 
-        // Camera effects
-        cameraShake(isCrit ? 12 : 6);
-        cameraFocusOn(this, isCrit ? 0.6 : 0.3);
+        target.flashTimer = 4;
+        target.squash = 1.2;
+        target.stretch = 0.8;
 
-        // Dramatic zoom on low HP or killing blow
-        const targetHpPercent = target.hp / target.maxHp;
-        if (target.hp <= 0) {
-            cameraDramaticZoom(40); // Killing blow
-        } else if (targetHpPercent < 0.2 && isCrit) {
-            cameraDramaticZoom(20); // Near death crit
-        }
-
-        // Impact flash
-        impactFlash = {
-            active: true,
-            x: target.x,
-            y: target.y,
-            radius: isCrit ? 60 : 40,
-            alpha: 1
-        };
-
-        target.flashTimer = 8;
-        target.squash = 1.4;
-        target.stretch = 0.6;
-
-        // Physics-based knockback - apply velocity, not position
+        // Physics-based knockback
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-        // Knockback force scales with attacker mass vs target mass
         const massRatio = this.mass / target.mass;
-        const baseKnockback = isCrit ? 12 : 7;
+        const baseKnockback = isCrit ? 10 : 6;
         const knockbackForce = baseKnockback * Math.sqrt(massRatio);
 
         target.vx += (dx / dist) * knockbackForce;
-        target.vy += (dy / dist) * knockbackForce * 0.4 - 3; // Slight upward pop
+        target.vy += (dy / dist) * knockbackForce * 0.4 - 2;
 
-        // Particles
-        spawnParticles(target.x, target.y, 'blood', isCrit ? 15 : 8);
-        if (isCrit) {
-            spawnParticles(target.x, target.y, 'spark', 10);
-            spawnParticles(target.x, target.y, 'shockwave', 1);
-            spawnParticles(target.x, target.y, 'impact', 6);
-        }
+        // Minimal particles - just enough to show contact
+        spawnParticles(target.x, target.y, 'blood', isCrit ? 5 : 2);
         addBloodStain(target.x, target.y + 15);
 
         // Floating damage number
@@ -1161,7 +1109,7 @@ class Fighter {
         if (this.genome.weapon === 'fangs' && rollDice(3) === 3) {
             target.poisoned = 4;
             addCommentary(getRandomPhrase('poison', { name: target.bug.name }), '#0f0');
-            spawnParticles(target.x, target.y, 'poison', 10);
+            spawnParticles(target.x, target.y, 'poison', 3);
         }
 
         // Toxic defense
@@ -1189,225 +1137,11 @@ class Fighter {
 
         if (target.hp <= 0) {
             target.hp = 0;
-            // Check for finishing move trigger
-            if (this.triggerFinishingMove(target, isCrit)) {
-                // Finishing move handles the death sequence
-                return;
-            }
-            // Normal death
             target.setState('death');
-            hitPause = 25;
-            slowMotion = 0.3;
-            setTimeout(() => { slowMotion = 1; }, 500);
+            hitPause = 8;
             addCommentary(getRandomPhrase('defeat', { name: target.bug.name }), '#f00');
-            spawnParticles(target.x, target.y, 'blood', 30);
-        }
-    }
-
-    triggerFinishingMove(target, wasCrit) {
-        // Finishing moves have higher chance on crits and when ability is charged
-        let finisherChance = wasCrit ? 0.6 : 0.35;
-        if (this.abilityCharge >= this.abilityMaxCharge * 0.5) finisherChance += 0.2;
-
-        if (Math.random() > finisherChance) return false;
-
-        // Initiate finishing move sequence
-        target.finisherVictim = true;
-        this.performFinishingMove(target);
-        return true;
-    }
-
-    performFinishingMove(target) {
-        const weapon = this.genome.weapon;
-
-        // Ultra dramatic camera
-        cameraDramaticZoom(60);
-        cameraShake(15);
-        cameraFocusOn(this, 0.9);
-
-        // Extended slow motion
-        hitPause = 40;
-        slowMotion = 0.15;
-
-        // Weapon-specific finisher effects
-        const finisherData = this.getFinisherData(weapon, target);
-
-        // Announcement
-        addCommentary(`💀 ${finisherData.name}! 💀`, '#ff0000');
-
-        // Execute finisher animation sequence
-        let step = 0;
-        const sequence = setInterval(() => {
-            step++;
-
-            switch (weapon) {
-                case 'mandibles':
-                    this.finisherMandibles(target, step);
-                    break;
-                case 'stinger':
-                    this.finisherStinger(target, step);
-                    break;
-                case 'fangs':
-                    this.finisherFangs(target, step);
-                    break;
-                case 'claws':
-                    this.finisherClaws(target, step);
-                    break;
-                default:
-                    this.finisherDefault(target, step);
-            }
-
-            if (step >= 8) {
-                clearInterval(sequence);
-                this.completeFinisher(target);
-            }
-        }, 80);
-    }
-
-    getFinisherData(weapon, target) {
-        const finishers = {
-            mandibles: {
-                name: 'CRUSHING DESTRUCTION',
-                particles: ['blood', 'spark'],
-                sound: 'crunch'
-            },
-            stinger: {
-                name: 'LETHAL INJECTION',
-                particles: ['poison', 'blood'],
-                sound: 'pierce'
-            },
-            fangs: {
-                name: 'SOUL DRAIN',
-                particles: ['blood', 'void'],
-                sound: 'drain'
-            },
-            claws: {
-                name: 'SAVAGE SHRED',
-                particles: ['blood', 'spark'],
-                sound: 'slash'
-            }
-        };
-        return finishers[weapon] || { name: 'BRUTAL FINISH', particles: ['blood'], sound: 'hit' };
-    }
-
-    finisherMandibles(target, step) {
-        // Crushing mandible finisher - bug grabs and crushes
-        if (step === 1) {
-            this.setState('attack');
-            addCommentary(`${this.bug.name} GRABS ${target.bug.name}!`, '#f00');
-        }
-        if (step >= 2 && step <= 5) {
-            // Crushing damage pulses
-            spawnParticles(target.x, target.y, 'blood', 5);
-            spawnParticles(target.x, target.y, 'spark', 3);
-            target.squash = 1.5 + step * 0.1;
-            target.stretch = 0.5 - step * 0.05;
-            cameraShake(5);
-        }
-        if (step === 6) {
-            addCommentary(`CRUSHED!`, '#ff0');
-            spawnParticles(target.x, target.y, 'blood', 30);
-            spawnParticles(target.x, target.y, 'impact', 10);
-        }
-    }
-
-    finisherStinger(target, step) {
-        // Stinger impale finisher
-        if (step === 1) {
-            this.setState('attack');
-            addCommentary(`${this.bug.name} raises the stinger!`, '#0f0');
-        }
-        if (step === 3) {
-            addCommentary(`IMPALED!`, '#0f0');
-            spawnParticles(target.x, target.y, 'poison', 20);
-        }
-        if (step >= 4 && step <= 7) {
-            // Venom pumping
-            spawnParticles(target.x, target.y, 'poison', 5);
-            target.flashTimer = 4;
-            target.squash = 1.0 + Math.sin(step * 1.5) * 0.2;
-        }
-    }
-
-    finisherFangs(target, step) {
-        // Vampiric drain finisher
-        if (step === 1) {
-            this.setState('attack');
-            addCommentary(`${this.bug.name} sinks in the fangs!`, '#800');
-        }
-        if (step >= 2 && step <= 6) {
-            // Life draining effect
             spawnParticles(target.x, target.y, 'blood', 3);
-            // Particles flowing toward attacker
-            const drainP = new Particle(target.x, target.y, 'blood');
-            drainP.vx = (this.x - target.x) * 0.1;
-            drainP.vy = (this.y - target.y) * 0.1;
-            particles.push(drainP);
-
-            target.squash = 0.9 - step * 0.05;
-            target.stretch = 1.1 + step * 0.05;
-            this.squash = 1.0 + step * 0.03;
         }
-        if (step === 7) {
-            addCommentary(`DRAINED DRY!`, '#600');
-        }
-    }
-
-    finisherClaws(target, step) {
-        // Savage claw shredding finisher
-        if (step === 1) {
-            this.setState('attack');
-            addCommentary(`${this.bug.name} goes into a FRENZY!`, '#f80');
-        }
-        if (step >= 2 && step <= 6) {
-            // Rapid slashing
-            spawnParticles(target.x + (Math.random() - 0.5) * 30, target.y + (Math.random() - 0.5) * 30, 'blood', 8);
-            spawnParticles(target.x, target.y, 'spark', 4);
-            target.x += (Math.random() - 0.5) * 5;
-            target.flashTimer = 3;
-            cameraShake(3);
-        }
-        if (step === 7) {
-            addCommentary(`SHREDDED!`, '#ff0');
-            spawnParticles(target.x, target.y, 'blood', 40);
-        }
-    }
-
-    finisherDefault(target, step) {
-        // Generic brutal finisher
-        if (step === 1) {
-            this.setState('attack');
-        }
-        if (step >= 3 && step <= 6) {
-            spawnParticles(target.x, target.y, 'blood', 5);
-            target.flashTimer = 4;
-        }
-    }
-
-    completeFinisher(target) {
-        // Finish the kill
-        target.setState('death');
-        slowMotion = 0.5;
-        setTimeout(() => { slowMotion = 1; }, 800);
-
-        // Extra dramatic particles
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                spawnParticles(target.x + (Math.random() - 0.5) * 30, target.y + (Math.random() - 0.5) * 30, 'blood', 8);
-            }, i * 100);
-        }
-
-        // Victory commentary
-        const victoryPhrases = [
-            `${this.bug.name} shows NO MERCY!`,
-            `DEVASTATING! ${target.bug.name} is DESTROYED!`,
-            `FATALITY! ${this.bug.name} claims the kill!`,
-            `${target.bug.name} has been ELIMINATED!`,
-            `BRUTAL EXECUTION by ${this.bug.name}!`
-        ];
-        setTimeout(() => {
-            addCommentary(victoryPhrases[Math.floor(Math.random() * victoryPhrases.length)], '#ff0');
-        }, 300);
     }
 
     // Charge ability over time during combat
@@ -1434,23 +1168,21 @@ class Fighter {
     activateAbility(target) {
         if (!this.canUseAbility()) return false;
 
+        // Special abilities cost significant stamina
+        const abilityCost = 25;
+        if (!this.spendStamina(abilityCost)) {
+            return false; // Too tired for special ability
+        }
+
         this.abilityActive = true;
         this.abilityTimer = 0;
         this.abilityCharge = 0;
         this.abilityCooldown = 180; // 3 seconds cooldown
         this.stats.specialsUsed++;
 
-        // Dramatic effects
-        spawnParticles(this.x, this.y, 'shockwave', 1);
-        screenShake.intensity = 10;
-        hitPause = 10;
-        slowMotion = 0.5;
-        setTimeout(() => { slowMotion = 1; }, 300);
-
-        // Camera focus on ability user
-        cameraShake(8);
-        cameraFocusOn(this, 0.7);
-        cameraDramaticZoom(25);
+        // Subtle feedback
+        screenShake.intensity = 3;
+        hitPause = 4;
 
         addCommentary(`${this.bug.name} uses ${this.specialAbility.name}!`, '#f0f');
 
@@ -1473,7 +1205,7 @@ class Fighter {
                 setTimeout(() => {
                     const damage = Math.floor((this.genome.bulk + this.genome.fury) / 4);
                     this.applyHit(target, damage, true);
-                    spawnParticles(target.x, target.y, 'impact', 15);
+                    spawnParticles(target.x, target.y, 'impact', 4);
                 }, 100);
                 break;
 
@@ -1485,7 +1217,7 @@ class Fighter {
                     target.poisoned = 8;
                     const damage = Math.floor(this.genome.fury / 3);
                     this.applyHit(target, damage, false);
-                    spawnParticles(target.x, target.y, 'poison', 25);
+                    spawnParticles(target.x, target.y, 'poison', 6);
                     addCommentary(`${target.bug.name} is badly poisoned!`, '#0f0');
                 }, 80);
                 break;
@@ -1514,7 +1246,7 @@ class Fighter {
                     const heal = Math.floor(damage * 0.6);
                     this.hp = Math.min(this.maxHp, this.hp + heal);
                     spawnFloatingNumber(this.x, this.y - 20, '+' + heal, '#0f0', false);
-                    spawnParticles(this.x, this.y, 'poison', 8);
+                    spawnParticles(this.x, this.y, 'poison', 2);
                     addCommentary(`${this.bug.name} drains ${heal} HP!`, '#0f0');
                 }, 100);
                 break;
@@ -1529,9 +1261,8 @@ class Fighter {
                     target.vx += (dx / dist) * 30;
                     target.vy -= 8;
                     this.applyHit(target, damage, true);
-                    spawnParticles(target.x, target.y, 'shockwave', 1);
-                    spawnParticles(target.x, target.y, 'dust', 15);
-                    screenShake.intensity = 20;
+                    spawnParticles(target.x, target.y, 'dust', 5);
+                    screenShake.intensity = 8;
                 }, 150);
                 break;
 
@@ -1540,16 +1271,16 @@ class Fighter {
                 this.abilityTimer = 120; // 2 seconds of invuln
                 this.squash = 1.3;
                 this.stretch = 0.7;
-                spawnParticles(this.x, this.y, 'spark', 20);
+                spawnParticles(this.x, this.y, 'spark', 5);
                 addCommentary(`${this.bug.name} becomes invulnerable!`, '#8af');
                 break;
 
             case 'toxicCloud':
                 // AoE poison cloud
-                for (let i = 0; i < 30; i++) {
+                for (let i = 0; i < 8; i++) {
                     setTimeout(() => {
-                        spawnParticles(this.x + (Math.random()-0.5)*80, this.y + (Math.random()-0.5)*60, 'poison', 2);
-                    }, i * 20);
+                        spawnParticles(this.x + (Math.random()-0.5)*80, this.y + (Math.random()-0.5)*60, 'poison', 1);
+                    }, i * 40);
                 }
                 setTimeout(() => {
                     if (dist < 100) {
@@ -1571,7 +1302,7 @@ class Fighter {
                     this.lungeX = (target.x - this.x) * 0.8;
                     const damage = Math.floor((this.genome.fury + this.genome.instinct) / 4);
                     this.applyHit(target, damage, true);
-                    spawnParticles(target.x, target.y, 'impact', 12);
+                    spawnParticles(target.x, target.y, 'impact', 4);
                     addCommentary(`Ambush strike!`, '#f0f');
                 }, 500);
                 break;
@@ -1588,7 +1319,7 @@ class Fighter {
                             const damage = Math.floor(this.genome.bulk / 8) + 3;
                             this.applyHit(target, damage, false);
                         }
-                        spawnParticles(this.x, this.y, 'spark', 8);
+                        spawnParticles(this.x, this.y, 'spark', 2);
                     }, i * 150);
                 }
                 break;
@@ -1603,10 +1334,9 @@ class Fighter {
                     if (Math.abs(this.x - target.x) < 40 && Math.abs(this.y - target.y) < 60) {
                         this.applyHit(target, damage, true);
                         target.vy += 10;
-                        spawnParticles(target.x, target.y, 'shockwave', 1);
                     }
-                    spawnParticles(this.x, this.y, 'dust', 15);
-                    spawnParticles(this.x, this.y, 'impact', 10);
+                    spawnParticles(this.x, this.y, 'dust', 4);
+                    spawnParticles(this.x, this.y, 'impact', 3);
                 }, 300);
                 break;
 
@@ -1622,7 +1352,7 @@ class Fighter {
                         this.applyHit(target, damage, true);
                         target.vx += pounceDir * 15;
                     }
-                    spawnParticles(this.x, this.y, 'dust', 10);
+                    spawnParticles(this.x, this.y, 'dust', 3);
                 }, 200);
                 break;
 
@@ -1631,7 +1361,7 @@ class Fighter {
                 this.abilityTimer = 180;
                 this.genome.fury += 30; // Temporary boost
                 setTimeout(() => { this.genome.fury -= 30; }, 3000);
-                spawnParticles(this.x, this.y, 'spark', 15);
+                spawnParticles(this.x, this.y, 'spark', 4);
                 addCommentary(`${this.bug.name} goes BERSERK!`, '#f00');
                 break;
         }
@@ -1666,10 +1396,74 @@ class Fighter {
 
         if (this.comboCount >= 3) {
             addCommentary(`${this.comboCount}-HIT COMBO!`, '#ff0');
-            if (this.comboCount >= 5) {
-                spawnParticles(this.x, this.y, 'spark', this.comboCount * 2);
-            }
         }
+    }
+
+    // Drive system: shift drives based on combat outcomes
+    onHitLanded(damage) {
+        // Landing hits rewards aggression - what's working continues
+        this.drives.recentHits++;
+        this.drives.aggression = Math.min(1, this.drives.aggression + this.drives.adaptRate * 2);
+        this.drives.caution = Math.max(0, this.drives.caution - this.drives.adaptRate);
+    }
+
+    onDamageTaken(damage) {
+        // Taking damage - response depends on fury (genome)
+        // High fury bugs get MORE aggressive when hurt
+        // Low fury bugs get MORE cautious when hurt
+        this.drives.recentDamage += damage;
+        const furyNorm = this.genome.fury / 100;
+
+        if (furyNorm > 0.5) {
+            // Fury response: fight back harder
+            this.drives.aggression = Math.min(1, this.drives.aggression + this.drives.adaptRate * furyNorm * 3);
+        } else {
+            // Cautious response: back off
+            this.drives.caution = Math.min(1, this.drives.caution + this.drives.adaptRate * (1 - furyNorm) * 3);
+            this.drives.aggression = Math.max(0, this.drives.aggression - this.drives.adaptRate);
+        }
+    }
+
+    // Called each combat tick to decay recent counters and drift drives toward baseline
+    updateDrives() {
+        // Slowly decay recent hit/damage counters
+        this.drives.recentHits *= 0.99;
+        this.drives.recentDamage *= 0.99;
+
+        // Drives slowly drift back toward genome-based baseline
+        const furyNorm = this.genome.fury / 100;
+        const baseAggression = 0.3 + furyNorm * 0.4;
+        const baseCaution = 0.3 + (1 - furyNorm) * 0.4;
+
+        this.drives.aggression += (baseAggression - this.drives.aggression) * 0.001;
+        this.drives.caution += (baseCaution - this.drives.caution) * 0.001;
+
+        // Stamina affects drives - low stamina increases caution, decreases aggression
+        const staminaPercent = this.stamina / this.maxStamina;
+        if (staminaPercent < 0.3) {
+            // Exhausted - forced caution
+            const exhaustionFactor = (0.3 - staminaPercent) * 2;  // 0-0.6
+            this.drives.caution = Math.min(1, this.drives.caution + exhaustionFactor * 0.02);
+            this.drives.aggression = Math.max(0, this.drives.aggression - exhaustionFactor * 0.02);
+        }
+
+        // Regenerate stamina (faster when not in aggressive state)
+        const regenMultiplier = this.aiState === 'circling' || this.aiState === 'retreating' ? 1.5 : 1.0;
+        this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegen * regenMultiplier);
+    }
+
+    // Spend stamina for an action - returns true if had enough
+    spendStamina(amount) {
+        if (this.stamina >= amount) {
+            this.stamina -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    // Check if has enough stamina for an action
+    hasStamina(amount) {
+        return this.stamina >= amount;
     }
 
     getScale() {
@@ -1754,13 +1548,13 @@ class Fighter {
             if (this.isFlying) {
                 // Flyers bounce off floor
                 if (Math.abs(this.vy) > 3) {
-                    spawnParticles(this.x, this.y + bounds.bottom, 'landing', 4);
+                    spawnParticles(this.x, this.y + bounds.bottom, 'landing', 2);
                 }
                 this.vy = -Math.abs(this.vy) * bounceFactor;
             } else {
                 // Landing dust for ground bugs
                 if (wasAirborne && Math.abs(this.vy) > 2) {
-                    spawnParticles(this.x, this.y + bounds.bottom, 'landing', 6);
+                    spawnParticles(this.x, this.y + bounds.bottom, 'landing', 3);
                 }
                 this.vy = 0;
                 this.grounded = true;
@@ -1824,6 +1618,12 @@ class Fighter {
     jump(power = 1.0) {
         if (this.jumpCooldown > 0) return false;
         if (!this.grounded && !this.onWall && !this.isFlying) return false;
+
+        // Jumps cost stamina proportional to power
+        const jumpStaminaCost = Math.floor(5 * power);
+        if (!this.spendStamina(jumpStaminaCost)) {
+            return false; // Too tired to jump
+        }
 
         const jumpForce = this.jumpPower * power;
 
@@ -1902,51 +1702,144 @@ class Fighter {
         }
     }
 
+    // Calculate tactical positioning adjustments based on instinct
+    getTacticalPositioning(opponent, dx, dy, dist) {
+        const instinctFactor = this.genome.instinct / 100;
+        let adjustX = 0;
+        let adjustY = 0;
+
+        // Low instinct bugs don't think tactically
+        if (instinctFactor < 0.3) return { adjustX: 0, adjustY: 0 };
+
+        // Arena awareness
+        const arenaCenter = ARENA.width / 2;
+        const distFromCenter = this.x - arenaCenter;
+        const opponentDistFromCenter = opponent.x - arenaCenter;
+
+        // 1. Cut off opponent's escape - get between them and arena center
+        if (Math.abs(opponentDistFromCenter) > Math.abs(distFromCenter)) {
+            // Opponent is closer to a wall - try to trap them
+            const cutoffDir = Math.sign(opponentDistFromCenter);
+            adjustX -= cutoffDir * instinctFactor * 0.3;
+        }
+
+        // 2. Avoid being trapped against walls ourselves
+        if (Math.abs(distFromCenter) > ARENA.width * 0.35) {
+            // We're near a wall - try to move toward center
+            adjustX -= Math.sign(distFromCenter) * instinctFactor * 0.4;
+        }
+
+        // 3. Height advantage for ground bugs - prefer higher ground when possible
+        if (!this.isFlying && !this.onWall && opponent.y < this.y - 20) {
+            // Opponent has height - try to get on equal footing
+            if (this.grounded && Math.random() < instinctFactor * 0.03) {
+                adjustY = -1;  // Trigger jump consideration
+            }
+        }
+
+        // 4. Flank when circling - don't approach head-on
+        if (this.aiState === 'circling' && dist < 150) {
+            const flankDir = this.side === 'left' ? 1 : -1;
+            adjustX += flankDir * instinctFactor * 0.5;
+        }
+
+        // 5. Control space - maintain optimal attack range
+        const weaponRange = this.getWeaponRange();
+        const optimalDist = weaponRange * 0.8;
+        if (dist < optimalDist * 0.6 && this.drives.caution > 0.4) {
+            // Too close - back off slightly for better positioning
+            adjustX -= Math.sign(dx) * instinctFactor * 0.3;
+        }
+
+        return { adjustX, adjustY };
+    }
+
+    getWeaponRange() {
+        switch (this.genome.weapon) {
+            case 'horns': return 45;
+            case 'stinger': return 40;
+            case 'mandibles': return 25;
+            case 'claws': return 35;
+            case 'fangs': return 30;
+            default: return 30;
+        }
+    }
+
     updateAIStateTransitions(opponent, dist, attackRange) {
         const hpPercent = this.hp / this.maxHp;
-        const furyFactor = this.genome.fury / 100;
-        const instinctFactor = this.genome.instinct / 100;
+        const { aggression, caution } = this.drives;
 
-        // Low HP + high instinct = more likely to retreat (flyers/wallcrawlers only)
-        if (hpPercent < 0.3 && (this.isFlying || this.isWallcrawler) && Math.random() < instinctFactor * 0.1) {
+        // Drives determine behavior probabilities per tick
+        // High caution + low HP = retreat (flyers/wallcrawlers only)
+        if (hpPercent < 0.4 && caution > 0.5 && (this.isFlying || this.isWallcrawler) && Math.random() < caution * 0.08) {
             this.aiState = 'retreating';
             this.aiStateTimer = 0;
         }
-        // In attack range + high fury = aggressive
-        else if (dist < attackRange * 1.2 && Math.random() < furyFactor * 0.15) {
+        // High aggression = push forward, especially when close
+        else if (dist < attackRange * 1.5 && Math.random() < aggression * 0.12) {
             this.aiState = 'aggressive';
             this.aiStateTimer = 0;
         }
-        // Sometimes circle to find opening
-        else if (dist < attackRange * 1.5 && this.aiStateTimer > 60 && Math.random() < instinctFactor * 0.05) {
+        // High caution = circle and probe for openings
+        else if (dist < attackRange * 2 && this.aiStateTimer > 40 && Math.random() < caution * 0.06) {
             this.aiState = 'circling';
             this.aiStateTimer = 0;
             this.circleAngle = Math.atan2(this.y - opponent.y, this.x - opponent.x);
         }
-        // Far away = aggressive approach
-        else if (dist > attackRange * 2 && this.aiStateTimer > 30) {
+        // Far away - aggression determines how fast we close distance
+        else if (dist > attackRange * 2 && this.aiStateTimer > Math.floor(60 - aggression * 40)) {
             this.aiState = 'aggressive';
             this.aiStateTimer = 0;
         }
     }
 
     executeAggressiveAI(opponent, dx, dy, dist, attackRange) {
-        const speed = 0.3 + (this.genome.speed / 150);
+        // Aggression drive amplifies approach speed
+        const baseSpeed = 0.3 + (this.genome.speed / 150);
+        // Stamina affects movement - exhausted bugs are slower
+        const staminaPercent = this.stamina / this.maxStamina;
+        const staminaFactor = 0.5 + staminaPercent * 0.5;  // 0.5-1.0
+        const speed = baseSpeed * (0.7 + this.drives.aggression * 0.6) * staminaFactor;
 
         if (this.isFlying) {
-            // Flyers thrust toward opponent
-            this.vx += Math.sign(dx) * speed * 1.2;
-            this.vy += Math.sign(dy) * speed * 0.8;
+            // Flyers use height advantage tactically
+            const heightAdvantage = this.y < opponent.y - 30;
+            const staminaPercent = this.stamina / this.maxStamina;
 
-            // Bobbing motion
-            this.vy += Math.sin(this.moveTimer / 8) * 0.3;
+            if (heightAdvantage && dist < attackRange * 1.5) {
+                // DIVE ATTACK from above
+                this.vx += Math.sign(dx) * speed * 2;
+                this.vy += 0.8;  // Dive down
+            } else if (staminaPercent < 0.3) {
+                // Low stamina - gain altitude to recover
+                this.vx += Math.sign(dx) * speed * 0.5;
+                this.vy -= 0.4;
+            } else if (opponent.isFlying) {
+                // Air-to-air - try to get above them
+                this.vx += Math.sign(dx) * speed;
+                this.vy += this.y > opponent.y ? -0.5 : 0.3;
+            } else {
+                // Opponent on ground - maintain height, swoop in
+                const idealHeight = opponent.y - 80;
+                if (this.y > idealHeight) {
+                    this.vy -= 0.4;  // Gain altitude
+                } else {
+                    this.vy += 0.2;  // Descend to attack
+                }
+                this.vx += Math.sign(dx) * speed * 1.2;
+            }
+
+            // Bobbing motion (reduced when diving)
+            if (!heightAdvantage || dist > attackRange * 2) {
+                this.vy += Math.sin(this.moveTimer / 8) * 0.2;
+            }
         } else if (this.onWall) {
             // Wall climbing - move toward opponent's height
             this.vy = Math.sign(dy) * speed * 3;
 
-            // Jump off wall to attack if close enough horizontally
+            // Jump off wall to attack - aggression increases willingness
             const horizDist = Math.abs(dx);
-            if (horizDist < 150 && Math.abs(dy) < 50 && Math.random() < 0.05) {
+            if (horizDist < 150 && Math.abs(dy) < 50 && Math.random() < 0.03 + this.drives.aggression * 0.05) {
                 this.jump(1.0);
                 this.vx = Math.sign(dx) * 8;
             }
@@ -1954,9 +1847,17 @@ class Fighter {
             // Ground movement - accelerate toward opponent
             this.vx += Math.sign(dx) * speed;
 
-            // Jump to reach flying opponents
+            // Apply tactical positioning for high-instinct bugs
+            const tactical = this.getTacticalPositioning(opponent, dx, dy, dist);
+            this.vx += tactical.adjustX;
+            if (tactical.adjustY < 0 && this.grounded) {
+                // Tactical suggests gaining height
+                this.jump(0.6);
+            }
+
+            // Jump to reach flying opponents - aggression affects willingness
             if (opponent.isFlying || opponent.onWall || opponent.y < this.y - 50) {
-                if (this.grounded && dist < attackRange * 2 && Math.random() < 0.08) {
+                if (this.grounded && dist < attackRange * 2 && Math.random() < 0.04 + this.drives.aggression * 0.06) {
                     this.jump(1.0);
                     // Add horizontal velocity toward opponent
                     this.vx += Math.sign(dx) * 3;
@@ -1967,18 +1868,33 @@ class Fighter {
 
     executeCirclingAI(opponent, dx, dy, dist) {
         const speed = 0.2 + (this.genome.speed / 200);
-        const circleRadius = 80 + (100 - this.genome.fury) / 2;
+        // Cautious bugs circle wider, aggressive bugs stay closer
+        const circleRadius = 60 + this.drives.caution * 60;
 
         this.circleAngle += (this.side === 'left' ? 0.04 : -0.04) * (this.genome.speed / 50);
 
         if (this.isFlying) {
+            // Flyers circle ABOVE opponent for tactical advantage
             const targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
-            const targetY = opponent.y + Math.sin(this.circleAngle) * circleRadius * 0.6;
-            this.vx += (targetX - this.x) * 0.02;
-            this.vy += (targetY - this.y) * 0.02;
+            const targetY = opponent.y - 60 + Math.sin(this.circleAngle) * circleRadius * 0.4;  // Stay above
+            this.vx += (targetX - this.x) * 0.025;
+            this.vy += (targetY - this.y) * 0.025;
+
+            // Maintain minimum height above ground opponents
+            if (!opponent.isFlying && this.y > opponent.y - 40) {
+                this.vy -= 0.3;
+            }
+        } else if (this.isWallcrawler && this.onWall) {
+            // Wallcrawlers on wall - move vertically to match opponent
+            const targetY = opponent.y;
+            this.vy = Math.sign(targetY - this.y) * speed * 2;
         } else {
             // Ground bugs strafe side to side
             this.vx += Math.cos(this.circleAngle) * speed * 2;
+
+            // Apply tactical positioning while circling
+            const tactical = this.getTacticalPositioning(opponent, opponent.x - this.x, opponent.y - this.y, dist);
+            this.vx += tactical.adjustX * 0.5;  // Reduced influence during circling
 
             // Occasionally jump while circling
             if (this.grounded && Math.random() < 0.02) {
@@ -1986,8 +1902,10 @@ class Fighter {
             }
         }
 
-        // Exit circling after a while and go aggressive
-        if (this.aiStateTimer > 90) {
+        // High aggression breaks out of circling to attack
+        // Low aggression stays cautious longer
+        const breakoutTime = Math.floor(120 - this.drives.aggression * 80);
+        if (this.aiStateTimer > breakoutTime) {
             this.aiState = 'aggressive';
             this.aiStateTimer = 0;
         }
@@ -2018,13 +1936,22 @@ class Fighter {
         const speed = 0.25 + (this.genome.speed / 200);
 
         if (this.isFlying) {
-            // Fly away and up
-            this.vx -= Math.sign(dx) * speed;
-            this.vy -= 0.3;
-        } else if (this.isWallcrawler && !this.onWall) {
-            // Try to get to a wall
-            const nearestWall = this.x < ARENA.width / 2 ? 'left' : 'right';
-            this.vx += nearestWall === 'left' ? -speed * 2 : speed * 2;
+            // Fly away and UP - gain altitude for safety
+            this.vx -= Math.sign(dx) * speed * 1.5;
+            this.vy -= 0.5;  // Strong upward retreat
+            // Don't go too high
+            if (this.y < ARENA.ceilingY + 80) {
+                this.vy += 0.3;
+            }
+        } else if (this.isWallcrawler) {
+            if (this.onWall) {
+                // Already on wall - climb UP for safety
+                this.vy = -speed * 4;
+            } else {
+                // Sprint to nearest wall
+                const nearestWall = this.x < ARENA.width / 2 ? 'left' : 'right';
+                this.vx += nearestWall === 'left' ? -speed * 3 : speed * 3;
+            }
         } else {
             // Ground bugs back away and jump
             this.vx -= Math.sign(dx) * speed;
@@ -2034,8 +1961,9 @@ class Fighter {
             }
         }
 
-        // Don't retreat forever
-        if (this.aiStateTimer > 60 || dist > 300) {
+        // High caution = retreat longer, high aggression = return to fight sooner
+        const retreatDuration = Math.floor(40 + this.drives.caution * 60 - this.drives.aggression * 30);
+        if (this.aiStateTimer > retreatDuration || dist > 300) {
             this.aiState = 'circling';
             this.aiStateTimer = 0;
         }
@@ -2045,6 +1973,7 @@ class Fighter {
 
     updateWallClimbing(opponent, dist) {
         const bounds = this.getScaledBounds();
+        const staminaPercent = this.stamina / this.maxStamina;
 
         if (this.onWall) {
             // Currently on wall - handle wall movement
@@ -2066,33 +1995,76 @@ class Fighter {
             this.vx = 0;
             this.grounded = true; // Can jump from wall
 
-            // Occasionally change climb direction
-            if (Math.random() < 0.02) {
-                this.climbDirection *= -1;
+            // Strategic wall behavior based on state
+            if (this.aiState === 'aggressive') {
+                // Position for pounce attack - match opponent's height
+                const targetY = opponent.y;
+                if (Math.abs(this.y - targetY) > 30) {
+                    this.vy = Math.sign(targetY - this.y) * 3;
+                }
+            } else if (this.aiState === 'retreating') {
+                // Climb UP for safety
+                this.vy = -3;
+            } else {
+                // Circling - move unpredictably
+                this.vy = Math.sin(this.moveTimer / 20) * 2;
             }
 
-            // Drop off wall if opponent is far or to attack
-            if (dist > 350 || (dist < 100 && Math.random() < 0.03)) {
+            // Decide when to drop/pounce
+            const horizDist = Math.abs(opponent.x - this.x);
+            const vertDist = Math.abs(opponent.y - this.y);
+
+            // Pounce attack when aligned and aggressive
+            if (horizDist < 180 && vertDist < 60 && this.drives.aggression > 0.4) {
+                if (Math.random() < 0.05 + this.drives.aggression * 0.08) {
+                    // POUNCE!
+                    this.onWall = false;
+                    this.grounded = false;
+                    const pounceDir = this.wallSide === 'left' ? 1 : -1;
+                    this.vx = pounceDir * (10 + this.genome.speed / 10);
+                    this.vy = -4;
+                }
+            }
+
+            // Drop off if too far from opponent or low stamina recovered
+            if (dist > 400 || (staminaPercent > 0.7 && this.aiState === 'retreating')) {
                 this.onWall = false;
                 this.grounded = false;
             }
         } else {
-            // Not on wall - check if should climb
-            // Near a wall and strategic reason to climb
-            const nearLeftWall = this.x < ARENA.leftWall + 60;
-            const nearRightWall = this.x > ARENA.rightWall - 60;
+            // Not on wall - should we climb?
+            const nearLeftWall = this.x < ARENA.leftWall + 80;
+            const nearRightWall = this.x > ARENA.rightWall - 80;
 
             if ((nearLeftWall || nearRightWall) && this.grounded) {
-                // Climb if opponent is above or to gain height advantage
-                const shouldClimb = opponent.y < this.y - 30 ||
-                                   opponent.isFlying ||
-                                   (dist < 200 && Math.random() < 0.03);
+                // Reasons to climb:
+                // 1. Low stamina - recover on wall
+                // 2. Opponent is flying/above us
+                // 3. High caution - use wall for safety
+                // 4. Tactical positioning
+                const wantToClimb =
+                    staminaPercent < 0.4 ||
+                    opponent.isFlying ||
+                    opponent.y < this.y - 50 ||
+                    (this.drives.caution > 0.5 && Math.random() < 0.1) ||
+                    (dist < 150 && Math.random() < 0.08);
 
-                if (shouldClimb) {
+                if (wantToClimb) {
                     this.onWall = true;
                     this.wallSide = nearLeftWall ? 'left' : 'right';
-                    this.climbDirection = 1; // Start climbing up
                     this.vy = 0;
+                }
+            }
+
+            // Actively seek wall when retreating or exhausted
+            if ((this.aiState === 'retreating' || staminaPercent < 0.3) && !this.onWall) {
+                const nearestWall = this.x < ARENA.width / 2 ? 'left' : 'right';
+                const wallX = nearestWall === 'left' ? ARENA.leftWall : ARENA.rightWall;
+                const distToWall = Math.abs(this.x - wallX);
+
+                // Move toward wall
+                if (distToWall > 50) {
+                    this.vx += nearestWall === 'left' ? -0.5 : 0.5;
                 }
             }
         }
@@ -2154,6 +2126,19 @@ class Fighter {
                 rotation = -Math.PI / 2;
             }
         }
+        // Drive-based body language (not during death/wall states)
+        else if (this.state !== 'death' && this.drives) {
+            // Aggressive bugs lean forward, cautious bugs lean back
+            const driveBalance = this.drives.aggression - this.drives.caution;
+            const leanDir = this.facingRight ? 1 : -1;
+            rotation = driveBalance * 0.15 * leanDir;  // Max ~8.5 degrees lean
+
+            // Low stamina = droopy posture
+            const staminaPct = this.stamina / this.maxStamina;
+            if (staminaPct < 0.3) {
+                rotation += (0.3 - staminaPct) * 0.3;  // Droop forward when exhausted
+            }
+        }
 
         // Apply rotation around bug center
         if (rotation !== 0) {
@@ -2162,51 +2147,18 @@ class Fighter {
             ctx.translate(-renderX, -renderY);
         }
 
-        // Draw variant glow effect (behind sprite)
-        if (this.variant && this.rarity !== 'common' && this.state !== 'death') {
-            this.variantGlowPhase += 0.05;
-            const glowPulse = 0.7 + Math.sin(this.variantGlowPhase) * 0.3;
-            const glowSize = this.spriteSize * scale * 1.5 * glowPulse;
-
-            if (this.variant === 'prismatic') {
-                // Special rainbow glow for prismatic
-                const hue = (Date.now() * 0.1) % 360;
-                const grad = ctx.createRadialGradient(renderX, renderY, 0, renderX, renderY, glowSize);
-                grad.addColorStop(0, `hsla(${hue}, 100%, 70%, 0.4)`);
-                grad.addColorStop(0.5, `hsla(${(hue + 60) % 360}, 100%, 60%, 0.2)`);
-                grad.addColorStop(1, 'transparent');
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(renderX, renderY, glowSize, 0, Math.PI * 2);
-                ctx.fill();
-            } else {
-                const glowColor = this.getVariantGlowColor();
-                if (glowColor) {
-                    const grad = ctx.createRadialGradient(renderX, renderY, 0, renderX, renderY, glowSize);
-                    grad.addColorStop(0, glowColor);
-                    grad.addColorStop(1, 'transparent');
-                    ctx.fillStyle = grad;
-                    ctx.beginPath();
-                    ctx.arc(renderX, renderY, glowSize, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-
-            // Electric variant gets lightning arcs
-            if (this.variant === 'electric' && Math.random() < 0.1) {
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                const arcAngle = Math.random() * Math.PI * 2;
-                const arcLen = glowSize * 0.8;
-                let ax = renderX, ay = renderY;
-                ctx.moveTo(ax, ay);
-                for (let i = 0; i < 4; i++) {
-                    ax += Math.cos(arcAngle) * (arcLen / 4) + (Math.random() - 0.5) * 10;
-                    ay += Math.sin(arcAngle) * (arcLen / 4) + (Math.random() - 0.5) * 10;
-                    ctx.lineTo(ax, ay);
-                }
-                ctx.stroke();
+        // Calculate drive-based color tint
+        let driveTint = null;
+        if (this.drives && this.state !== 'death') {
+            const aggression = this.drives.aggression;
+            const caution = this.drives.caution;
+            // Strong aggression = red tint, strong caution = blue tint
+            if (aggression > 0.7) {
+                const intensity = (aggression - 0.7) / 0.3;  // 0-1
+                driveTint = { r: Math.floor(60 * intensity), g: 0, b: 0 };
+            } else if (caution > 0.7) {
+                const intensity = (caution - 0.7) / 0.3;  // 0-1
+                driveTint = { r: 0, g: 0, b: Math.floor(60 * intensity) };
             }
         }
 
@@ -2216,7 +2168,26 @@ class Fighter {
                 const colorIdx = parseInt(frame[py][this.facingRight ? px : this.spriteSize - 1 - px]);
                 if (colorIdx === 0) continue;
 
-                ctx.fillStyle = (this.flashTimer > 0 && this.flashTimer % 2 === 0) ? '#fff' : colors[colorIdx];
+                let pixelColor = colors[colorIdx];
+
+                // Apply flash effect
+                if (this.flashTimer > 0 && this.flashTimer % 2 === 0) {
+                    pixelColor = '#fff';
+                }
+                // Apply drive tint
+                else if (driveTint) {
+                    // Parse the color and add tint
+                    const hex = pixelColor.replace('#', '');
+                    let r = parseInt(hex.substr(0, 2), 16) || parseInt(hex[0], 16) * 17;
+                    let g = parseInt(hex.substr(2, 2), 16) || parseInt(hex[1], 16) * 17;
+                    let b = parseInt(hex.substr(4, 2), 16) || parseInt(hex[2], 16) * 17;
+                    r = Math.min(255, r + driveTint.r);
+                    g = Math.min(255, g + driveTint.g);
+                    b = Math.min(255, b + driveTint.b);
+                    pixelColor = `rgb(${r},${g},${b})`;
+                }
+
+                ctx.fillStyle = pixelColor;
                 ctx.fillRect(
                     startX + px * scaleX,
                     startY + py * scaleY,
@@ -2249,52 +2220,39 @@ class Fighter {
                 ctx.fillRect(barX + barWidth + 4, barY, 4, barHeight);
             }
 
-            // Rarity indicator
-            if (this.rarity !== 'common' && this.variant) {
-                const rarityColors = {
-                    uncommon: '#2ecc71',
-                    rare: '#3498db',
-                    epic: '#9b59b6',
-                    legendary: '#f39c12'
-                };
-                const rarityColor = rarityColors[this.rarity] || '#888';
+            // AI state indicator (small text below health bar)
+            if (this.aiState && this.state !== 'death') {
+                ctx.font = '8px monospace';
+                ctx.textAlign = 'center';
 
-                // Draw rarity gem/star
-                ctx.save();
-                const gemX = this.x;
-                const gemY = barY - 8;
-                const gemSize = this.rarity === 'legendary' ? 6 : 4;
+                let stateText = '';
+                let stateColor = '#888';
 
-                // Glow for epic/legendary
-                if (this.rarity === 'legendary' || this.rarity === 'epic') {
-                    const glowPulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
-                    ctx.shadowColor = rarityColor;
-                    ctx.shadowBlur = 8 * glowPulse;
+                switch (this.aiState) {
+                    case 'aggressive':
+                        stateText = '→';  // Arrow toward
+                        stateColor = '#f66';
+                        break;
+                    case 'circling':
+                        stateText = '◯';  // Circle
+                        stateColor = '#ff0';
+                        break;
+                    case 'retreating':
+                        stateText = '←';  // Arrow away
+                        stateColor = '#6af';
+                        break;
+                    case 'stunned':
+                        stateText = '✕';  // Stunned
+                        stateColor = '#f00';
+                        break;
                 }
 
-                ctx.fillStyle = rarityColor;
-                if (this.rarity === 'legendary') {
-                    // Star shape for legendary
-                    ctx.beginPath();
-                    for (let i = 0; i < 5; i++) {
-                        const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
-                        const r = i === 0 ? gemSize : gemSize;
-                        if (i === 0) ctx.moveTo(gemX + Math.cos(angle) * r, gemY + Math.sin(angle) * r);
-                        else ctx.lineTo(gemX + Math.cos(angle) * r, gemY + Math.sin(angle) * r);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                } else {
-                    // Diamond shape for others
-                    ctx.beginPath();
-                    ctx.moveTo(gemX, gemY - gemSize);
-                    ctx.lineTo(gemX + gemSize, gemY);
-                    ctx.lineTo(gemX, gemY + gemSize);
-                    ctx.lineTo(gemX - gemSize, gemY);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-                ctx.restore();
+                // Flip arrow direction based on facing
+                if (stateText === '→' && !this.facingRight) stateText = '←';
+                else if (stateText === '←' && !this.facingRight) stateText = '→';
+
+                ctx.fillStyle = stateColor;
+                ctx.fillText(stateText, this.x, barY + barHeight + 10);
             }
         }
     }
@@ -2800,8 +2758,18 @@ function renderFightHUD(ctx) {
     ctx.textAlign = 'center';
     ctx.fillText(`${Math.max(0, f1.hp)} / ${f1.maxHp}`, leftX + barWidth / 2, hudY + 20);
 
+    // Stamina bar
+    const staminaY1 = hudY + 26;
+    const staminaBarHeight = 4;
+    ctx.fillStyle = '#220';
+    ctx.fillRect(leftX, staminaY1, barWidth, staminaBarHeight);
+    const stam1Pct = Math.max(0, f1.stamina / f1.maxStamina);
+    const stamColor1 = stam1Pct > 0.3 ? '#fc0' : '#f60';
+    ctx.fillStyle = stamColor1;
+    ctx.fillRect(leftX, staminaY1, barWidth * stam1Pct, staminaBarHeight);
+
     // Ability charge bar
-    const abilityY1 = hudY + 28;
+    const abilityY1 = hudY + 34;
     ctx.fillStyle = '#224';
     ctx.fillRect(leftX, abilityY1, barWidth, abilityBarHeight);
 
@@ -2878,8 +2846,17 @@ function renderFightHUD(ctx) {
     ctx.textAlign = 'center';
     ctx.fillText(`${Math.max(0, f2.hp)} / ${f2.maxHp}`, rightX + barWidth / 2, hudY + 20);
 
+    // Stamina bar (fills from right)
+    const staminaY2 = hudY + 26;
+    ctx.fillStyle = '#220';
+    ctx.fillRect(rightX, staminaY2, barWidth, staminaBarHeight);
+    const stam2Pct = Math.max(0, f2.stamina / f2.maxStamina);
+    const stamColor2 = stam2Pct > 0.3 ? '#fc0' : '#f60';
+    ctx.fillStyle = stamColor2;
+    ctx.fillRect(rightX + barWidth * (1 - stam2Pct), staminaY2, barWidth * stam2Pct, staminaBarHeight);
+
     // Ability charge bar
-    const abilityY2 = hudY + 28;
+    const abilityY2 = hudY + 34;
     ctx.fillStyle = '#224';
     ctx.fillRect(rightX, abilityY2, barWidth, abilityBarHeight);
 
@@ -3098,13 +3075,6 @@ function processCombatTick() {
         return;
     }
 
-    // Variant particle emission
-    fighters.forEach(f => {
-        if (f.isAlive) {
-            f.emitVariantParticles();
-        }
-    });
-
     // Poison tick
     fighters.forEach(f => {
         if (f.poisoned > 0 && combatTick % 30 === 0) {
@@ -3112,7 +3082,7 @@ function processCombatTick() {
             f.hp -= poisonDmg;
             f.poisoned--;
             f.flashTimer = 4;
-            spawnParticles(f.x, f.y, 'poison', 3);
+            spawnParticles(f.x, f.y, 'poison', 1);
             spawnFloatingNumber(f.x, f.y, poisonDmg, '#0f0', false);
             if (f.hp <= 0) {
                 f.hp = 0;
@@ -3218,10 +3188,11 @@ function processCombatTick() {
         }
     }
 
-    // Update abilities and combos
+    // Update abilities, combos, and drives
     fighters.forEach(f => {
         f.updateAbility();
         f.updateCombo();
+        f.updateDrives();
     });
 
     // Attack timing and ability usage
@@ -3556,19 +3527,33 @@ function placeBet(which) {
         addCommentary("Enter a bet amount!", '#f00');
         return false;
     }
+
+    // If switching fighters, refund old bet first
+    if (currentBet.amount > 0 && currentBet.on !== which) {
+        player.money += currentBet.amount;
+        const oldBugName = currentBet.on === 1 ? nextBugs.bug1.name : nextBugs.bug2.name;
+        addCommentary(`Switched from ${oldBugName}!`, '#ff0');
+        currentBet = { amount: 0, on: null };
+    }
+
     if (amount > player.money) {
         addCommentary("Not enough money!", '#f00');
         return false;
     }
 
-    if (currentBet.amount > 0) player.money += currentBet.amount;
-
-    currentBet = { amount, on: which };
+    // Add to existing bet on same fighter, or start new bet
+    currentBet.amount += amount;
+    currentBet.on = which;
     player.money -= amount;
     updateUI();
 
     const bugName = which === 1 ? nextBugs.bug1.name : nextBugs.bug2.name;
-    addCommentary(`Bet $${amount} on ${bugName}!`, '#0f0');
+    addCommentary(`Bet $${amount} on ${bugName}! (Total: $${currentBet.amount})`, '#0f0');
+
+    // Update button states to show which is selected
+    document.getElementById('bet-fighter1').classList.toggle('selected', which === 1);
+    document.getElementById('bet-fighter2').classList.toggle('selected', which === 2);
+
     return true;
 }
 
@@ -3640,6 +3625,10 @@ function startCountdown() {
 
     document.getElementById('countdown-display').classList.remove('hidden');
     document.getElementById('bet-buttons').classList.remove('disabled');
+
+    // Clear bet selection styling from previous round
+    document.getElementById('bet-fighter1').classList.remove('selected');
+    document.getElementById('bet-fighter2').classList.remove('selected');
 }
 
 function updateCountdown() {
@@ -3693,39 +3682,6 @@ function startFight() {
     document.getElementById('bet-buttons').classList.add('disabled');
 
     addCommentary(`${fighters[0].bug.name} vs ${fighters[1].bug.name}!`, '#ff0');
-
-    // Announce rare variants with fanfare
-    setTimeout(() => {
-        fighters.forEach(f => {
-            if (f.rarity !== 'common' && f.variant) {
-                const rarityColors = {
-                    uncommon: '#2ecc71',
-                    rare: '#3498db',
-                    epic: '#9b59b6',
-                    legendary: '#f39c12'
-                };
-                const announcements = {
-                    uncommon: [`A ${f.variant} variant appears!`, `${f.variant.toUpperCase()} specimen in the arena!`],
-                    rare: [`RARE! A ${f.variant} variant!`, `The crowd gasps - ${f.variant} variant!`],
-                    epic: [`EPIC ${f.variant.toUpperCase()} variant!!!`, `Incredible! An EPIC ${f.variant}!`],
-                    legendary: [`LEGENDARY ${f.variant.toUpperCase()}!!!`, `ONCE IN A LIFETIME! LEGENDARY ${f.variant}!!!`]
-                };
-                const msgs = announcements[f.rarity] || [];
-                const msg = msgs[Math.floor(Math.random() * msgs.length)];
-                if (msg) {
-                    addCommentary(msg, rarityColors[f.rarity]);
-                    // Extra particles for legendary
-                    if (f.rarity === 'legendary') {
-                        for (let i = 0; i < 20; i++) {
-                            setTimeout(() => {
-                                particles.push(new Particle(f.x + (Math.random() - 0.5) * 60, f.y + (Math.random() - 0.5) * 60, f.getVariantParticleType() || 'sparkle'));
-                            }, i * 50);
-                        }
-                    }
-                }
-            }
-        });
-    }, 500);
 }
 
 function updateIntroPhase() {
@@ -3763,15 +3719,8 @@ function endFight() {
         addCommentary(getRandomPhrase('victory', { name: winner.bug.name }), '#ff0');
         resolveBet(winnerSide);
 
-        // Victory effects - sparks and confetti
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => {
-                spawnParticles(winner.x, winner.y - 20, 'spark', 8);
-                spawnParticles(winner.x + (Math.random() - 0.5) * 60, winner.y - 30, 'confetti', 5);
-            }, i * 200);
-        }
-        // Shockwave on victory
-        spawnParticles(winner.x, winner.y, 'shockwave', 1);
+        // Simple victory effect
+        spawnParticles(winner.x, winner.y - 20, 'spark', 4);
     }
 
     setTimeout(startCountdown, 4000);
@@ -4182,17 +4131,44 @@ function renderArena() {
         renderPreFightPresentation(ctx);
     }
 
-    // Commentary
+    // Commentary - 90s terminal style
     ctx.textAlign = 'left';
-    ctx.font = '13px monospace';
+    ctx.font = '16px "VT323", monospace';
     commentary.forEach((c, i) => {
         c.age++;
         ctx.globalAlpha = Math.max(0, 1 - c.age / 180);
+        // Add text shadow for glow effect
+        ctx.shadowColor = c.color;
+        ctx.shadowBlur = 8;
         ctx.fillStyle = c.color;
-        ctx.fillText(c.text, 50, canvas.height - 60 + i * 18);
+        ctx.fillText('> ' + c.text, 55, canvas.height - 70 + i * 20);
     });
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
     commentary = commentary.filter(c => c.age < 180);
+
+    // CRT scanline overlay effect
+    renderCRTEffect(ctx);
+}
+
+function renderCRTEffect(ctx) {
+    // Subtle scanlines
+    ctx.globalAlpha = 0.03;
+    ctx.fillStyle = '#000';
+    for (let y = 0; y < canvas.height; y += 3) {
+        ctx.fillRect(0, y, canvas.width, 1);
+    }
+
+    // Subtle vignette
+    ctx.globalAlpha = 1;
+    const vignette = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.3,
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.8
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 function gameLoopFn() {
@@ -4225,6 +4201,9 @@ function gameLoopFn() {
 
 function updateUI() {
     document.getElementById('money').textContent = player.money;
+    // Persist money to localStorage
+    localStorage.setItem('bugfights_money', player.money.toString());
+
     if (currentBet.amount > 0) {
         const name = currentBet.on === 1 ? nextBugs.bug1.name : nextBugs.bug2.name;
         document.getElementById('current-bet').textContent = `$${currentBet.amount} on ${name}`;
@@ -4240,10 +4219,26 @@ function initGame() {
     document.getElementById('bet-fighter1').addEventListener('click', () => placeBet(1));
     document.getElementById('bet-fighter2').addEventListener('click', () => placeBet(2));
 
+    // 90s visitor counter - stored in localStorage
+    initVisitorCounter();
+
     fighters = [];
     updateUI();
     startCountdown();
     gameLoopFn();
+}
+
+function initVisitorCounter() {
+    let visits = parseInt(localStorage.getItem('bugfights_visits') || '0');
+    visits++;
+    localStorage.setItem('bugfights_visits', visits.toString());
+
+    // Format with leading zeros for that classic hit counter look
+    const formatted = String(visits).padStart(6, '0');
+    const counter = document.getElementById('visitor-count');
+    if (counter) {
+        counter.textContent = formatted;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', initGame);
