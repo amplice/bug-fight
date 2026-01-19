@@ -384,7 +384,8 @@ class Fighter {
         const dx = opponent.x - this.x;
         const dy = opponent.y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const attackRange = 60;
+        // Attack range based on combined sprite sizes
+        const attackRange = (this.spriteSize + opponent.spriteSize) / 2 + 15;
 
         if (this.state === 'idle' && !this.onWall) {
             this.facingRight = dx > 0;
@@ -783,7 +784,8 @@ class Simulation {
         const dx = target.x - attacker.x;
         const dy = target.y - attacker.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const attackRange = 60;
+        // Attack range based on combined sprite sizes
+        const attackRange = (attacker.spriteSize + target.spriteSize) / 2 + 15;
 
         if (this.attackCooldowns[attackerIndex] <= 0 && dist < attackRange) {
             // Attempt attack
