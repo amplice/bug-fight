@@ -245,12 +245,14 @@ function renderFighter(ctx, fighterState, spriteData, side) {
     const frame = frameSet[Math.min(fighterState.animFrame || 0, frameSet.length - 1)];
     const colors = frames.colors;
 
-    const scale = 1.0;
-    const scaleX = scale * (fighterState.squash || 1);
-    const scaleY = scale * (fighterState.stretch || 1);
+    // Size scaling based on fighter's sprite size (from genome)
+    const baseScale = (fighterState.spriteSize || 32) / size;
+    const scaleX = baseScale * (fighterState.squash || 1);
+    const scaleY = baseScale * (fighterState.stretch || 1);
 
     const renderX = fighterState.x + (fighterState.lungeX || 0);
-    const renderY = fighterState.y + (fighterState.lungeY || 0);
+    // Victory bounce offsets Y position
+    const renderY = fighterState.y + (fighterState.lungeY || 0) - (fighterState.victoryBounce || 0);
 
     const sizeX = size * scaleX;
     const sizeY = size * scaleY;
@@ -264,11 +266,11 @@ function renderFighter(ctx, fighterState, spriteData, side) {
         ctx.globalAlpha = 0.5 + (fighterState.flashTimer / 16);
     }
 
-    // Death/wall rotation
+    // Death animation - use rotation and alpha from server
     let rotation = 0;
     if (fighterState.state === 'death') {
-        rotation = fighterState.facingRight ? Math.PI / 2 : -Math.PI / 2;
-        ctx.globalAlpha = 0.5;
+        rotation = fighterState.deathRotation || 0;
+        ctx.globalAlpha = fighterState.deathAlpha || 0.5;
     } else if (fighterState.onWall) {
         rotation = fighterState.wallSide === 'left' ? Math.PI / 2 : -Math.PI / 2;
     } else if (fighterState.drives) {

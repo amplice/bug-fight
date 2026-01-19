@@ -57,10 +57,16 @@ class Fighter {
         this.poisoned = 0;
         this.attackCooldown = 30 + Math.random() * 30;
 
-        // Animation state (minimal - for client sync)
+        // Animation state
         this.state = 'idle';
         this.animFrame = 0;
+        this.animTick = 0;
         this.stateTimer = 0;
+
+        // Victory/Death animation
+        this.victoryBounce = 0;
+        this.deathRotation = 0;
+        this.deathAlpha = 1;
 
         // Physics
         this.vx = 0;
@@ -219,21 +225,49 @@ class Fighter {
         this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegen * regenMultiplier);
     }
 
-    // Update state timers and reset states
+    // Update state timers, animation frames, and special animations
     updateState() {
         this.stateTimer++;
+        this.animTick++;
 
-        // Reset attack state after animation would complete
-        if (this.state === 'attack' && this.stateTimer > 20) {
-            this.setState('idle');
-        }
-        // Reset hit state
-        if (this.state === 'hit' && this.stateTimer > 10) {
-            if (this.isAlive) {
-                this.setState('idle');
-            } else {
-                this.setState('death');
+        // Animation frame cycling
+        const frameCount = { idle: 4, attack: 4, hit: 2, death: 4, victory: 4 };
+        const frameDelay = this.state === 'idle' ? 8 : 5;
+
+        if (this.animTick >= frameDelay) {
+            this.animTick = 0;
+            this.animFrame++;
+            const maxFrames = frameCount[this.state] || 4;
+            if (this.animFrame >= maxFrames) {
+                if (this.state === 'death') {
+                    this.animFrame = maxFrames - 1; // Stay on last frame
+                } else if (this.state === 'attack') {
+                    this.setState('idle');
+                } else if (this.state === 'hit') {
+                    this.isAlive ? this.setState('idle') : this.setState('death');
+                } else {
+                    this.animFrame = 0; // Loop
+                }
             }
+        }
+
+        // Victory animation - bouncing
+        if (this.state === 'victory') {
+            this.victoryBounce = Math.sin(this.stateTimer / 8) * 10;
+        } else {
+            this.victoryBounce = 0;
+        }
+
+        // Death animation - rotation and fade
+        if (this.state === 'death') {
+            const targetRotation = this.facingRight ? Math.PI / 2 : -Math.PI / 2;
+            this.deathRotation += (targetRotation - this.deathRotation) * 0.1;
+            if (this.stateTimer > 120) {
+                this.deathAlpha = Math.max(0.3, this.deathAlpha - 0.005);
+            }
+        } else {
+            this.deathRotation = 0;
+            this.deathAlpha = 1;
         }
     }
 
@@ -606,6 +640,11 @@ class Fighter {
                 aggression: Math.round(this.drives.aggression * 100) / 100,
                 caution: Math.round(this.drives.caution * 100) / 100,
             },
+            // Animation properties
+            spriteSize: this.spriteSize,
+            victoryBounce: Math.round(this.victoryBounce * 10) / 10,
+            deathRotation: Math.round(this.deathRotation * 100) / 100,
+            deathAlpha: Math.round(this.deathAlpha * 100) / 100,
         };
     }
 }
