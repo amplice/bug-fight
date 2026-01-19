@@ -245,10 +245,11 @@ function renderFighter(ctx, fighterState, spriteData, side) {
     const frame = frameSet[Math.min(fighterState.animFrame || 0, frameSet.length - 1)];
     const colors = frames.colors;
 
-    // Size scaling based on fighter's sprite size (from genome)
-    const baseScale = (fighterState.spriteSize || 32) / size;
-    const scaleX = baseScale * (fighterState.squash || 1);
-    const scaleY = baseScale * (fighterState.stretch || 1);
+    // Size scaling - divide by constant 24 for larger bugs (matches original)
+    // spriteSize ranges from 20-48, so scale ranges from ~0.83 to 2.0
+    const sizeRatio = (fighterState.spriteSize || 32) / 24;
+    const scaleX = sizeRatio * (fighterState.squash || 1);
+    const scaleY = sizeRatio * (fighterState.stretch || 1);
 
     const renderX = fighterState.x + (fighterState.lungeX || 0);
     // Victory bounce offsets Y position
