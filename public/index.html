@@ -96,10 +96,24 @@
                 <span class="counter-digits" id="visitor-count">000042</span>
             </div>
             <div class="footer-badges">
+                <button id="roster-btn" class="badge roster-btn">VIEW ROSTER</button>
                 <span class="badge netscape">Best viewed at 800x600</span>
                 <span class="badge construction">Always under construction!</span>
             </div>
             <div class="copyright">&copy; 1997-2026 Bug Fights Inc. All bugs reserved.</div>
+        </div>
+    </div>
+
+    <!-- Roster Modal -->
+    <div id="roster-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>BUG ROSTER</h2>
+                <button id="close-roster" class="close-btn">&times;</button>
+            </div>
+            <div id="roster-grid" class="roster-grid">
+                <!-- Roster items populated by JS -->
+            </div>
         </div>
     </div>
 

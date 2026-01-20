@@ -2,6 +2,7 @@
 // Handles all game logic, runs 24/7
 
 const BugGenome = require('./BugGenome');
+const RosterManager = require('./roster');
 
 // ============================================
 // CONSTANTS
@@ -661,9 +662,13 @@ class Simulation {
         this.tick = 0;
         this.fightNumber = 0;
 
+        this.roster = new RosterManager();
+
         this.fighters = [];
         this.bugs = []; // Genome data for client
         this.bugNames = [];
+        this.bugIds = []; // IDs of current fighters in roster
+        this.bugRecords = []; // W-L records
 
         this.events = []; // Events this tick (hits, commentary, etc.)
         this.winner = null;
@@ -679,18 +684,23 @@ class Simulation {
         this.countdown = COUNTDOWN_SECONDS;
         this.winner = null;
 
-        // Generate two new bugs
-        const genome1 = new BugGenome();
-        const genome2 = new BugGenome();
-        const name1 = genome1.getName();
-        const name2 = genome2.getName();
+        // Select two bugs from roster
+        const [bug1, bug2] = this.roster.selectFighters();
 
-        this.bugs = [genome1.toJSON(), genome2.toJSON()];
-        this.bugNames = [name1, name2];
+        const genome1 = new BugGenome(bug1.genome);
+        const genome2 = new BugGenome(bug2.genome);
+
+        this.bugs = [bug1.genome, bug2.genome];
+        this.bugNames = [bug1.name, bug2.name];
+        this.bugIds = [bug1.id, bug2.id];
+        this.bugRecords = [
+            { wins: bug1.wins, losses: bug1.losses },
+            { wins: bug2.wins, losses: bug2.losses }
+        ];
 
         this.fighters = [
-            new Fighter(genome1, 'left', name1),
-            new Fighter(genome2, 'right', name2),
+            new Fighter(genome1, 'left', bug1.name),
+            new Fighter(genome2, 'right', bug2.name),
         ];
 
         this.attackCooldowns = [30 + Math.random() * 30, 30 + Math.random() * 30];
@@ -965,12 +975,18 @@ class Simulation {
             this.winner = 1;
             f1.setState('victory');
             this.addEvent('commentary', `${f1.name} WINS!`, '#ff0');
+            // Record win/loss
+            this.roster.recordWin(this.bugIds[0]);
+            this.roster.recordLoss(this.bugIds[1]);
         } else if (f2.isAlive && !f1.isAlive) {
             this.winner = 2;
             f2.setState('victory');
             this.addEvent('commentary', `${f2.name} WINS!`, '#ff0');
+            // Record win/loss
+            this.roster.recordWin(this.bugIds[1]);
+            this.roster.recordLoss(this.bugIds[0]);
         } else {
-            // Both dead - draw
+            // Both dead - draw (no record change)
             this.winner = 0;
             this.addEvent('commentary', 'DRAW!', '#888');
         }
@@ -988,10 +1004,16 @@ class Simulation {
             fighters: this.fighters.map(f => f.toState()),
             bugs: this.bugs,
             bugNames: this.bugNames,
+            bugRecords: this.bugRecords,
             odds: this.calculateOdds(),
             events: this.events,
             winner: this.winner,
         };
+    }
+
+    // Get full roster for client
+    getRoster() {
+        return this.roster.getRosterForClient();
     }
 }
 

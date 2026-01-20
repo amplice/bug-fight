@@ -294,6 +294,113 @@ function updateConnectionStatus(isConnected) {
 }
 
 // ============================================
+// ROSTER MODAL
+// ============================================
+
+let rosterSprites = {}; // Cache for roster bug sprites
+
+async function loadRoster() {
+    try {
+        const response = await fetch('/api/roster');
+        const roster = await response.json();
+        renderRosterModal(roster);
+    } catch (err) {
+        console.error('Failed to load roster:', err);
+    }
+}
+
+function renderRosterModal(roster) {
+    const grid = document.getElementById('roster-grid');
+    grid.innerHTML = '';
+
+    roster.forEach((bug, index) => {
+        const card = document.createElement('div');
+        card.className = 'roster-card';
+
+        const winRate = bug.wins + bug.losses > 0
+            ? Math.round((bug.wins / (bug.wins + bug.losses)) * 100)
+            : 0;
+
+        card.innerHTML = `
+            <div class="roster-card-header">
+                <div class="roster-card-name">${bug.name}</div>
+                <div class="roster-card-record">${bug.wins}W - ${bug.losses}L</div>
+            </div>
+            <div class="roster-card-sprite" id="roster-sprite-${index}"></div>
+            <div class="roster-card-stats">
+                <div>BLK: ${bug.stats.bulk}
+                    <div class="roster-stat-bar"><div class="roster-stat-bar-fill bulk" style="width: ${bug.stats.bulk}%"></div></div>
+                </div>
+                <div>SPD: ${bug.stats.speed}
+                    <div class="roster-stat-bar"><div class="roster-stat-bar-fill speed" style="width: ${bug.stats.speed}%"></div></div>
+                </div>
+                <div>FRY: ${bug.stats.fury}
+                    <div class="roster-stat-bar"><div class="roster-stat-bar-fill fury" style="width: ${bug.stats.fury}%"></div></div>
+                </div>
+                <div>INS: ${bug.stats.instinct}
+                    <div class="roster-stat-bar"><div class="roster-stat-bar-fill instinct" style="width: ${bug.stats.instinct}%"></div></div>
+                </div>
+            </div>
+            <div class="roster-card-attrs">
+                <span class="weapon">${bug.weapon}</span>
+                <span class="defense">${bug.defense}</span>
+                <span class="mobility">${bug.mobility}</span>
+            </div>
+        `;
+
+        grid.appendChild(card);
+
+        // Generate sprite for this bug
+        renderRosterSprite(bug, index);
+    });
+}
+
+function renderRosterSprite(bug, index) {
+    const container = document.getElementById(`roster-sprite-${index}`);
+    if (!container) return;
+
+    // Create canvas for this bug's sprite
+    const canvas = document.createElement('canvas');
+    const size = 48;
+    canvas.width = size;
+    canvas.height = size;
+    canvas.style.width = `${size * 1.5}px`;
+    canvas.style.height = `${size * 1.5}px`;
+
+    const ctx = canvas.getContext('2d');
+
+    // Generate sprite
+    const genome = new BugGenome(bug.genome);
+    const generator = new BugSpriteGenerator(genome);
+    const frames = generator.generateAllFrames();
+    const frame = frames.idle[0];
+    const colors = frames.colors;
+
+    // Draw pixels
+    const scale = size / generator.size;
+    for (let py = 0; py < generator.size; py++) {
+        for (let px = 0; px < generator.size; px++) {
+            const colorIdx = parseInt(frame[py][px]);
+            if (colorIdx === 0) continue;
+
+            ctx.fillStyle = colors[colorIdx];
+            ctx.fillRect(px * scale, py * scale, scale + 0.5, scale + 0.5);
+        }
+    }
+
+    container.appendChild(canvas);
+}
+
+function openRosterModal() {
+    document.getElementById('roster-modal').classList.remove('hidden');
+    loadRoster();
+}
+
+function closeRosterModal() {
+    document.getElementById('roster-modal').classList.add('hidden');
+}
+
+// ============================================
 // INIT
 // ============================================
 
@@ -301,6 +408,13 @@ function initClient() {
     // Set up bet buttons
     document.getElementById('bet-fighter1').addEventListener('click', () => placeBet(1));
     document.getElementById('bet-fighter2').addEventListener('click', () => placeBet(2));
+
+    // Set up roster modal
+    document.getElementById('roster-btn').addEventListener('click', openRosterModal);
+    document.getElementById('close-roster').addEventListener('click', closeRosterModal);
+    document.getElementById('roster-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'roster-modal') closeRosterModal();
+    });
 
     // Visitor counter
     let visits = parseInt(localStorage.getItem('bugfights_visits') || '0');

@@ -1,0 +1,295 @@
+{
+  "bugs": [
+    {
+      "id": "cbsadl112",
+      "genome": {
+        "bulk": 35,
+        "speed": 88,
+        "fury": 38,
+        "instinct": 55,
+        "abdomenType": "segmented",
+        "thoraxType": "wide",
+        "headType": "elongated",
+        "legCount": 8,
+        "legStyle": "curved-forward",
+        "pattern": "spotted",
+        "weapon": "fangs",
+        "defense": "none",
+        "mobility": "winged",
+        "color": {
+          "hue": 153.0498741300538,
+          "saturation": 0.8844322733622361,
+          "lightness": 0.41784745674168094
+        },
+        "accentHue": 193.45705697698668,
+        "patternSeed": 683
+      },
+      "name": "Fang Creep",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.584Z"
+    },
+    {
+      "id": "cm2428j8v",
+      "genome": {
+        "bulk": 32,
+        "speed": 31,
+        "fury": 73,
+        "instinct": 79,
+        "abdomenType": "bulbous",
+        "thoraxType": "wide",
+        "headType": "round",
+        "legCount": 4,
+        "legStyle": "curved-forward",
+        "pattern": "spotted",
+        "weapon": "claws",
+        "defense": "toxic",
+        "mobility": "wallcrawler",
+        "color": {
+          "hue": 39.9487059552899,
+          "saturation": 0.6765079810199016,
+          "lightness": 0.5328963709806289
+        },
+        "accentHue": 81.55741369875278,
+        "patternSeed": 6644
+      },
+      "name": "Slasher Mass",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "2vv6ecjfu",
+      "genome": {
+        "bulk": 34,
+        "speed": 88,
+        "fury": 53,
+        "instinct": 69,
+        "abdomenType": "oval",
+        "thoraxType": "compact",
+        "headType": "elongated",
+        "legCount": 6,
+        "legStyle": "short",
+        "pattern": "spotted",
+        "weapon": "mandibles",
+        "defense": "shell",
+        "mobility": "ground",
+        "color": {
+          "hue": 335.4471418395699,
+          "saturation": 0.80459742949754,
+          "lightness": 0.43959965311595955
+        },
+        "accentHue": 24.652650912311742,
+        "patternSeed": 6052
+      },
+      "name": "Gnasher Dash",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "7luio1c21",
+      "genome": {
+        "bulk": 78,
+        "speed": 61,
+        "fury": 87,
+        "instinct": 54,
+        "abdomenType": "oval",
+        "thoraxType": "compact",
+        "headType": "square",
+        "legCount": 6,
+        "legStyle": "curved-back",
+        "pattern": "striped",
+        "weapon": "stinger",
+        "defense": "toxic",
+        "mobility": "winged",
+        "color": {
+          "hue": 356.3060945832072,
+          "saturation": 0.8715682272332619,
+          "lightness": 0.3986974754967354
+        },
+        "accentHue": 65.27173568453509,
+        "patternSeed": 4470
+      },
+      "name": "Piercer Runner",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "fk98h057e",
+      "genome": {
+        "bulk": 60,
+        "speed": 47,
+        "fury": 51,
+        "instinct": 58,
+        "abdomenType": "round",
+        "thoraxType": "wide",
+        "headType": "triangular",
+        "legCount": 4,
+        "legStyle": "short",
+        "pattern": "spotted",
+        "weapon": "fangs",
+        "defense": "none",
+        "mobility": "winged",
+        "color": {
+          "hue": 279.31721367586175,
+          "saturation": 0.8018717482932939,
+          "lightness": 0.4643885984423683
+        },
+        "accentHue": 333.74126491255447,
+        "patternSeed": 6374
+      },
+      "name": "Fang Orb",
+      "wins": 0,
+      "losses": 1,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "ano9qpkqo",
+      "genome": {
+        "bulk": 74,
+        "speed": 17,
+        "fury": 47,
+        "instinct": 45,
+        "abdomenType": "oval",
+        "thoraxType": "elongated",
+        "headType": "triangular",
+        "legCount": 6,
+        "legStyle": "curved-forward",
+        "pattern": "spotted",
+        "weapon": "mandibles",
+        "defense": "camouflage",
+        "mobility": "wallcrawler",
+        "color": {
+          "hue": 61.67232717388673,
+          "saturation": 0.744988823127201,
+          "lightness": 0.5101204300419092
+        },
+        "accentHue": 108.36747947237133,
+        "patternSeed": 6186
+      },
+      "name": "Breaker Runner",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "g3uv5r5mo",
+      "genome": {
+        "bulk": 51,
+        "speed": 76,
+        "fury": 40,
+        "instinct": 64,
+        "abdomenType": "segmented",
+        "thoraxType": "wide",
+        "headType": "triangular",
+        "legCount": 6,
+        "legStyle": "curved-back",
+        "pattern": "striped",
+        "weapon": "fangs",
+        "defense": "shell",
+        "mobility": "winged",
+        "color": {
+          "hue": 302.74459270078137,
+          "saturation": 0.5410978961502556,
+          "lightness": 0.5031807279527798
+        },
+        "accentHue": 28.44872682345192,
+        "patternSeed": 2945
+      },
+      "name": "Toxic Link",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "l0x7vb0pk",
+      "genome": {
+        "bulk": 77,
+        "speed": 77,
+        "fury": 79,
+        "instinct": 57,
+        "abdomenType": "round",
+        "thoraxType": "compact",
+        "headType": "triangular",
+        "legCount": 4,
+        "legStyle": "curved-forward",
+        "pattern": "striped",
+        "weapon": "claws",
+        "defense": "camouflage",
+        "mobility": "ground",
+        "color": {
+          "hue": 157.2266130436541,
+          "saturation": 0.7787708677400493,
+          "lightness": 0.5562934058017455
+        },
+        "accentHue": 221.25402454747942,
+        "patternSeed": 2577
+      },
+      "name": "Ripper Blob",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "gcq9xq172",
+      "genome": {
+        "bulk": 81,
+        "speed": 47,
+        "fury": 46,
+        "instinct": 50,
+        "abdomenType": "round",
+        "thoraxType": "elongated",
+        "headType": "square",
+        "legCount": 4,
+        "legStyle": "short",
+        "pattern": "spotted",
+        "weapon": "stinger",
+        "defense": "toxic",
+        "mobility": "winged",
+        "color": {
+          "hue": 93.51692592269757,
+          "saturation": 0.7183300623344309,
+          "lightness": 0.4494128786219757
+        },
+        "accentHue": 150.2060687959794,
+        "patternSeed": 8581
+      },
+      "name": "Lancer Dome",
+      "wins": 0,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    },
+    {
+      "id": "tnyweh7kh",
+      "genome": {
+        "bulk": 76,
+        "speed": 55,
+        "fury": 41,
+        "instinct": 10,
+        "abdomenType": "round",
+        "thoraxType": "compact",
+        "headType": "elongated",
+        "legCount": 6,
+        "legStyle": "short",
+        "pattern": "spotted",
+        "weapon": "fangs",
+        "defense": "none",
+        "mobility": "winged",
+        "color": {
+          "hue": 272.9946413329301,
+          "saturation": 0.8995938592755244,
+          "lightness": 0.3606104080629019
+        },
+        "accentHue": 310.4405817075886,
+        "patternSeed": 3435
+      },
+      "name": "Biter Blob",
+      "wins": 1,
+      "losses": 0,
+      "createdAt": "2026-01-20T23:05:17.592Z"
+    }
+  ],
+  "savedAt": "2026-01-20T23:05:50.257Z"
+}

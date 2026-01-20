@@ -32,6 +32,16 @@ function serveStatic(req, res) {
     // Remove query string
     filePath = filePath.split('?')[0];
 
+    // API endpoints
+    if (filePath === '/api/roster') {
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify(simulation.getRoster()));
+        return;
+    }
+
     // Security: prevent directory traversal
     filePath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
 
