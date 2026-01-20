@@ -348,6 +348,32 @@ h1 {
     text-shadow: 0 0 5px #ff0;
 }
 
+.odds-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.odds-format-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(180deg, #444 0%, #222 100%);
+    border: 2px solid;
+    border-color: #666 #222 #222 #666;
+    color: #ff0;
+    cursor: pointer;
+    text-shadow: 0 0 5px #ff0;
+}
+
+.odds-format-btn:hover {
+    background: linear-gradient(180deg, #555 0%, #333 100%);
+}
+
+.odds-format-btn:active {
+    border-color: #222 #666 #666 #222;
+}
+
 /* Stats Legend - Terminal style */
 .stats-legend {
     background: #000;

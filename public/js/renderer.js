@@ -545,11 +545,11 @@ function renderPreFightStats(ctx, state) {
     const chartRadius = 70;
 
     // Fighter 1 panel
-    renderFighterPanel(ctx, leftX, chartY, bugs[0], names[0], odds.fighter1, records[0],
+    renderFighterPanel(ctx, leftX, chartY, bugs[0], names[0], odds, 1, records[0],
                        state.fightNumber, 0, chartRadius, '#f55', 'rgba(255, 85, 85, 0.3)');
 
     // Fighter 2 panel
-    renderFighterPanel(ctx, rightX, chartY, bugs[1], names[1], odds.fighter2, records[1],
+    renderFighterPanel(ctx, rightX, chartY, bugs[1], names[1], odds, 2, records[1],
                        state.fightNumber, 1, chartRadius, '#5af', 'rgba(85, 170, 255, 0.3)');
 
     // Betting hint
@@ -559,7 +559,11 @@ function renderPreFightStats(ctx, state) {
     ctx.fillText('Place your bets below!', canvas.width / 2, 580);
 }
 
-function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, record, fightNumber, index, radius, color, fillColor) {
+function getOddsFormat() {
+    return localStorage.getItem('bugfights_odds_format') || 'decimal';
+}
+
+function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, fighterNum, record, fightNumber, index, radius, color, fillColor) {
     // Name
     ctx.textAlign = 'center';
     ctx.font = 'bold 16px "Press Start 2P", monospace';
@@ -573,6 +577,12 @@ function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, record, fight
     ctx.font = '12px "Press Start 2P", monospace';
     ctx.fillStyle = '#888';
     ctx.fillText(`${record.wins}-${record.losses}`, centerX, 190);
+
+    // Win probability
+    const prob = fighterNum === 1 ? odds.prob1 : odds.prob2;
+    ctx.font = '10px "VT323", monospace';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`(${prob}% win chance)`, centerX, 205);
 
     // Bug preview
     const previewY = 230;
@@ -614,12 +624,20 @@ function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, record, fight
     ctx.fillStyle = '#af5';
     ctx.fillText(`👟 ${bug.mobility}`, centerX, attrY + 36);
 
-    // Odds
+    // Odds - display in user's preferred format
+    const oddsFormat = getOddsFormat();
+    let oddsText;
+    if (oddsFormat === 'american') {
+        oddsText = fighterNum === 1 ? odds.american1 : odds.american2;
+    } else {
+        oddsText = (fighterNum === 1 ? odds.fighter1 : odds.fighter2) + 'x';
+    }
+
     ctx.font = 'bold 18px "Press Start 2P", monospace';
     ctx.fillStyle = '#ff0';
     ctx.shadowColor = '#ff0';
     ctx.shadowBlur = 8;
-    ctx.fillText(`${odds}x`, centerX, attrY + 70);
+    ctx.fillText(oddsText, centerX, attrY + 70);
     ctx.shadowBlur = 0;
 }
 

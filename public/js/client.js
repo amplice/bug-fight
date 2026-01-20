@@ -32,6 +32,9 @@ let player = {
 let currentBet = { amount: 0, on: null };
 let lastFightNumber = 0;
 
+// Odds format preference
+let oddsFormat = localStorage.getItem('bugfights_odds_format') || 'decimal';
+
 // Callbacks for renderer
 let onStateUpdate = null;
 let onEvent = null;
@@ -261,9 +264,21 @@ function updateUI() {
         document.getElementById('fighter2-attrs').innerHTML = formatAttrs(bug2);
     }
 
-    // Odds
-    document.getElementById('odds1').textContent = gameState.odds.fighter1 + 'x';
-    document.getElementById('odds2').textContent = gameState.odds.fighter2 + 'x';
+    // Odds - display in selected format
+    const odds = gameState.odds;
+    if (oddsFormat === 'american') {
+        document.getElementById('odds1').textContent = odds.american1;
+        document.getElementById('odds2').textContent = odds.american2;
+    } else {
+        document.getElementById('odds1').textContent = odds.fighter1 + 'x';
+        document.getElementById('odds2').textContent = odds.fighter2 + 'x';
+    }
+
+    // Update odds format button
+    const oddsBtn = document.getElementById('odds-format-btn');
+    if (oddsBtn) {
+        oddsBtn.textContent = oddsFormat === 'american' ? 'AMERICAN' : 'DECIMAL';
+    }
 
     // Bet buttons state
     const betButtons = document.getElementById('bet-buttons');
@@ -404,10 +419,19 @@ function closeRosterModal() {
 // INIT
 // ============================================
 
+function toggleOddsFormat() {
+    oddsFormat = oddsFormat === 'decimal' ? 'american' : 'decimal';
+    localStorage.setItem('bugfights_odds_format', oddsFormat);
+    updateUI();
+}
+
 function initClient() {
     // Set up bet buttons
     document.getElementById('bet-fighter1').addEventListener('click', () => placeBet(1));
     document.getElementById('bet-fighter2').addEventListener('click', () => placeBet(2));
+
+    // Set up odds format toggle
+    document.getElementById('odds-format-btn').addEventListener('click', toggleOddsFormat);
 
     // Set up roster modal
     document.getElementById('roster-btn').addEventListener('click', openRosterModal);

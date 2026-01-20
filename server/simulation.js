@@ -712,9 +712,43 @@ class Simulation {
         const p1 = this.fighters[0].getPowerRating();
         const p2 = this.fighters[1].getPowerRating();
         const total = p1 + p2;
+
+        // True win probabilities (normalized)
+        const prob1 = p1 / total;
+        const prob2 = p2 / total;
+
+        // Apply house edge (5% spread)
+        // This reduces payouts slightly - the "juice" or "vig"
+        const houseEdge = 0.05;
+        const adjustedProb1 = prob1 + (houseEdge / 2);
+        const adjustedProb2 = prob2 + (houseEdge / 2);
+
+        // Convert to decimal odds (European style)
+        // Decimal odds = 1 / probability
+        const decimal1 = (1 / adjustedProb1).toFixed(2);
+        const decimal2 = (1 / adjustedProb2).toFixed(2);
+
+        // Convert to American odds
+        // If prob > 50%: American = -100 * (prob / (1 - prob))
+        // If prob < 50%: American = 100 * ((1 - prob) / prob)
+        const toAmerican = (prob) => {
+            if (prob >= 0.5) {
+                return Math.round(-100 * (prob / (1 - prob)));
+            } else {
+                return '+' + Math.round(100 * ((1 - prob) / prob));
+            }
+        };
+
+        const american1 = toAmerican(adjustedProb1);
+        const american2 = toAmerican(adjustedProb2);
+
         return {
-            fighter1: (total / p1).toFixed(2),
-            fighter2: (total / p2).toFixed(2),
+            fighter1: decimal1,
+            fighter2: decimal2,
+            american1: american1,
+            american2: american2,
+            prob1: Math.round(prob1 * 100),
+            prob2: Math.round(prob2 * 100),
         };
     }
 
