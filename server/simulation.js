@@ -548,8 +548,10 @@ class Fighter {
     updateWallClimbing(opponent, dist) {
         const halfSize = this.spriteSize / 2;
         const staminaPercent = this.stamina / this.maxStamina;
+        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
 
         if (this.onWall) {
+            // Snap to wall position
             if (this.wallSide === 'left') {
                 this.x = ARENA.leftWall + halfSize;
             } else {
@@ -563,56 +565,115 @@ class Fighter {
             this.vx = 0;
             this.grounded = true;
 
+            // Enhanced stamina recovery on wall
+            this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegen * 1.5);
+
+            // Wall climbing movement - always try to match or gain height advantage
+            const targetY = opponent.y - 30; // Want to be slightly above opponent
+            const heightDiff = this.y - targetY;
+
             if (this.aiState === 'aggressive') {
-                const targetY = opponent.y;
-                if (Math.abs(this.y - targetY) > 30) {
-                    this.vy = Math.sign(targetY - this.y) * 3;
+                // Aggressively match opponent height for attack positioning
+                if (Math.abs(heightDiff) > 20) {
+                    const climbSpeed = 4 + (this.genome.speed / 30);
+                    this.vy = Math.sign(targetY - this.y) * climbSpeed;
+                } else {
+                    // In position - prepare to pounce
+                    this.vy = Math.sin(this.moveTimer / 10) * 1; // Subtle movement
                 }
-            } else if (this.aiState === 'retreating') {
-                this.vy = -3;
+            } else if (this.aiState === 'retreating' || staminaPercent < 0.4) {
+                // Climb high for safety and recovery
+                this.vy = -3.5;
+            } else if (this.aiState === 'circling') {
+                // Circle by moving up and down on wall
+                this.vy = Math.sin(this.moveTimer / 15) * 2.5;
             } else {
                 this.vy = Math.sin(this.moveTimer / 20) * 2;
             }
 
+            // WALL JUMP / POUNCE ATTACK
             const horizDist = Math.abs(opponent.x - this.x);
             const vertDist = Math.abs(opponent.y - this.y);
+            const hasLineOfSight = vertDist < 80;
 
-            if (horizDist < 180 && vertDist < 60 && this.drives.aggression > 0.4) {
-                if (Math.random() < 0.05 + this.drives.aggression * 0.08) {
+            // Pounce conditions - more likely when:
+            // - Opponent is in range horizontally
+            // - We have height advantage or are at same level
+            // - We have stamina
+            // - We're aggressive
+            if (horizDist < 250 && hasLineOfSight && staminaPercent > 0.3) {
+                const heightAdvantage = this.y < opponent.y - 10;
+                const pounceChance = 0.03 +
+                    (this.drives.aggression * 0.1) +
+                    (heightAdvantage ? 0.05 : 0) +
+                    (horizDist < 150 ? 0.03 : 0);
+
+                if (Math.random() < pounceChance) {
+                    // WALL JUMP!
                     this.onWall = false;
                     this.grounded = false;
+
                     const pounceDir = this.wallSide === 'left' ? 1 : -1;
-                    this.vx = pounceDir * (10 + this.genome.speed / 10);
-                    this.vy = -4;
+                    const jumpPower = 12 + (this.genome.speed / 8);
+
+                    // Calculate trajectory towards opponent
+                    const dx = opponent.x - this.x;
+                    const dy = opponent.y - this.y;
+                    const angle = Math.atan2(dy, Math.abs(dx));
+
+                    this.vx = pounceDir * jumpPower * Math.cos(angle);
+                    this.vy = -6 + Math.min(4, dy / 40); // Upward arc, adjusted for height diff
+
+                    // Use some stamina for the jump
+                    this.spendStamina(5);
                 }
             }
 
-            if (dist > 400 || (staminaPercent > 0.7 && this.aiState === 'retreating')) {
+            // Leave wall if too far from action or fully recovered
+            if (dist > 450 || (staminaPercent > 0.85 && this.aiState !== 'retreating' && this.drives.aggression > 0.5)) {
                 this.onWall = false;
                 this.grounded = false;
+                // Drop down with slight push toward center
+                this.vx = this.wallSide === 'left' ? 3 : -3;
             }
         } else {
+            // NOT ON WALL - decide whether to seek wall
             const nearLeftWall = this.x < ARENA.leftWall + 80;
             const nearRightWall = this.x > ARENA.rightWall - 80;
 
+            // Climb if near wall and conditions are right
             if ((nearLeftWall || nearRightWall) && this.grounded) {
                 const wantToClimb =
-                    staminaPercent < 0.4 ||
-                    opponent.isFlying ||
-                    opponent.y < this.y - 50 ||
-                    (this.drives.caution > 0.5 && Math.random() < 0.1) ||
-                    (dist < 150 && Math.random() < 0.08);
+                    staminaPercent < 0.5 ||  // Low stamina - go recover
+                    opponent.isFlying ||      // Opponent flying - match vertical mobility
+                    opponent.y < this.y - 40 || // Opponent above - gain height
+                    (this.drives.caution > 0.6 && Math.random() < 0.15) ||
+                    (dist < 120 && Math.random() < 0.12) || // Close combat - escape up
+                    (this.aiState === 'retreating');
 
                 if (wantToClimb) {
                     this.onWall = true;
                     this.wallSide = nearLeftWall ? 'left' : 'right';
-                    this.vy = 0;
+                    this.vy = -3; // Initial upward boost
                 }
             }
 
-            if ((this.aiState === 'retreating' || staminaPercent < 0.3) && !this.onWall) {
-                const nearestWall = this.x < ARENA.width / 2 ? 'left' : 'right';
-                this.vx += nearestWall === 'left' ? -0.5 : 0.5;
+            // ACTIVELY SEEK WALLS when:
+            // - Opponent is flying and we're grounded
+            // - Low stamina
+            // - Retreating
+            // - Opponent has range advantage
+            const shouldSeekWall =
+                (opponent.isFlying && !this.onWall) ||
+                (staminaPercent < 0.35 && !this.onWall) ||
+                (this.aiState === 'retreating' && !this.onWall) ||
+                (dist > 200 && opponent.y < this.y - 50); // They're above us at range
+
+            if (shouldSeekWall) {
+                // Move toward nearest wall
+                const nearestWall = this.x < arenaCenter ? 'left' : 'right';
+                const wallForce = 1.2 + (this.genome.speed / 80);
+                this.vx += nearestWall === 'left' ? -wallForce : wallForce;
             }
         }
     }
