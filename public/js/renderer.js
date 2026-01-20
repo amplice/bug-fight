@@ -378,6 +378,252 @@ function renderFighter(ctx, fighterState, spriteData, side) {
 }
 
 // ============================================
+// PRE-FIGHT STATS SCREEN
+// ============================================
+
+function renderPentagonChart(ctx, centerX, centerY, radius, stats, color, fillColor) {
+    // Stats: [bulk, speed, fury, instinct] normalized to 0-1
+    const labels = ['BLK', 'SPD', 'FRY', 'INS'];
+    const numStats = 4;
+    const angleStep = (Math.PI * 2) / numStats;
+    const startAngle = -Math.PI / 2; // Start from top
+
+    // Draw background grid
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+
+    // Draw concentric shapes (at 25%, 50%, 75%, 100%)
+    for (let level = 0.25; level <= 1; level += 0.25) {
+        ctx.beginPath();
+        for (let i = 0; i <= numStats; i++) {
+            const angle = startAngle + i * angleStep;
+            const x = centerX + Math.cos(angle) * radius * level;
+            const y = centerY + Math.sin(angle) * radius * level;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    // Draw axis lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    for (let i = 0; i < numStats; i++) {
+        const angle = startAngle + i * angleStep;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius);
+        ctx.stroke();
+    }
+
+    // Draw stat shape
+    ctx.beginPath();
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+
+    for (let i = 0; i <= numStats; i++) {
+        const statIndex = i % numStats;
+        const angle = startAngle + i * angleStep;
+        const value = stats[statIndex];
+        const x = centerX + Math.cos(angle) * radius * value;
+        const y = centerY + Math.sin(angle) * radius * value;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw stat points
+    ctx.fillStyle = color;
+    for (let i = 0; i < numStats; i++) {
+        const angle = startAngle + i * angleStep;
+        const value = stats[i];
+        const x = centerX + Math.cos(angle) * radius * value;
+        const y = centerY + Math.sin(angle) * radius * value;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw labels
+    ctx.font = 'bold 11px "Press Start 2P", monospace';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < numStats; i++) {
+        const angle = startAngle + i * angleStep;
+        const labelRadius = radius + 20;
+        const x = centerX + Math.cos(angle) * labelRadius;
+        const y = centerY + Math.sin(angle) * labelRadius;
+        ctx.fillText(labels[i], x, y);
+    }
+}
+
+function renderBugPreview(ctx, x, y, bugData, fightNumber, index, maxSize) {
+    const key = `${fightNumber}-${index}`;
+    if (!sprites[key]) return;
+
+    const { frames, size } = sprites[key];
+    const frame = frames.idle[0];
+    const colors = frames.colors;
+
+    // Calculate scale to fit in maxSize while maintaining aspect ratio
+    const sizeRatio = (bugData.spriteSize || 32) / 24;
+    const scale = Math.min(maxSize / (size * sizeRatio), 2.5);
+    const finalScale = sizeRatio * scale;
+
+    const renderSize = size * finalScale;
+    const startX = x - renderSize / 2;
+    const startY = y - renderSize / 2;
+
+    // Draw pixels
+    for (let py = 0; py < size; py++) {
+        for (let px = 0; px < size; px++) {
+            const colorIdx = parseInt(frame[py][px]);
+            if (colorIdx === 0) continue;
+
+            ctx.fillStyle = colors[colorIdx];
+            ctx.fillRect(
+                startX + px * finalScale,
+                startY + py * finalScale,
+                finalScale + 0.5,
+                finalScale + 0.5
+            );
+        }
+    }
+}
+
+function renderPreFightStats(ctx, state) {
+    const bugs = state.bugs;
+    const names = state.bugNames;
+    const odds = state.odds;
+    const records = state.bugRecords || [{wins: 0, losses: 0}, {wins: 0, losses: 0}];
+
+    if (!bugs || bugs.length < 2) return;
+
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px "Press Start 2P", monospace';
+    ctx.fillStyle = '#ff0';
+    ctx.shadowColor = '#f80';
+    ctx.shadowBlur = 20;
+    ctx.fillText('NEXT FIGHT', canvas.width / 2, 50);
+    ctx.shadowBlur = 0;
+
+    // Fight number
+    ctx.font = '14px "Press Start 2P", monospace';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`FIGHT #${state.fightNumber}`, canvas.width / 2, 75);
+
+    // Countdown
+    ctx.font = 'bold 48px "Press Start 2P", monospace';
+    ctx.fillStyle = state.countdown <= 3 ? '#f00' : '#fff';
+    ctx.shadowColor = state.countdown <= 3 ? '#f00' : '#08f';
+    ctx.shadowBlur = 15;
+    ctx.fillText(state.countdown, canvas.width / 2, 130);
+    ctx.shadowBlur = 0;
+
+    // VS
+    ctx.font = 'bold 36px "Press Start 2P", monospace';
+    ctx.fillStyle = '#f00';
+    ctx.shadowColor = '#f00';
+    ctx.shadowBlur = 10;
+    ctx.fillText('VS', canvas.width / 2, 340);
+    ctx.shadowBlur = 0;
+
+    // Left fighter (Fighter 1)
+    const leftX = 225;
+    const rightX = 675;
+    const chartY = 280;
+    const chartRadius = 70;
+
+    // Fighter 1 panel
+    renderFighterPanel(ctx, leftX, chartY, bugs[0], names[0], odds.fighter1, records[0],
+                       state.fightNumber, 0, chartRadius, '#f55', 'rgba(255, 85, 85, 0.3)');
+
+    // Fighter 2 panel
+    renderFighterPanel(ctx, rightX, chartY, bugs[1], names[1], odds.fighter2, records[1],
+                       state.fightNumber, 1, chartRadius, '#5af', 'rgba(85, 170, 255, 0.3)');
+
+    // Betting hint
+    ctx.font = '12px "VT323", monospace';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Place your bets below!', canvas.width / 2, 580);
+}
+
+function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, record, fightNumber, index, radius, color, fillColor) {
+    // Name
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 16px "Press Start 2P", monospace';
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.fillText(name, centerX, 170);
+    ctx.shadowBlur = 0;
+
+    // Record
+    ctx.font = '12px "Press Start 2P", monospace';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`${record.wins}-${record.losses}`, centerX, 190);
+
+    // Bug preview
+    const previewY = 230;
+    const genome = new BugGenome(bug);
+    const spriteSize = Math.round(32 * genome.getSizeMultiplier());
+    bug.spriteSize = Math.max(20, Math.min(48, spriteSize));
+    renderBugPreview(ctx, centerX, previewY, bug, fightNumber, index, 80);
+
+    // Pentagon chart
+    const stats = [
+        bug.bulk / 100,
+        bug.speed / 100,
+        bug.fury / 100,
+        bug.instinct / 100
+    ];
+    renderPentagonChart(ctx, centerX, chartY, radius, stats, color, fillColor);
+
+    // Stat values
+    ctx.font = '10px "VT323", monospace';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`${bug.bulk}`, centerX, chartY - radius - 35);
+    ctx.fillText(`${bug.speed}`, centerX + radius + 30, chartY);
+    ctx.fillText(`${bug.fury}`, centerX, chartY + radius + 35);
+    ctx.fillText(`${bug.instinct}`, centerX - radius - 30, chartY);
+
+    // Attributes
+    const attrY = chartY + radius + 60;
+    ctx.font = '11px "VT323", monospace';
+
+    // Weapon
+    ctx.fillStyle = '#f55';
+    ctx.fillText(`⚔ ${bug.weapon}`, centerX, attrY);
+
+    // Defense
+    ctx.fillStyle = '#5af';
+    ctx.fillText(`🛡 ${bug.defense}`, centerX, attrY + 18);
+
+    // Mobility
+    ctx.fillStyle = '#af5';
+    ctx.fillText(`👟 ${bug.mobility}`, centerX, attrY + 36);
+
+    // Odds
+    ctx.font = 'bold 18px "Press Start 2P", monospace';
+    ctx.fillStyle = '#ff0';
+    ctx.shadowColor = '#ff0';
+    ctx.shadowBlur = 8;
+    ctx.fillText(`${odds}x`, centerX, attrY + 70);
+    ctx.shadowBlur = 0;
+}
+
+// ============================================
 // MAIN RENDER
 // ============================================
 
@@ -467,6 +713,11 @@ function render(state) {
     ctx.fillStyle = '#888';
     ctx.font = '12px monospace';
     ctx.fillText(`FIGHT #${state.fightNumber}`, canvas.width / 2, 55);
+
+    // Pre-fight stats screen during countdown
+    if (state.phase === 'countdown') {
+        renderPreFightStats(ctx, state);
+    }
 
     // Commentary
     const commentary = window.BugFightsClient.getCommentary();
