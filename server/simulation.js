@@ -742,6 +742,43 @@ class Simulation {
         this.addEvent('commentary', 'FIGHT!', '#f00');
     }
 
+    resolveFighterCollision(f1, f2) {
+        // Skip if either is dead
+        if (!f1.isAlive || !f2.isAlive) return;
+
+        const dx = f2.x - f1.x;
+        const dy = f2.y - f1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Combined collision radius based on sprite sizes
+        const minDist = (f1.spriteSize + f2.spriteSize) / 2 * 0.7;
+
+        if (dist < minDist && dist > 0) {
+            // Calculate overlap
+            const overlap = minDist - dist;
+
+            // Normalize direction
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            // Push apart based on mass ratio
+            const totalMass = f1.mass + f2.mass;
+            const f1Ratio = f2.mass / totalMass;
+            const f2Ratio = f1.mass / totalMass;
+
+            // Separate the fighters
+            f1.x -= nx * overlap * f1Ratio;
+            f1.y -= ny * overlap * f1Ratio;
+            f2.x += nx * overlap * f2Ratio;
+            f2.y += ny * overlap * f2Ratio;
+
+            // Add some bounce velocity
+            const bounce = 0.3;
+            f1.vx -= nx * bounce;
+            f2.vx += nx * bounce;
+        }
+    }
+
     updateFight() {
         const [f1, f2] = this.fighters;
 
@@ -752,6 +789,9 @@ class Simulation {
         // Update physics
         f1.updatePhysics();
         f2.updatePhysics();
+
+        // Resolve body collision between fighters
+        this.resolveFighterCollision(f1, f2);
 
         // Update drives
         f1.updateDrives();
