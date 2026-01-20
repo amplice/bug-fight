@@ -750,10 +750,17 @@ class Simulation {
         const dy = f2.y - f1.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Combined collision radius based on sprite sizes
-        const minDist = (f1.spriteSize + f2.spriteSize) / 2 * 0.7;
+        // Combined collision radius - nearly full sprite size to prevent overlap
+        const minDist = (f1.spriteSize + f2.spriteSize) / 2 * 0.95;
 
-        if (dist < minDist && dist > 0) {
+        if (dist < minDist) {
+            // Handle edge case where bugs are at same position
+            if (dist < 1) {
+                f1.x -= 10;
+                f2.x += 10;
+                return;
+            }
+
             // Calculate overlap
             const overlap = minDist - dist;
 
@@ -766,14 +773,15 @@ class Simulation {
             const f1Ratio = f2.mass / totalMass;
             const f2Ratio = f1.mass / totalMass;
 
-            // Separate the fighters
-            f1.x -= nx * overlap * f1Ratio;
-            f1.y -= ny * overlap * f1Ratio;
-            f2.x += nx * overlap * f2Ratio;
-            f2.y += ny * overlap * f2Ratio;
+            // Immediately separate the fighters (no partial - full separation)
+            const separationForce = overlap + 2; // Extra push to ensure separation
+            f1.x -= nx * separationForce * f1Ratio;
+            f1.y -= ny * separationForce * f1Ratio * 0.3; // Less vertical push
+            f2.x += nx * separationForce * f2Ratio;
+            f2.y += ny * separationForce * f2Ratio * 0.3;
 
-            // Add some bounce velocity
-            const bounce = 0.3;
+            // Bounce velocity to keep them moving apart
+            const bounce = 1.5;
             f1.vx -= nx * bounce;
             f2.vx += nx * bounce;
         }
