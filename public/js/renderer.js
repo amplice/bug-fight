@@ -448,14 +448,14 @@ function renderPentagonChart(ctx, centerX, centerY, radius, stats, color, fillCo
     }
 
     // Draw labels
-    ctx.font = 'bold 11px "Press Start 2P", monospace';
-    ctx.fillStyle = '#888';
+    ctx.font = 'bold 9px "Press Start 2P", monospace';
+    ctx.fillStyle = '#666';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     for (let i = 0; i < numStats; i++) {
         const angle = startAngle + i * angleStep;
-        const labelRadius = radius + 20;
+        const labelRadius = radius + 18;
         const x = centerX + Math.cos(angle) * labelRadius;
         const y = centerY + Math.sin(angle) * labelRadius;
         ctx.fillText(labels[i], x, y);
@@ -510,39 +510,39 @@ function renderPreFightStats(ctx, state) {
 
     // Title
     ctx.textAlign = 'center';
-    ctx.font = 'bold 24px "Press Start 2P", monospace';
+    ctx.font = 'bold 20px "Press Start 2P", monospace';
     ctx.fillStyle = '#ff0';
     ctx.shadowColor = '#f80';
     ctx.shadowBlur = 20;
-    ctx.fillText('NEXT FIGHT', canvas.width / 2, 50);
+    ctx.fillText('NEXT FIGHT', canvas.width / 2, 35);
     ctx.shadowBlur = 0;
 
     // Fight number
-    ctx.font = '14px "Press Start 2P", monospace';
+    ctx.font = '10px "Press Start 2P", monospace';
     ctx.fillStyle = '#888';
-    ctx.fillText(`FIGHT #${state.fightNumber}`, canvas.width / 2, 75);
+    ctx.fillText(`FIGHT #${state.fightNumber}`, canvas.width / 2, 55);
 
-    // Countdown
-    ctx.font = 'bold 48px "Press Start 2P", monospace';
+    // Countdown - centered between the two panels
+    ctx.font = 'bold 36px "Press Start 2P", monospace';
     ctx.fillStyle = state.countdown <= 3 ? '#f00' : '#fff';
     ctx.shadowColor = state.countdown <= 3 ? '#f00' : '#08f';
     ctx.shadowBlur = 15;
-    ctx.fillText(state.countdown, canvas.width / 2, 130);
+    ctx.fillText(state.countdown, canvas.width / 2, 300);
     ctx.shadowBlur = 0;
 
     // VS
-    ctx.font = 'bold 36px "Press Start 2P", monospace';
+    ctx.font = 'bold 24px "Press Start 2P", monospace';
     ctx.fillStyle = '#f00';
     ctx.shadowColor = '#f00';
     ctx.shadowBlur = 10;
     ctx.fillText('VS', canvas.width / 2, 340);
     ctx.shadowBlur = 0;
 
-    // Left fighter (Fighter 1)
-    const leftX = 225;
-    const rightX = 675;
-    const chartY = 280;
-    const chartRadius = 70;
+    // Fighter panels - spread further apart
+    const leftX = 190;
+    const rightX = 710;
+    const chartY = 320;
+    const chartRadius = 55;
 
     // Fighter 1 panel
     renderFighterPanel(ctx, leftX, chartY, bugs[0], names[0], odds, 1, records[0],
@@ -553,10 +553,10 @@ function renderPreFightStats(ctx, state) {
                        state.fightNumber, 1, chartRadius, '#5af', 'rgba(85, 170, 255, 0.3)');
 
     // Betting hint
-    ctx.font = '12px "VT323", monospace';
+    ctx.font = '14px "VT323", monospace';
     ctx.fillStyle = '#666';
     ctx.textAlign = 'center';
-    ctx.fillText('Place your bets below!', canvas.width / 2, 580);
+    ctx.fillText('Place your bets below!', canvas.width / 2, 585);
 }
 
 function getOddsFormat() {
@@ -564,34 +564,34 @@ function getOddsFormat() {
 }
 
 function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, fighterNum, record, fightNumber, index, radius, color, fillColor) {
-    // Name
+    // Name - at top
     ctx.textAlign = 'center';
-    ctx.font = 'bold 16px "Press Start 2P", monospace';
+    ctx.font = 'bold 12px "Press Start 2P", monospace';
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 10;
-    ctx.fillText(name, centerX, 170);
+    ctx.fillText(name, centerX, 85);
     ctx.shadowBlur = 0;
 
     // Record
-    ctx.font = '12px "Press Start 2P", monospace';
+    ctx.font = '10px "Press Start 2P", monospace';
     ctx.fillStyle = '#888';
-    ctx.fillText(`${record.wins}-${record.losses}`, centerX, 190);
+    ctx.fillText(`${record.wins}W - ${record.losses}L`, centerX, 105);
 
-    // Win probability
-    const prob = fighterNum === 1 ? odds.prob1 : odds.prob2;
-    ctx.font = '10px "VT323", monospace';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText(`(${prob}% win chance)`, centerX, 205);
-
-    // Bug preview
-    const previewY = 230;
+    // Bug preview - larger and centered
+    const previewY = 170;
     const genome = new BugGenome(bug);
     const spriteSize = Math.round(32 * genome.getSizeMultiplier());
     bug.spriteSize = Math.max(20, Math.min(48, spriteSize));
-    renderBugPreview(ctx, centerX, previewY, bug, fightNumber, index, 80);
+    renderBugPreview(ctx, centerX, previewY, bug, fightNumber, index, 70);
 
-    // Pentagon chart
+    // Win probability under sprite
+    const prob = fighterNum === 1 ? odds.prob1 : odds.prob2;
+    ctx.font = '12px "VT323", monospace';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`${prob}% chance`, centerX, 220);
+
+    // Pentagon chart - moved down
     const stats = [
         bug.bulk / 100,
         bug.speed / 100,
@@ -600,29 +600,25 @@ function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, fighterNum, r
     ];
     renderPentagonChart(ctx, centerX, chartY, radius, stats, color, fillColor);
 
-    // Stat values
-    ctx.font = '10px "VT323", monospace';
+    // Stat values around chart
+    ctx.font = '12px "VT323", monospace';
     ctx.fillStyle = '#aaa';
-    ctx.fillText(`${bug.bulk}`, centerX, chartY - radius - 35);
-    ctx.fillText(`${bug.speed}`, centerX + radius + 30, chartY);
-    ctx.fillText(`${bug.fury}`, centerX, chartY + radius + 35);
-    ctx.fillText(`${bug.instinct}`, centerX - radius - 30, chartY);
+    ctx.fillText(`${bug.bulk}`, centerX, chartY - radius - 25);
+    ctx.fillText(`${bug.speed}`, centerX + radius + 25, chartY);
+    ctx.fillText(`${bug.fury}`, centerX, chartY + radius + 25);
+    ctx.fillText(`${bug.instinct}`, centerX - radius - 25, chartY);
 
-    // Attributes
-    const attrY = chartY + radius + 60;
-    ctx.font = '11px "VT323", monospace';
+    // Attributes - horizontal layout below chart
+    const attrY = chartY + radius + 45;
+    ctx.font = '12px "VT323", monospace';
 
-    // Weapon
+    // Single line for attributes
     ctx.fillStyle = '#f55';
-    ctx.fillText(`⚔ ${bug.weapon}`, centerX, attrY);
-
-    // Defense
+    ctx.fillText(bug.weapon, centerX - 60, attrY);
     ctx.fillStyle = '#5af';
-    ctx.fillText(`🛡 ${bug.defense}`, centerX, attrY + 18);
-
-    // Mobility
+    ctx.fillText(bug.defense, centerX, attrY);
     ctx.fillStyle = '#af5';
-    ctx.fillText(`👟 ${bug.mobility}`, centerX, attrY + 36);
+    ctx.fillText(bug.mobility, centerX + 60, attrY);
 
     // Odds - display in user's preferred format
     const oddsFormat = getOddsFormat();
@@ -633,11 +629,11 @@ function renderFighterPanel(ctx, centerX, chartY, bug, name, odds, fighterNum, r
         oddsText = (fighterNum === 1 ? odds.fighter1 : odds.fighter2) + 'x';
     }
 
-    ctx.font = 'bold 18px "Press Start 2P", monospace';
+    ctx.font = 'bold 14px "Press Start 2P", monospace';
     ctx.fillStyle = '#ff0';
     ctx.shadowColor = '#ff0';
     ctx.shadowBlur = 8;
-    ctx.fillText(oddsText, centerX, attrY + 70);
+    ctx.fillText(oddsText, centerX, attrY + 35);
     ctx.shadowBlur = 0;
 }
 
