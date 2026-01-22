@@ -124,6 +124,7 @@ function processEvent(event) {
             addCommentary(event.data, event.color);
             break;
         case 'hit':
+        case 'wallImpact':
             if (onEvent) onEvent(event);
             break;
         case 'fightEnd':

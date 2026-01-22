@@ -80,10 +80,77 @@ Core emergent combat system implemented. Stripped scripted spectacle in favor of
 
 ## Architecture
 
+### Current Stack
+- **Frontend**: Vanilla JS, Canvas API, static HTML/CSS
+- **Backend**: Node.js + `ws` library
+- **Database**: JSON files (roster.json)
+- **Hosting**: Single VPS
+
+### Target Stack (Near-term)
+- **Frontend**: Vite (bundling/dev), vanilla JS, Canvas API
+- **Backend**: Bun (native WebSocket, faster runtime)
+- **Database**: SQLite + Prisma ORM
+- **Hosting**: Single VPS
+
+### Target Stack (Endgame)
+- **Frontend**: Vite, vanilla JS (or minimal framework if breeding UI demands it)
+- **Backend**: Bun
+- **Database**: PostgreSQL or Turso (SQLite at edge) + Prisma
+- **Hosting**: TBD based on scale needs
+
+### Architecture Decisions
+- **TypeScript**: Yes. Migrate sooner rather than later. Type safety helps with breeding/genetics complexity.
+- **User accounts**: Yes. Persistent balances, leaderboards. Potentially on-chain/crypto in future.
+- **Frontend state**: Vanilla JS (just objects). No framework unless UI complexity demands it.
+- **Scaling**: Single VPS until performance requires otherwise.
+- **Testing**: Unit tests for critical simulation/genetics math. Ship fast otherwise.
+
+### Provable Fairness
+
+**Goal**: Prove fights aren't rigged. Users can verify the exact code from GitHub is running, and randomness can't be manipulated.
+
+**Phase 1 - drand Integration (Near-term)**:
+- Replace `Math.random()` with seeded PRNG
+- Seed each fight with [drand](https://drand.love) randomness beacon
+- Store `drandRound` with each fight result
+- Anyone can replay fight: clone repo + same seed = same outcome
+- Combat mechanics unchanged - just swap randomness source
+
+```javascript
+// Fetch drand beacon at fight start
+const beacon = await fetch('https://api.drand.sh/public/latest').json();
+const seed = beacon.randomness;  // Publicly verifiable
+const round = beacon.round;      // Stored with fight result
+
+// Seeded RNG replaces Math.random() throughout simulation
+const rng = createSeededRNG(seed);
+```
+
+**Phase 2 - TEE Attestation (With real money)**:
+- Run simulation in AWS Nitro Enclave (or Intel SGX)
+- Enclave generates cryptographic attestation of exact code running
+- Users verify attestation matches GitHub release hash
+- Even server operator can't modify code or peek inside enclave
+- RNG generated inside enclave - physically can't be manipulated
+
+**Trust Model**:
+- Phase 1: "If I cheated, you could catch me by replaying"
+- Phase 2: "I physically cannot cheat - hardware enforces it"
+
+**Why not ZK proofs?**
+- Full ZK (zkSNARKs) would require rewriting simulation in circuit language
+- Complex physics/AI simulation = massive circuit, minutes to prove
+- Overkill when TEE achieves same trust with standard code
+- Maybe revisit for on-chain betting pools where verification must happen in smart contract
+
 ### Files
-- `index.html` - Canvas and betting UI
-- `js/game.js` - Game engine, Fighter class, combat
-- `js/procedural.js` - BugGenome, sprite generation
+- `server/index.js` - HTTP server, WebSocket handling
+- `server/simulation.js` - Game engine, Fighter class, combat loop
+- `server/roster.js` - Persistent bug roster management
+- `public/index.html` - Canvas and betting UI
+- `public/js/client.js` - WebSocket client, betting logic, UI updates
+- `public/js/renderer.js` - Canvas rendering, animations, pre-fight screen
+- `public/js/procedural.js` - BugGenome, sprite generation
 
 ### Key Stats
 - **Bulk** - HP, stamina pool
@@ -94,11 +161,22 @@ Core emergent combat system implemented. Stripped scripted spectacle in favor of
 ### Weapons/Defense/Mobility
 Keep these simple. They affect range and damage type, not complex behaviors.
 
+## Implemented Features
+- Persistent roster of 10 bugs with fight records (W-L)
+- Pre-fight stats screen with pentagon charts
+- Accurate odds calculation with 5% house edge
+- American/European odds toggle
+- Enhanced wallcrawler AI (wall seeking, wall jumps)
+- Roster viewer modal
+
 ## Next Steps
 1. Tune drive/stamina/positioning values for optimal fight pacing
 2. Add breeding system (winners pass on genomes)
 3. Revisit variants as genetic traits, not cosmetic rarity
 4. Add feints/baits (fake attacks to draw reactions)
+5. Migrate to Bun + Vite + SQLite/Prisma + TypeScript stack
+6. Integrate drand for provable randomness (replace Math.random with seeded RNG)
+7. User accounts with persistent balances and leaderboards
 
 ## Running
 

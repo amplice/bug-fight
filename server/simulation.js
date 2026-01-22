@@ -113,6 +113,11 @@ class Fighter {
         this.lungeY = 0;
         this.flashTimer = 0;
 
+        // Knockback tracking
+        this.isKnockedBack = false;
+        this.knockbackVelocity = 0; // Track velocity at knockback for wall stun calc
+        this.wallStunTimer = 0; // Additional stun from hitting wall
+
         // Size multiplier for bounds
         this.sizeMultiplier = genome.getSizeMultiplier();
         this.spriteSize = Math.round(32 * this.sizeMultiplier);
@@ -308,27 +313,39 @@ class Fighter {
             this.vy = Math.abs(this.vy) * bounceFactor;
         }
 
-        // Walls
+        // Walls - with wall stun detection
         const leftLimit = ARENA.leftWall + halfSize;
         if (this.x < leftLimit) {
+            const impactVelocity = Math.abs(this.vx);
             this.x = leftLimit;
+
             if (this.isWallcrawler && !this.onWall && this.grounded) {
                 this.onWall = true;
                 this.wallSide = 'left';
                 this.vx = 0;
             } else {
+                // Check for wall stun from knockback
+                if (this.isKnockedBack && impactVelocity > 4) {
+                    this.applyWallStun(impactVelocity, 'left');
+                }
                 this.vx = Math.abs(this.vx) * bounceFactor;
             }
         }
 
         const rightLimit = ARENA.rightWall - halfSize;
         if (this.x > rightLimit) {
+            const impactVelocity = Math.abs(this.vx);
             this.x = rightLimit;
+
             if (this.isWallcrawler && !this.onWall && this.grounded) {
                 this.onWall = true;
                 this.wallSide = 'right';
                 this.vx = 0;
             } else {
+                // Check for wall stun from knockback
+                if (this.isKnockedBack && impactVelocity > 4) {
+                    this.applyWallStun(impactVelocity, 'right');
+                }
                 this.vx = -Math.abs(this.vx) * bounceFactor;
             }
         }
@@ -340,6 +357,16 @@ class Fighter {
 
         if (this.jumpCooldown > 0) this.jumpCooldown--;
         if (this.stunTimer > 0) this.stunTimer--;
+        if (this.wallStunTimer > 0) this.wallStunTimer--;
+
+        // Knockback decay - clear knockback state when velocity drops or grounded
+        if (this.isKnockedBack) {
+            const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+            if (speed < 2 || this.grounded) {
+                this.isKnockedBack = false;
+                this.knockbackVelocity = 0;
+            }
+        }
 
         // Visual decay
         this.squash += (1 - this.squash) * 0.2;
@@ -372,6 +399,78 @@ class Fighter {
         this.squash = 0.7;
         this.stretch = 1.3;
         return true;
+    }
+
+    // Wall stun from knockback impact
+    applyWallStun(impactVelocity, wallSide) {
+        // Base stun scales with impact velocity
+        let wallStun = Math.floor(impactVelocity * 3);
+
+        // Wallcrawlers are used to walls - reduced stun
+        if (this.isWallcrawler) {
+            wallStun = Math.floor(wallStun * 0.3);
+        }
+
+        // Shell defense absorbs some impact
+        if (this.genome.defense === 'shell') {
+            wallStun = Math.floor(wallStun * 0.7);
+        }
+
+        // Flying bugs take more impact (not used to ground/walls)
+        if (this.isFlying) {
+            wallStun = Math.floor(wallStun * 1.3);
+        }
+
+        // Apply the stun
+        this.wallStunTimer = wallStun;
+        this.stunTimer = Math.max(this.stunTimer, wallStun);
+
+        // Visual feedback - squash against wall
+        this.squash = 1.4;
+        this.stretch = 0.6;
+        this.flashTimer = 3;
+
+        // Store impact info for event generation
+        this.lastWallImpact = {
+            velocity: impactVelocity,
+            wallSide: wallSide,
+            stunApplied: wallStun,
+        };
+    }
+
+    // Wall awareness helpers
+    getWallProximity() {
+        // Returns 0-1 value, 1 = at wall, 0 = at center
+        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+        const arenaHalfWidth = (ARENA.rightWall - ARENA.leftWall) / 2;
+        const distFromCenter = Math.abs(this.x - arenaCenter);
+        return distFromCenter / arenaHalfWidth;
+    }
+
+    getNearestWallSide() {
+        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+        return this.x < arenaCenter ? 'left' : 'right';
+    }
+
+    getDistanceToWall(side) {
+        if (side === 'left') {
+            return this.x - ARENA.leftWall;
+        } else {
+            return ARENA.rightWall - this.x;
+        }
+    }
+
+    isCornered(threshold = 100) {
+        // Returns true if within threshold pixels of a wall
+        const leftDist = this.x - ARENA.leftWall;
+        const rightDist = ARENA.rightWall - this.x;
+        return Math.min(leftDist, rightDist) < threshold;
+    }
+
+    getEscapeDirection() {
+        // Returns direction to move away from nearest wall (toward center)
+        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+        return this.x < arenaCenter ? 1 : -1; // Move right if on left, left if on right
     }
 
     // AI
@@ -419,7 +518,32 @@ class Fighter {
     updateAIStateTransitions(opponent, dist, attackRange) {
         const hpPercent = this.hp / this.maxHp;
         const { aggression, caution } = this.drives;
+        const instinctFactor = this.genome.instinct / 100;
 
+        // CORNER ESCAPE: High instinct bugs recognize when they're trapped
+        const iAmCornered = this.isCornered(100);
+        const wallProximity = this.getWallProximity();
+
+        if (iAmCornered && instinctFactor > 0.4) {
+            // Cornered! High instinct bugs try to escape
+            const escapeUrgency = wallProximity * instinctFactor;
+
+            // More likely to retreat/escape when:
+            // - Very close to wall (high wallProximity)
+            // - Low HP
+            // - Just got hit (high caution from damage)
+            // - Opponent is close (pressure)
+            const pressured = dist < attackRange * 1.5;
+            const desperate = hpPercent < 0.5;
+
+            if ((pressured || desperate) && Math.random() < escapeUrgency * 0.15) {
+                this.aiState = 'retreating'; // Will use smart escape logic
+                this.aiStateTimer = 0;
+                return; // Priority escape
+            }
+        }
+
+        // Normal state transitions
         if (hpPercent < 0.4 && caution > 0.5 && (this.isFlying || this.isWallcrawler) && Math.random() < caution * 0.08) {
             this.aiState = 'retreating';
             this.aiStateTimer = 0;
@@ -444,8 +568,18 @@ class Fighter {
 
         if (this.isFlying) {
             const heightAdvantage = this.y < opponent.y - 30;
+            const instinctFactor = this.genome.instinct / 100;
+            const opponentCornered = opponent.isCornered(120);
+
             if (heightAdvantage && dist < attackRange * 1.5) {
-                this.vx += Math.sign(dx) * speed * 2;
+                // Dive attack - with herding if high instinct
+                let attackDir = Math.sign(dx);
+                if (instinctFactor > 0.4 && opponentCornered) {
+                    // Push toward wall during dive
+                    const opponentWallSide = opponent.getNearestWallSide();
+                    attackDir = opponentWallSide === 'left' ? -0.5 : 0.5;
+                }
+                this.vx += attackDir * speed * 2;
                 this.vy += 0.8;
             } else if (staminaPercent < 0.3) {
                 this.vx += Math.sign(dx) * speed * 0.5;
@@ -454,13 +588,22 @@ class Fighter {
                 this.vx += Math.sign(dx) * speed;
                 this.vy += this.y > opponent.y ? -0.5 : 0.3;
             } else {
+                // Hovering over ground opponent - high instinct: herd toward walls
                 const idealHeight = opponent.y - 80;
                 if (this.y > idealHeight) {
                     this.vy -= 0.4;
                 } else {
                     this.vy += 0.2;
                 }
-                this.vx += Math.sign(dx) * speed * 1.2;
+
+                // Approach with herding angle
+                let approachDir = Math.sign(dx);
+                if (instinctFactor > 0.4 && dist < attackRange * 3) {
+                    const opponentNearerWall = opponent.getNearestWallSide();
+                    const herdBias = opponentNearerWall === 'left' ? -0.3 : 0.3;
+                    approachDir += herdBias * instinctFactor;
+                }
+                this.vx += approachDir * speed * 1.2;
             }
             if (!heightAdvantage || dist > attackRange * 2) {
                 this.vy += Math.sin(this.moveTimer / 8) * 0.2;
@@ -473,7 +616,45 @@ class Fighter {
                 this.vx = Math.sign(dx) * 8;
             }
         } else {
-            this.vx += Math.sign(dx) * speed;
+            // Ground bug aggressive behavior with instinct-based cornering
+            const instinctFactor = this.genome.instinct / 100;
+
+            // Check if opponent is cornered
+            const opponentCornered = opponent.isCornered(120);
+            const opponentWallSide = opponent.getNearestWallSide();
+
+            // High instinct: try to cut off escape and push toward wall
+            if (instinctFactor > 0.4 && dist < attackRange * 3) {
+                // If opponent is cornered, press the advantage - stay between them and center
+                if (opponentCornered) {
+                    const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+                    const cutoffX = opponentWallSide === 'left'
+                        ? opponent.x + 60  // Position to their right (toward center)
+                        : opponent.x - 60; // Position to their left (toward center)
+
+                    // Move to cutoff position instead of directly at opponent
+                    const cutoffDx = cutoffX - this.x;
+                    if (Math.abs(cutoffDx) > 30) {
+                        this.vx += Math.sign(cutoffDx) * speed * (0.8 + instinctFactor * 0.4);
+                    } else {
+                        // In position - now push toward wall
+                        this.vx += Math.sign(dx) * speed;
+                    }
+                } else {
+                    // Try to herd opponent toward nearest wall
+                    const opponentNearerWall = opponent.getNearestWallSide();
+                    const herdDirection = opponentNearerWall === 'left' ? -1 : 1;
+
+                    // Approach at an angle to push toward wall
+                    const angleOffset = herdDirection * instinctFactor * 0.5;
+                    this.vx += (Math.sign(dx) + angleOffset) * speed;
+                }
+            } else {
+                // Low instinct or far away: just chase directly
+                this.vx += Math.sign(dx) * speed;
+            }
+
+            // Jump at flying/elevated opponents
             if (opponent.isFlying || opponent.onWall || opponent.y < this.y - 50) {
                 if (this.grounded && dist < attackRange * 2 && Math.random() < 0.04 + this.drives.aggression * 0.06) {
                     this.jump(1.0);
@@ -486,12 +667,25 @@ class Fighter {
     executeCirclingAI(opponent, dx, dy, dist) {
         const speed = 0.2 + (this.genome.speed / 200);
         const circleRadius = 60 + this.drives.caution * 60;
+        const instinctFactor = this.genome.instinct / 100;
 
         this.circleAngle += (this.side === 'left' ? 0.04 : -0.04) * (this.genome.speed / 50);
 
+        // High instinct: avoid circling into walls
+        const iAmCornered = this.isCornered(100);
+        const wallAvoidance = iAmCornered ? this.getEscapeDirection() * instinctFactor * 0.8 : 0;
+
         if (this.isFlying) {
-            const targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
+            let targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
             const targetY = opponent.y - 60 + Math.sin(this.circleAngle) * circleRadius * 0.4;
+
+            // Adjust target to avoid walls
+            if (instinctFactor > 0.3) {
+                const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+                const wallBias = (arenaCenter - targetX) * instinctFactor * 0.3;
+                targetX += wallBias;
+            }
+
             this.vx += (targetX - this.x) * 0.025;
             this.vy += (targetY - this.y) * 0.025;
             if (!opponent.isFlying && this.y > opponent.y - 40) {
@@ -501,7 +695,20 @@ class Fighter {
             const targetY = opponent.y;
             this.vy = Math.sign(targetY - this.y) * speed * 2;
         } else {
-            this.vx += Math.cos(this.circleAngle) * speed * 2;
+            // Ground circling with wall avoidance
+            let circleForce = Math.cos(this.circleAngle) * speed * 2;
+
+            // High instinct: bias movement away from walls while circling
+            if (iAmCornered && instinctFactor > 0.3) {
+                circleForce += wallAvoidance * speed * 3;
+                // Reverse circle direction if it would push us into wall
+                const predictedX = this.x + circleForce * 10;
+                if (predictedX < ARENA.leftWall + 80 || predictedX > ARENA.rightWall - 80) {
+                    this.circleAngle += Math.PI; // Reverse direction
+                }
+            }
+
+            this.vx += circleForce;
             if (this.grounded && Math.random() < 0.02) {
                 this.jump(0.5);
             }
@@ -516,9 +723,21 @@ class Fighter {
 
     executeRetreatingAI(opponent, dx, dy, dist) {
         const speed = 0.25 + (this.genome.speed / 200);
+        const instinctFactor = this.genome.instinct / 100;
+
+        // High instinct: don't retreat into walls - retreat toward center or sideways
+        const iAmCornered = this.isCornered(100);
+        const escapeDir = this.getEscapeDirection();
+        const retreatDir = -Math.sign(dx); // Default: away from opponent
 
         if (this.isFlying) {
-            this.vx -= Math.sign(dx) * speed * 1.5;
+            // Flying: retreat with wall awareness
+            let retreatX = retreatDir;
+            if (iAmCornered && instinctFactor > 0.3) {
+                // Don't fly into wall - bias toward center
+                retreatX = escapeDir * 0.7 + retreatDir * 0.3;
+            }
+            this.vx += retreatX * speed * 1.5;
             this.vy -= 0.5;
             if (this.y < ARENA.ceilingY + 80) {
                 this.vy += 0.3;
@@ -531,10 +750,34 @@ class Fighter {
                 this.vx += nearestWall === 'left' ? -speed * 3 : speed * 3;
             }
         } else {
-            this.vx -= Math.sign(dx) * speed;
+            // Ground retreat with wall awareness
+            if (iAmCornered && instinctFactor > 0.3) {
+                // Cornered! High instinct bugs try to escape sideways/past opponent
+                const panicFactor = this.getWallProximity(); // 0-1, higher = more cornered
+
+                if (panicFactor > 0.8 && instinctFactor > 0.5) {
+                    // Critically cornered - try to slip past opponent
+                    // Jump over or dash through
+                    if (this.grounded && Math.random() < 0.15 * instinctFactor) {
+                        this.jump(1.0);
+                        this.vx += escapeDir * 6; // Dash toward center
+                    } else {
+                        // Strafe toward center
+                        this.vx += escapeDir * speed * 2;
+                    }
+                } else {
+                    // Cornered but not critical - retreat at angle toward center
+                    this.vx += (retreatDir * 0.5 + escapeDir * 0.5 * instinctFactor) * speed;
+                }
+            } else {
+                // Not cornered or low instinct - normal retreat
+                this.vx += retreatDir * speed;
+            }
+
             if (this.grounded && Math.random() < 0.05) {
                 this.jump(0.6);
-                this.vx -= Math.sign(dx) * 3;
+                // Jump toward center if cornered, away from opponent otherwise
+                this.vx += (iAmCornered && instinctFactor > 0.4) ? escapeDir * 3 : retreatDir * 3;
             }
         }
 
@@ -708,6 +951,9 @@ class Fighter {
             victoryBounce: Math.round(this.victoryBounce * 10) / 10,
             deathRotation: Math.round(this.deathRotation * 100) / 100,
             deathAlpha: Math.round(this.deathAlpha * 100) / 100,
+            // Knockback state
+            isKnockedBack: this.isKnockedBack,
+            wallStunTimer: this.wallStunTimer,
         };
     }
 }
@@ -892,6 +1138,32 @@ class Simulation {
         }
     }
 
+    checkWallImpact(fighter) {
+        if (fighter.lastWallImpact) {
+            const impact = fighter.lastWallImpact;
+
+            // Generate event for renderer (screen shake, particles)
+            this.addEvent('wallImpact', {
+                x: fighter.x,
+                y: fighter.y,
+                name: fighter.name,
+                velocity: impact.velocity,
+                wallSide: impact.wallSide,
+                stunApplied: impact.stunApplied,
+            });
+
+            // Commentary based on impact severity
+            if (impact.stunApplied >= 20) {
+                this.addEvent('commentary', `${fighter.name} SLAMMED into the wall!`, '#f80');
+            } else if (impact.stunApplied >= 10) {
+                this.addEvent('commentary', `${fighter.name} crashes into the wall!`, '#fa0');
+            }
+
+            // Clear the impact info
+            fighter.lastWallImpact = null;
+        }
+    }
+
     updateFight() {
         const [f1, f2] = this.fighters;
 
@@ -902,6 +1174,10 @@ class Simulation {
         // Update physics
         f1.updatePhysics();
         f2.updatePhysics();
+
+        // Check for wall impacts and generate events
+        this.checkWallImpact(f1);
+        this.checkWallImpact(f2);
 
         // Resolve body collision between fighters
         this.resolveFighterCollision(f1, f2);
@@ -991,11 +1267,36 @@ class Simulation {
                 target.squash = 1.2;
                 target.stretch = 0.8;
 
-                // Knockback
+                // Knockback - enhanced with weapon types and damage scaling
                 const massRatio = attacker.mass / target.mass;
-                const knockbackForce = (isCrit ? 10 : 6) * Math.sqrt(massRatio);
+                const damageRatio = damage / 10; // Scale knockback with damage
+
+                // Weapon knockback multipliers
+                let weaponKnockback = 1.0;
+                switch (attacker.genome.weapon) {
+                    case 'mandibles': weaponKnockback = 0.8; break;  // Grip, less knockback
+                    case 'stinger': weaponKnockback = 1.4; break;    // Pierce, more knockback
+                    case 'claws': weaponKnockback = 1.2; break;      // Slash, good knockback
+                    case 'fangs': weaponKnockback = 1.0; break;      // Bite, standard
+                }
+
+                // Defense knockback resistance
+                let defenseResist = 1.0;
+                if (target.genome.defense === 'shell') {
+                    defenseResist = 0.7; // Heavy shell resists knockback
+                } else if (target.genome.defense === 'agility') {
+                    defenseResist = 1.3; // Light, more knockback
+                }
+
+                const baseKnockback = isCrit ? 12 : 7;
+                const knockbackForce = baseKnockback * Math.sqrt(massRatio) * weaponKnockback * defenseResist * (0.8 + damageRatio * 0.3);
+
                 target.vx += dirX * knockbackForce;
-                target.vy += dirY * knockbackForce * 0.4 - 2;
+                target.vy += dirY * knockbackForce * 0.3 - 3; // Slight upward pop
+
+                // Track knockback state for wall stun detection
+                target.isKnockedBack = true;
+                target.knockbackVelocity = knockbackForce;
 
                 // Update drives
                 attacker.onHitLanded(damage);

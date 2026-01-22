@@ -97,6 +97,12 @@ function spawnParticles(x, y, type, count = 5) {
             particle.size = 2;
             particle.vy = -1;
             particle.vx = (Math.random() - 0.5) * 4;
+        } else if (type === 'wallImpact') {
+            particle.color = ['#fa0', '#f80', '#ff0'][Math.floor(Math.random() * 3)];
+            particle.size = 2 + Math.random() * 3;
+            particle.vy = (Math.random() - 0.5) * 8;
+            particle.vx = (Math.random() - 0.5) * 4;
+            particle.life = 20 + Math.random() * 20;
         }
 
         particles.push(particle);
@@ -793,6 +799,22 @@ function handleEvent(event) {
         addBloodStain(data.x, data.y + 15);
         spawnFloatingNumber(data.x, data.y, data.damage, data.isCrit ? '#ff0' : '#f80', data.isCrit);
         screenShake.intensity = data.isCrit ? 5 : 2;
+    } else if (event.type === 'wallImpact') {
+        const data = event.data;
+        // Spawn impact particles at wall
+        const wallX = data.wallSide === 'left' ? ARENA.leftWall : ARENA.rightWall;
+        const particleCount = Math.min(10, Math.floor(data.velocity));
+        spawnParticles(wallX, data.y, 'wallImpact', particleCount);
+        spawnParticles(wallX, data.y, 'dust', 3);
+
+        // Screen shake based on impact severity
+        const shakeIntensity = Math.min(8, data.stunApplied / 4);
+        screenShake.intensity = Math.max(screenShake.intensity, shakeIntensity);
+
+        // Show "WALL!" floating text for big impacts
+        if (data.stunApplied >= 15) {
+            spawnFloatingNumber(data.x, data.y - 20, 'WALL!', '#f80', true);
+        }
     }
 }
 
