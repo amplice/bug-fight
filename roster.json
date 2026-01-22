@@ -25,8 +25,8 @@
         "patternSeed": 683
       },
       "name": "Fang Creep",
-      "wins": 372,
-      "losses": 288,
+      "wins": 374,
+      "losses": 291,
       "createdAt": "2026-01-20T23:05:17.584Z"
     },
     {
@@ -55,7 +55,7 @@
       },
       "name": "Slasher Mass",
       "wins": 103,
-      "losses": 535,
+      "losses": 538,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -83,8 +83,8 @@
         "patternSeed": 6052
       },
       "name": "Gnasher Dash",
-      "wins": 358,
-      "losses": 311,
+      "wins": 362,
+      "losses": 313,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -112,8 +112,8 @@
         "patternSeed": 4470
       },
       "name": "Piercer Runner",
-      "wins": 523,
-      "losses": 84,
+      "wins": 524,
+      "losses": 85,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -141,8 +141,8 @@
         "patternSeed": 6374
       },
       "name": "Fang Orb",
-      "wins": 256,
-      "losses": 405,
+      "wins": 257,
+      "losses": 408,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -171,7 +171,7 @@
       },
       "name": "Breaker Runner",
       "wins": 6,
-      "losses": 623,
+      "losses": 627,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -199,8 +199,8 @@
         "patternSeed": 2945
       },
       "name": "Toxic Link",
-      "wins": 556,
-      "losses": 132,
+      "wins": 559,
+      "losses": 133,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -228,7 +228,7 @@
         "patternSeed": 2577
       },
       "name": "Ripper Blob",
-      "wins": 570,
+      "wins": 574,
       "losses": 104,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
@@ -257,7 +257,7 @@
         "patternSeed": 8581
       },
       "name": "Lancer Dome",
-      "wins": 367,
+      "wins": 371,
       "losses": 308,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
@@ -286,10 +286,10 @@
         "patternSeed": 3435
       },
       "name": "Biter Blob",
-      "wins": 152,
-      "losses": 473,
+      "wins": 155,
+      "losses": 478,
       "createdAt": "2026-01-20T23:05:17.592Z"
     }
   ],
-  "savedAt": "2026-01-22T13:45:45.094Z"
+  "savedAt": "2026-01-22T14:00:59.157Z"
 }
