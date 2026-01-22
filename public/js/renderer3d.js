@@ -375,37 +375,122 @@ function onWindowResize() {
 }
 
 // ============================================
-// PLACEHOLDER BUG RENDERING
+// VOXEL BUG RENDERING
 // ============================================
 
-// Temporary: render bugs as colored boxes until Phase 2
-function createPlaceholderBug(color) {
-    const geometry = new THREE.BoxGeometry(30, 20, 40);
-    const material = new THREE.MeshStandardMaterial({
-        color: color,
-        roughness: 0.7,
+// Cached bug meshes and data
+let bugCache = {}; // Keyed by genome hash
+let currentFightNumber = 0;
+
+// Voxel size in world units
+const VOXEL_SIZE = 3;
+
+/**
+ * Create a voxel mesh group for a bug
+ * @param {Object} bugData - Bug genome data
+ * @param {number} index - Fighter index (0 or 1)
+ * @returns {THREE.Group} Group containing all voxel meshes
+ */
+function createVoxelBug(bugData, index) {
+    // Create genome and generator
+    const genome = new BugGenome(bugData);
+    const generator = new BugGenerator3D(genome);
+    const bugModel = generator.generate();
+
+    // Create a group to hold all voxels
+    const bugGroup = new THREE.Group();
+    bugGroup.userData.voxelData = bugModel;
+    bugGroup.userData.colors = bugModel.colors;
+
+    // Group voxels by color for efficient instancing
+    const colorGroups = {};
+    bugModel.voxels.forEach(v => {
+        if (!colorGroups[v.colorIndex]) {
+            colorGroups[v.colorIndex] = [];
+        }
+        colorGroups[v.colorIndex].push(v);
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    return mesh;
+
+    // Create instanced mesh for each color
+    const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+
+    Object.entries(colorGroups).forEach(([colorIndex, voxels]) => {
+        const color = bugModel.colors[colorIndex];
+        if (!color) return; // Skip transparent
+
+        const material = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.7,
+            metalness: 0.1,
+        });
+
+        const instancedMesh = new THREE.InstancedMesh(voxelGeometry, material, voxels.length);
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = true;
+
+        const matrix = new THREE.Matrix4();
+        voxels.forEach((v, i) => {
+            matrix.setPosition(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+            instancedMesh.setMatrixAt(i, matrix);
+        });
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.userData.colorIndex = colorIndex;
+        bugGroup.add(instancedMesh);
+    });
+
+    return bugGroup;
 }
 
+/**
+ * Generate a hash for bug genome to use as cache key
+ */
+function genomeCacheKey(bugData, fightNumber, index) {
+    return `${fightNumber}-${index}`;
+}
+
+/**
+ * Update bug positions and create/update meshes
+ */
 function updateBugPositions(state) {
     if (!state.fighters || state.fighters.length < 2) return;
+    if (!state.bugs || state.bugs.length < 2) return;
+
+    // Check for new fight
+    if (state.fightNumber !== currentFightNumber) {
+        // Clear old bug meshes
+        bugMeshes.forEach(mesh => {
+            if (mesh) scene.remove(mesh);
+        });
+        bugMeshes = [null, null];
+        currentFightNumber = state.fightNumber;
+    }
 
     state.fighters.forEach((fighter, index) => {
-        // Create placeholder if needed
+        // Create bug mesh if needed
         if (!bugMeshes[index]) {
-            const color = index === 0 ? 0xff5555 : 0x5555ff;
-            bugMeshes[index] = createPlaceholderBug(color);
+            const cacheKey = genomeCacheKey(state.bugs[index], state.fightNumber, index);
+
+            // Check cache
+            if (bugCache[cacheKey]) {
+                bugMeshes[index] = bugCache[cacheKey].clone();
+            } else {
+                bugMeshes[index] = createVoxelBug(state.bugs[index], index);
+                bugCache[cacheKey] = bugMeshes[index];
+            }
+
             scene.add(bugMeshes[index]);
+
+            // Clean old cache entries
+            cleanBugCache(state.fightNumber);
         }
 
         // Map 2D position to 3D
         const pos3d = map2Dto3D(fighter.x, fighter.y);
-        bugMeshes[index].position.set(pos3d.x, pos3d.y + 15, pos3d.z);
+        bugMeshes[index].position.set(pos3d.x, pos3d.y, pos3d.z);
 
         // Rotation based on facing
+        // Bug faces +Z by default, rotate 180 if facing left
         bugMeshes[index].rotation.y = fighter.facingRight ? 0 : Math.PI;
 
         // Scale based on squash/stretch
@@ -413,13 +498,40 @@ function updateBugPositions(state) {
         const stretch = fighter.stretch || 1;
         bugMeshes[index].scale.set(squash, stretch, 1);
 
-        // Flash effect
-        if (fighter.flashTimer > 0) {
-            bugMeshes[index].material.emissive.setHex(0xffffff);
-            bugMeshes[index].material.emissiveIntensity = 0.5;
-        } else {
-            bugMeshes[index].material.emissive.setHex(0x000000);
-            bugMeshes[index].material.emissiveIntensity = 0;
+        // Flash effect (make all materials emissive)
+        bugMeshes[index].traverse(child => {
+            if (child.isMesh && child.material) {
+                if (fighter.flashTimer > 0 && fighter.flashTimer % 2 === 0) {
+                    child.material.emissive = new THREE.Color(0xffffff);
+                    child.material.emissiveIntensity = 0.8;
+                } else {
+                    child.material.emissive = new THREE.Color(0x000000);
+                    child.material.emissiveIntensity = 0;
+                }
+            }
+        });
+
+        // Victory bounce
+        if (fighter.state === 'victory' && fighter.victoryBounce) {
+            bugMeshes[index].position.y += fighter.victoryBounce;
+        }
+
+        // Death rotation
+        if (fighter.state === 'death' && fighter.deathRotation) {
+            bugMeshes[index].rotation.z = fighter.deathRotation;
+            bugMeshes[index].position.y -= 10; // Sink down
+        }
+    });
+}
+
+/**
+ * Clean old entries from bug cache
+ */
+function cleanBugCache(currentFight) {
+    Object.keys(bugCache).forEach(key => {
+        const fightNum = parseInt(key.split('-')[0]);
+        if (fightNum < currentFight - 2) {
+            delete bugCache[key];
         }
     });
 }

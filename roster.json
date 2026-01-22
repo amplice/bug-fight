@@ -25,8 +25,8 @@
         "patternSeed": 683
       },
       "name": "Fang Creep",
-      "wins": 374,
-      "losses": 291,
+      "wins": 375,
+      "losses": 292,
       "createdAt": "2026-01-20T23:05:17.584Z"
     },
     {
@@ -55,7 +55,7 @@
       },
       "name": "Slasher Mass",
       "wins": 103,
-      "losses": 538,
+      "losses": 539,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -112,7 +112,7 @@
         "patternSeed": 4470
       },
       "name": "Piercer Runner",
-      "wins": 524,
+      "wins": 528,
       "losses": 85,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
@@ -142,7 +142,7 @@
       },
       "name": "Fang Orb",
       "wins": 257,
-      "losses": 408,
+      "losses": 410,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -171,7 +171,7 @@
       },
       "name": "Breaker Runner",
       "wins": 6,
-      "losses": 627,
+      "losses": 628,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -199,7 +199,7 @@
         "patternSeed": 2945
       },
       "name": "Toxic Link",
-      "wins": 559,
+      "wins": 560,
       "losses": 133,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
@@ -257,8 +257,8 @@
         "patternSeed": 8581
       },
       "name": "Lancer Dome",
-      "wins": 371,
-      "losses": 308,
+      "wins": 372,
+      "losses": 309,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -287,9 +287,9 @@
       },
       "name": "Biter Blob",
       "wins": 155,
-      "losses": 478,
+      "losses": 479,
       "createdAt": "2026-01-20T23:05:17.592Z"
     }
   ],
-  "savedAt": "2026-01-22T14:00:59.157Z"
+  "savedAt": "2026-01-22T14:05:59.146Z"
 }
