@@ -26,13 +26,13 @@ const ARENA_3D = {
 // Map from 2D coordinates to 3D
 // 2D: x = 50-850, y = 80-550 (floorY)
 // 3D: x = -450 to 450, y = 0 (floor) to 400, z = -300 to 300
-function map2Dto3D(x2d, y2d) {
+function map2Dto3D(x2d, y2d, z2d = 0) {
     // 2D x: 50-850 -> 3D x: -450 to 450
     const x3d = (x2d - 450);
     // 2D y: 80 (ceiling) to 550 (floor) -> 3D y: 400 (top) to 0 (floor)
     const y3d = 550 - y2d;
-    // Z starts at 0 (center) for now, will be added in Phase 4
-    const z3d = 0;
+    // Z is passed directly from server (already in correct range)
+    const z3d = z2d;
     return { x: x3d, y: y3d, z: z3d };
 }
 
@@ -385,26 +385,21 @@ let currentFightNumber = 0;
 // Voxel size in world units
 const VOXEL_SIZE = 3;
 
+// Animation state
+const ANIM_FRAME_DURATION = 6; // Ticks per animation frame
+let animationCounters = [0, 0]; // Per-fighter animation counter
+
 /**
- * Create a voxel mesh group for a bug
- * @param {Object} bugData - Bug genome data
- * @param {number} index - Fighter index (0 or 1)
+ * Create a mesh group from voxel data
+ * @param {Object} frameData - {voxels, colors, size}
  * @returns {THREE.Group} Group containing all voxel meshes
  */
-function createVoxelBug(bugData, index) {
-    // Create genome and generator
-    const genome = new BugGenome(bugData);
-    const generator = new BugGenerator3D(genome);
-    const bugModel = generator.generate();
-
-    // Create a group to hold all voxels
+function createMeshFromVoxels(frameData) {
     const bugGroup = new THREE.Group();
-    bugGroup.userData.voxelData = bugModel;
-    bugGroup.userData.colors = bugModel.colors;
 
     // Group voxels by color for efficient instancing
     const colorGroups = {};
-    bugModel.voxels.forEach(v => {
+    frameData.voxels.forEach(v => {
         if (!colorGroups[v.colorIndex]) {
             colorGroups[v.colorIndex] = [];
         }
@@ -415,7 +410,7 @@ function createVoxelBug(bugData, index) {
     const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
 
     Object.entries(colorGroups).forEach(([colorIndex, voxels]) => {
-        const color = bugModel.colors[colorIndex];
+        const color = frameData.colors[colorIndex];
         if (!color) return; // Skip transparent
 
         const material = new THREE.MeshStandardMaterial({
@@ -443,10 +438,80 @@ function createVoxelBug(bugData, index) {
 }
 
 /**
+ * Create all animation frames for a bug
+ * @param {Object} bugData - Bug genome data
+ * @returns {Object} Object containing frame groups for each animation state
+ */
+function createAllBugFrames(bugData) {
+    const genome = new BugGenome(bugData);
+    const generator = new BugGenerator3D(genome);
+    const animData = generator.generateAllFrames();
+
+    const frameMeshes = {
+        idle: [],
+        attack: [],
+        hit: [],
+        death: [],
+        victory: [],
+        colors: animData.colors,
+    };
+
+    // Create mesh groups for each frame
+    Object.keys(animData.frames).forEach(stateName => {
+        animData.frames[stateName].forEach(frameData => {
+            const mesh = createMeshFromVoxels(frameData);
+            mesh.visible = false; // Start hidden
+            frameMeshes[stateName].push(mesh);
+        });
+    });
+
+    return frameMeshes;
+}
+
+/**
+ * Create a voxel mesh group for a bug (legacy - creates single frame)
+ * @param {Object} bugData - Bug genome data
+ * @param {number} index - Fighter index (0 or 1)
+ * @returns {THREE.Group} Group containing all voxel meshes
+ */
+function createVoxelBug(bugData, index) {
+    // Create genome and generator
+    const genome = new BugGenome(bugData);
+    const generator = new BugGenerator3D(genome);
+    const bugModel = generator.generate();
+
+    return createMeshFromVoxels(bugModel);
+}
+
+/**
  * Generate a hash for bug genome to use as cache key
  */
 function genomeCacheKey(bugData, fightNumber, index) {
     return `${fightNumber}-${index}`;
+}
+
+// Store animation frame data for each fighter
+let bugAnimFrames = [null, null];
+let currentAnimState = ['idle', 'idle'];
+let currentFrameIndex = [0, 0];
+
+/**
+ * Map fighter state to animation state
+ */
+function getAnimationState(fighterState) {
+    switch (fighterState) {
+        case 'attacking':
+            return 'attack';
+        case 'hit':
+        case 'stunned':
+            return 'hit';
+        case 'death':
+            return 'death';
+        case 'victory':
+            return 'victory';
+        default:
+            return 'idle';
+    }
 }
 
 /**
@@ -458,69 +523,121 @@ function updateBugPositions(state) {
 
     // Check for new fight
     if (state.fightNumber !== currentFightNumber) {
-        // Clear old bug meshes
+        // Clear old bug meshes and animation frames
         bugMeshes.forEach(mesh => {
             if (mesh) scene.remove(mesh);
         });
         bugMeshes = [null, null];
+
+        // Remove all animation frame meshes from scene
+        bugAnimFrames.forEach(frames => {
+            if (frames) {
+                Object.keys(frames).forEach(stateName => {
+                    if (Array.isArray(frames[stateName])) {
+                        frames[stateName].forEach(mesh => {
+                            if (mesh && mesh.parent) scene.remove(mesh);
+                        });
+                    }
+                });
+            }
+        });
+        bugAnimFrames = [null, null];
+        currentAnimState = ['idle', 'idle'];
+        currentFrameIndex = [0, 0];
+        animationCounters = [0, 0];
+
+        // Clear fighter UI
+        clearFighterUI();
+
         currentFightNumber = state.fightNumber;
     }
 
     state.fighters.forEach((fighter, index) => {
-        // Create bug mesh if needed
-        if (!bugMeshes[index]) {
+        // Create all animation frames if needed
+        if (!bugAnimFrames[index]) {
             const cacheKey = genomeCacheKey(state.bugs[index], state.fightNumber, index);
 
             // Check cache
             if (bugCache[cacheKey]) {
-                bugMeshes[index] = bugCache[cacheKey].clone();
+                bugAnimFrames[index] = bugCache[cacheKey];
             } else {
-                bugMeshes[index] = createVoxelBug(state.bugs[index], index);
-                bugCache[cacheKey] = bugMeshes[index];
+                bugAnimFrames[index] = createAllBugFrames(state.bugs[index]);
+                bugCache[cacheKey] = bugAnimFrames[index];
             }
 
-            scene.add(bugMeshes[index]);
+            // Add all frames to scene (but hidden)
+            Object.keys(bugAnimFrames[index]).forEach(stateName => {
+                if (Array.isArray(bugAnimFrames[index][stateName])) {
+                    bugAnimFrames[index][stateName].forEach(mesh => {
+                        scene.add(mesh);
+                    });
+                }
+            });
 
             // Clean old cache entries
             cleanBugCache(state.fightNumber);
         }
 
-        // Map 2D position to 3D
-        const pos3d = map2Dto3D(fighter.x, fighter.y);
-        bugMeshes[index].position.set(pos3d.x, pos3d.y, pos3d.z);
+        // Determine animation state
+        const targetAnimState = getAnimationState(fighter.state);
 
-        // Rotation based on facing
-        // Bug faces +Z by default, rotate 180 if facing left
-        bugMeshes[index].rotation.y = fighter.facingRight ? 0 : Math.PI;
+        // Reset frame counter on state change
+        if (targetAnimState !== currentAnimState[index]) {
+            currentAnimState[index] = targetAnimState;
+            currentFrameIndex[index] = 0;
+            animationCounters[index] = 0;
+        }
 
-        // Scale based on squash/stretch
-        const squash = fighter.squash || 1;
-        const stretch = fighter.stretch || 1;
-        bugMeshes[index].scale.set(squash, stretch, 1);
+        // Advance animation frame
+        animationCounters[index]++;
+        if (animationCounters[index] >= ANIM_FRAME_DURATION) {
+            animationCounters[index] = 0;
+            const frames = bugAnimFrames[index][currentAnimState[index]];
+            if (frames && frames.length > 0) {
+                currentFrameIndex[index] = (currentFrameIndex[index] + 1) % frames.length;
+            }
+        }
 
-        // Flash effect (make all materials emissive)
-        bugMeshes[index].traverse(child => {
-            if (child.isMesh && child.material) {
-                if (fighter.flashTimer > 0 && fighter.flashTimer % 2 === 0) {
-                    child.material.emissive = new THREE.Color(0xffffff);
-                    child.material.emissiveIntensity = 0.8;
-                } else {
-                    child.material.emissive = new THREE.Color(0x000000);
-                    child.material.emissiveIntensity = 0;
-                }
+        // Hide all frames, show current
+        Object.keys(bugAnimFrames[index]).forEach(stateName => {
+            if (Array.isArray(bugAnimFrames[index][stateName])) {
+                bugAnimFrames[index][stateName].forEach((mesh, frameIdx) => {
+                    const shouldShow = stateName === currentAnimState[index] &&
+                        frameIdx === currentFrameIndex[index];
+                    mesh.visible = shouldShow;
+
+                    if (shouldShow) {
+                        // Map 2D position to 3D (now with z from server)
+                        const pos3d = map2Dto3D(fighter.x, fighter.y, fighter.z || 0);
+                        mesh.position.set(pos3d.x, pos3d.y, pos3d.z);
+
+                        // Rotation based on facing
+                        mesh.rotation.y = fighter.facingRight ? 0 : Math.PI;
+
+                        // Scale based on squash/stretch
+                        const squash = fighter.squash || 1;
+                        const stretch = fighter.stretch || 1;
+                        mesh.scale.set(squash, stretch, 1);
+
+                        // Flash effect
+                        mesh.traverse(child => {
+                            if (child.isMesh && child.material) {
+                                if (fighter.flashTimer > 0 && fighter.flashTimer % 2 === 0) {
+                                    child.material.emissive = new THREE.Color(0xffffff);
+                                    child.material.emissiveIntensity = 0.8;
+                                } else {
+                                    child.material.emissive = new THREE.Color(0x000000);
+                                    child.material.emissiveIntensity = 0;
+                                }
+                            }
+                        });
+
+                        // Additional position adjustments for victory/death
+                        // (these are baked into the animation frames now)
+                    }
+                });
             }
         });
-
-        // Victory bounce
-        if (fighter.state === 'victory' && fighter.victoryBounce) {
-            bugMeshes[index].position.y += fighter.victoryBounce;
-        }
-
-        // Death rotation
-        if (fighter.state === 'death' && fighter.deathRotation) {
-            bugMeshes[index].rotation.z = fighter.deathRotation;
-            bugMeshes[index].position.y -= 10; // Sink down
-        }
     });
 }
 
@@ -532,6 +649,344 @@ function cleanBugCache(currentFight) {
         const fightNum = parseInt(key.split('-')[0]);
         if (fightNum < currentFight - 2) {
             delete bugCache[key];
+        }
+    });
+}
+
+// ============================================
+// 3D EFFECTS SYSTEM
+// ============================================
+
+// Particle pool for hit effects
+let hitParticles = [];
+const MAX_HIT_PARTICLES = 100;
+
+// Floating damage numbers
+let damageNumbers = [];
+const MAX_DAMAGE_NUMBERS = 20;
+
+// Screen shake
+let screenShake = { x: 0, y: 0, intensity: 0 };
+
+// Floating UI (health bars, names)
+let fighterUI = [null, null];
+
+/**
+ * Create hit particle burst at position
+ */
+function createHitParticles(x, y, z, color = 0xffff00, count = 8) {
+    const particleGeo = new THREE.SphereGeometry(2, 4, 4);
+    const particleMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 1,
+    });
+
+    for (let i = 0; i < count; i++) {
+        if (hitParticles.length >= MAX_HIT_PARTICLES) {
+            // Remove oldest particle
+            const old = hitParticles.shift();
+            scene.remove(old.mesh);
+        }
+
+        const mesh = new THREE.Mesh(particleGeo.clone(), particleMat.clone());
+        mesh.position.set(x, y, z);
+
+        // Random velocity in all directions
+        const speed = 3 + Math.random() * 5;
+        const angleXZ = Math.random() * Math.PI * 2;
+        const angleY = (Math.random() - 0.3) * Math.PI;
+
+        const particle = {
+            mesh: mesh,
+            vx: Math.cos(angleXZ) * Math.cos(angleY) * speed,
+            vy: Math.sin(angleY) * speed + 2, // Upward bias
+            vz: Math.sin(angleXZ) * Math.cos(angleY) * speed,
+            life: 1.0,
+            decay: 0.03 + Math.random() * 0.02,
+        };
+
+        scene.add(mesh);
+        hitParticles.push(particle);
+    }
+}
+
+/**
+ * Create floating damage number
+ */
+function createDamageNumber(x, y, z, damage, isCrit = false, isPoison = false) {
+    if (damageNumbers.length >= MAX_DAMAGE_NUMBERS) {
+        const old = damageNumbers.shift();
+        scene.remove(old.sprite);
+    }
+
+    // Create canvas for the number text
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+
+    // Style based on damage type
+    let color = '#fff';
+    let fontSize = 32;
+    if (isCrit) {
+        color = '#ff0';
+        fontSize = 40;
+    } else if (isPoison) {
+        color = '#0f0';
+        fontSize = 28;
+    }
+
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Outline
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4;
+    ctx.strokeText(damage.toString(), 64, 32);
+
+    // Fill
+    ctx.fillStyle = color;
+    ctx.fillText(damage.toString(), 64, 32);
+
+    // Create sprite
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.position.set(x, y + 20, z);
+    sprite.scale.set(40, 20, 1);
+
+    const dmgNum = {
+        sprite: sprite,
+        vy: 1.5 + (isCrit ? 0.5 : 0),
+        life: 1.0,
+        decay: 0.025,
+    };
+
+    scene.add(sprite);
+    damageNumbers.push(dmgNum);
+}
+
+/**
+ * Update all particles and effects
+ */
+function updateEffects() {
+    // Update hit particles
+    for (let i = hitParticles.length - 1; i >= 0; i--) {
+        const p = hitParticles[i];
+
+        // Physics
+        p.mesh.position.x += p.vx;
+        p.mesh.position.y += p.vy;
+        p.mesh.position.z += p.vz;
+        p.vy -= 0.15; // Gravity
+
+        // Fade
+        p.life -= p.decay;
+        p.mesh.material.opacity = p.life;
+        p.mesh.scale.setScalar(p.life);
+
+        // Remove if dead
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            hitParticles.splice(i, 1);
+        }
+    }
+
+    // Update damage numbers
+    for (let i = damageNumbers.length - 1; i >= 0; i--) {
+        const d = damageNumbers[i];
+
+        // Float up
+        d.sprite.position.y += d.vy;
+        d.vy *= 0.95; // Slow down
+
+        // Fade
+        d.life -= d.decay;
+        d.sprite.material.opacity = d.life;
+
+        // Remove if dead
+        if (d.life <= 0) {
+            scene.remove(d.sprite);
+            damageNumbers.splice(i, 1);
+        }
+    }
+
+    // Screen shake decay
+    if (screenShake.intensity > 0) {
+        screenShake.intensity *= 0.9;
+        if (screenShake.intensity < 0.1) {
+            screenShake.intensity = 0;
+        }
+    }
+}
+
+/**
+ * Apply screen shake
+ */
+function applyScreenShake(intensity) {
+    screenShake.intensity = Math.min(10, screenShake.intensity + intensity);
+}
+
+/**
+ * Create floating UI (health bar + name) for a fighter
+ */
+function createFighterUI(index, name) {
+    const group = new THREE.Group();
+
+    // Health bar background
+    const bgGeo = new THREE.PlaneGeometry(50, 6);
+    const bgMat = new THREE.MeshBasicMaterial({
+        color: 0x333333,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+    });
+    const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+    bgMesh.position.y = 0;
+    group.add(bgMesh);
+
+    // Health bar fill
+    const fillGeo = new THREE.PlaneGeometry(48, 4);
+    const fillMat = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+    });
+    const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+    fillMesh.position.y = 0;
+    fillMesh.position.z = 0.1;
+    group.add(fillMesh);
+
+    // Name label
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(name, 128, 32);
+    ctx.fillText(name, 128, 32);
+
+    const nameTexture = new THREE.CanvasTexture(canvas);
+    const nameMat = new THREE.SpriteMaterial({
+        map: nameTexture,
+        transparent: true,
+        depthTest: false,
+    });
+    const nameSprite = new THREE.Sprite(nameMat);
+    nameSprite.position.y = 15;
+    nameSprite.scale.set(60, 15, 1);
+    group.add(nameSprite);
+
+    // Store references for updates
+    group.userData.fillMesh = fillMesh;
+    group.userData.fillMat = fillMat;
+    group.userData.originalWidth = 48;
+
+    return group;
+}
+
+/**
+ * Update fighter UI position and health
+ */
+function updateFighterUI(index, fighter, state) {
+    if (!fighterUI[index]) {
+        const name = state.bugNames ? state.bugNames[index] : `Fighter ${index + 1}`;
+        fighterUI[index] = createFighterUI(index, name);
+        scene.add(fighterUI[index]);
+    }
+
+    const ui = fighterUI[index];
+    const pos3d = map2Dto3D(fighter.x, fighter.y, fighter.z || 0);
+
+    // Position above bug
+    ui.position.set(pos3d.x, pos3d.y + 40, pos3d.z);
+
+    // Make UI face camera (billboard)
+    ui.lookAt(camera.position);
+
+    // Update health bar
+    const hpPercent = fighter.hp / fighter.maxHp;
+    const fillMesh = ui.userData.fillMesh;
+    const fillMat = ui.userData.fillMat;
+
+    // Scale health bar
+    fillMesh.scale.x = hpPercent;
+    fillMesh.position.x = (1 - hpPercent) * -24; // Keep left-aligned
+
+    // Color based on health
+    if (hpPercent > 0.5) {
+        fillMat.color.setHex(0x00ff00);
+    } else if (hpPercent > 0.25) {
+        fillMat.color.setHex(0xffff00);
+    } else {
+        fillMat.color.setHex(0xff0000);
+    }
+
+    // Hide if dead
+    ui.visible = fighter.state !== 'death' || fighter.deathAlpha > 0.5;
+}
+
+/**
+ * Clean up fighter UI for new fight
+ */
+function clearFighterUI() {
+    fighterUI.forEach(ui => {
+        if (ui) scene.remove(ui);
+    });
+    fighterUI = [null, null];
+}
+
+/**
+ * Process events from game state
+ */
+function processEvents(events) {
+    if (!events || events.length === 0) return;
+
+    events.forEach(event => {
+        if (event.type === 'hit') {
+            const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
+
+            // Hit particles
+            const color = event.data.isPoison ? 0x00ff00 :
+                event.data.isCrit ? 0xffff00 : 0xff8800;
+            createHitParticles(pos3d.x, pos3d.y, pos3d.z, color, event.data.isCrit ? 15 : 8);
+
+            // Damage number
+            createDamageNumber(
+                pos3d.x,
+                pos3d.y,
+                pos3d.z,
+                event.data.damage,
+                event.data.isCrit,
+                event.data.isPoison
+            );
+
+            // Screen shake
+            if (event.data.isCrit) {
+                applyScreenShake(3);
+            } else {
+                applyScreenShake(1);
+            }
+        }
+
+        if (event.type === 'wallImpact') {
+            const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
+            // Wall impact particles
+            createHitParticles(pos3d.x, pos3d.y, pos3d.z, 0x888888, 12);
+            applyScreenShake(event.data.stunApplied / 5);
         }
     });
 }
@@ -550,6 +1005,27 @@ function render3D(state) {
 
     // Update bug positions
     updateBugPositions(state);
+
+    // Update fighter UI (health bars, names)
+    if (state.fighters && state.fighters.length >= 2) {
+        state.fighters.forEach((fighter, index) => {
+            updateFighterUI(index, fighter, state);
+        });
+    }
+
+    // Process game events (hits, impacts)
+    processEvents(state.events);
+
+    // Update effects (particles, damage numbers)
+    updateEffects();
+
+    // Apply screen shake to camera
+    if (screenShake.intensity > 0) {
+        const shakeX = (Math.random() - 0.5) * screenShake.intensity;
+        const shakeY = (Math.random() - 0.5) * screenShake.intensity;
+        camera.position.x += shakeX;
+        camera.position.y += shakeY;
+    }
 
     // Render
     renderer.render(scene, camera);

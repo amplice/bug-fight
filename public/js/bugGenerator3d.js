@@ -411,60 +411,306 @@ class BugGenerator3D {
     }
 
     generateIdleFrame(frameIndex) {
-        // Generate base bug
-        const base = this.generate();
+        // Generate fresh base for each frame
+        this.voxels = [];
+        const g = this.genome;
+        const scale = this.sizeMultiplier;
+        const bulkFactor = 0.8 + (g.bulk / 100) * 0.6;
+        const speedFactor = 0.8 + (g.speed / 100) * 0.4;
 
-        // Apply subtle idle animation
-        const breathOffset = Math.sin(frameIndex * Math.PI / 2) * 0.3;
-        const antennaWave = Math.sin(frameIndex * Math.PI / 2) * 0.5;
+        // Breathing motion - subtle body compression/expansion
+        const breathPhase = frameIndex * Math.PI / 2;
+        const breathScale = 1 + Math.sin(breathPhase) * 0.05;
 
-        // Modify voxels for animation (simplified - just return base for now)
-        // Full animation would transform specific voxels
-        return base;
+        // Generate body parts with breathing
+        this.generateAbdomen(bulkFactor * breathScale, scale);
+        this.generateThorax(bulkFactor * breathScale, speedFactor, scale);
+        this.generateHead(speedFactor, scale);
+
+        // Legs with subtle movement
+        this.generateAnimatedLegs(g.legStyle, scale, frameIndex, 'idle');
+
+        // Antennae with wave
+        this.generateAnimatedAntennae(scale, frameIndex);
+
+        this.generateWeapon(g.weapon, scale);
+
+        if (g.mobility === 'winged') {
+            this.generateAnimatedWings(scale, frameIndex, 'idle');
+        }
+
+        this.generateMarkings(scale);
+        this.voxels = this.dedupeVoxels(this.voxels);
+
+        return {
+            voxels: this.voxels,
+            colors: this.colors,
+            size: Math.ceil(this.size * scale),
+        };
     }
 
     generateAttackFrame(frameIndex) {
-        const base = this.generate();
+        this.voxels = [];
+        const g = this.genome;
+        const scale = this.sizeMultiplier;
+        const bulkFactor = 0.8 + (g.bulk / 100) * 0.6;
+        const speedFactor = 0.8 + (g.speed / 100) * 0.4;
 
-        // Attack animation: lunge forward
-        const lungeAmount = [0, 2, 3, 1][frameIndex];
-        base.voxels = VoxelUtils.translateVoxels(base.voxels, 0, 0, lungeAmount);
+        // Lunge amounts: windup, extend, strike, recover
+        const lungeZ = [0, 1, 3, 1][frameIndex];
+        const squashFactor = [1, 0.95, 0.85, 0.95][frameIndex];
 
-        return base;
+        this.generateAbdomen(bulkFactor * squashFactor, scale);
+        this.generateThorax(bulkFactor * squashFactor, speedFactor, scale);
+        this.generateHead(speedFactor, scale);
+        this.generateAnimatedLegs(g.legStyle, scale, frameIndex, 'attack');
+        this.generateAntennae(scale);
+        this.generateWeapon(g.weapon, scale);
+
+        if (g.mobility === 'winged') {
+            this.generateWings(scale);
+        }
+
+        this.generateMarkings(scale);
+        this.voxels = this.dedupeVoxels(this.voxels);
+
+        // Apply lunge translation
+        this.voxels = VoxelUtils.translateVoxels(this.voxels, 0, 0, lungeZ);
+
+        return {
+            voxels: this.voxels,
+            colors: this.colors,
+            size: Math.ceil(this.size * scale),
+        };
     }
 
     generateHitFrame(frameIndex) {
-        const base = this.generate();
+        this.voxels = [];
+        const g = this.genome;
+        const scale = this.sizeMultiplier;
+        const bulkFactor = 0.8 + (g.bulk / 100) * 0.6;
+        const speedFactor = 0.8 + (g.speed / 100) * 0.4;
 
-        // Hit animation: recoil back
-        const recoilAmount = [2, 1][frameIndex];
-        base.voxels = VoxelUtils.translateVoxels(base.voxels, 0, 0, -recoilAmount);
+        // Recoil: hit, recovery
+        const recoilZ = [-2, -1][frameIndex];
+        const squashFactor = [1.15, 1.05][frameIndex]; // Expand on hit
 
-        return base;
+        this.generateAbdomen(bulkFactor * squashFactor, scale);
+        this.generateThorax(bulkFactor * squashFactor, speedFactor, scale);
+        this.generateHead(speedFactor, scale);
+        this.generateLegs(g.legStyle, scale);
+        this.generateAntennae(scale);
+        this.generateWeapon(g.weapon, scale);
+
+        if (g.mobility === 'winged') {
+            this.generateWings(scale);
+        }
+
+        this.generateMarkings(scale);
+        this.voxels = this.dedupeVoxels(this.voxels);
+
+        // Apply recoil translation
+        this.voxels = VoxelUtils.translateVoxels(this.voxels, 0, 0, recoilZ);
+
+        return {
+            voxels: this.voxels,
+            colors: this.colors,
+            size: Math.ceil(this.size * scale),
+        };
     }
 
     generateDeathFrame(frameIndex) {
-        const base = this.generate();
+        this.voxels = [];
+        const g = this.genome;
+        const scale = this.sizeMultiplier;
+        const bulkFactor = 0.8 + (g.bulk / 100) * 0.6;
+        const speedFactor = 0.8 + (g.speed / 100) * 0.4;
 
-        // Death animation: fall over
+        this.generateAbdomen(bulkFactor, scale);
+        this.generateThorax(bulkFactor, speedFactor, scale);
+        this.generateHead(speedFactor, scale);
+        this.generateLegs(g.legStyle, scale);
+        this.generateAntennae(scale);
+        this.generateWeapon(g.weapon, scale);
+
+        if (g.mobility === 'winged') {
+            this.generateWings(scale);
+        }
+
+        this.generateMarkings(scale);
+        this.voxels = this.dedupeVoxels(this.voxels);
+
+        // Progressive rotation and sinking
         const rotationAmount = (frameIndex / 3) * (Math.PI / 2);
-        base.voxels = VoxelUtils.rotateVoxelsX(base.voxels, rotationAmount);
+        const sinkAmount = frameIndex * 1.5;
 
-        // Sink down
-        const sinkAmount = frameIndex * 2;
-        base.voxels = VoxelUtils.translateVoxels(base.voxels, 0, -sinkAmount, 0);
+        this.voxels = VoxelUtils.rotateVoxelsX(this.voxels, rotationAmount);
+        this.voxels = VoxelUtils.translateVoxels(this.voxels, 0, -sinkAmount, 0);
 
-        return base;
+        return {
+            voxels: this.voxels,
+            colors: this.colors,
+            size: Math.ceil(this.size * scale),
+        };
     }
 
     generateVictoryFrame(frameIndex) {
-        const base = this.generate();
+        this.voxels = [];
+        const g = this.genome;
+        const scale = this.sizeMultiplier;
+        const bulkFactor = 0.8 + (g.bulk / 100) * 0.6;
+        const speedFactor = 0.8 + (g.speed / 100) * 0.4;
 
-        // Victory animation: bounce
-        const bounceHeight = Math.sin(frameIndex * Math.PI / 2) * 3;
-        base.voxels = VoxelUtils.translateVoxels(base.voxels, 0, bounceHeight, 0);
+        this.generateAbdomen(bulkFactor, scale);
+        this.generateThorax(bulkFactor, speedFactor, scale);
+        this.generateHead(speedFactor, scale);
+        this.generateAnimatedLegs(g.legStyle, scale, frameIndex, 'victory');
+        this.generateAntennae(scale);
+        this.generateWeapon(g.weapon, scale);
 
-        return base;
+        if (g.mobility === 'winged') {
+            this.generateAnimatedWings(scale, frameIndex, 'victory');
+        }
+
+        this.generateMarkings(scale);
+        this.voxels = this.dedupeVoxels(this.voxels);
+
+        // Bounce animation
+        const bounceHeight = Math.abs(Math.sin(frameIndex * Math.PI / 2)) * 3;
+        this.voxels = VoxelUtils.translateVoxels(this.voxels, 0, bounceHeight, 0);
+
+        return {
+            voxels: this.voxels,
+            colors: this.colors,
+            size: Math.ceil(this.size * scale),
+        };
+    }
+
+    // Animated legs with movement
+    generateAnimatedLegs(legStyle, scale, frameIndex, animType) {
+        const legLength = Math.round(4 * scale);
+        const legThickness = 1;
+
+        const attachments = [
+            { x: 2.5, y: -0.5, z: 1, phase: 0 },     // Front
+            { x: 2.5, y: -0.5, z: 0, phase: 0.33 },  // Middle
+            { x: 2.5, y: -0.5, z: -1, phase: 0.66 }, // Back
+        ];
+
+        attachments.forEach((attach, i) => {
+            let midAngle, endAngle;
+
+            switch (legStyle) {
+                case 'curved-back':
+                    midAngle = -0.3 - i * 0.1;
+                    endAngle = -0.6;
+                    break;
+                case 'curved-forward':
+                    midAngle = 0.3 + i * 0.1;
+                    endAngle = 0.6;
+                    break;
+                case 'short':
+                    midAngle = -0.1;
+                    endAngle = -0.4;
+                    break;
+                default:
+                    midAngle = 0;
+                    endAngle = -0.3;
+            }
+
+            // Animation offset based on leg and frame
+            let legOffset = 0;
+            if (animType === 'idle') {
+                legOffset = Math.sin((frameIndex + attach.phase * 4) * Math.PI / 2) * 0.3;
+            } else if (animType === 'attack') {
+                legOffset = frameIndex === 2 ? 0.5 : 0; // Brace on strike
+            } else if (animType === 'victory') {
+                legOffset = Math.abs(Math.sin((frameIndex + i) * Math.PI / 2)) * 0.4;
+            }
+
+            // Right leg
+            const rightStart = {
+                x: Math.round(attach.x * scale),
+                y: Math.round(attach.y * scale),
+                z: Math.round(attach.z * scale)
+            };
+            const rightMid = {
+                x: Math.round((attach.x + 2) * scale),
+                y: Math.round((attach.y - 1 + midAngle + legOffset) * scale),
+                z: Math.round((attach.z + midAngle * 2) * scale)
+            };
+            const rightEnd = {
+                x: Math.round((attach.x + 3) * scale),
+                y: Math.round((attach.y - 3 + endAngle) * scale),
+                z: Math.round((attach.z + endAngle * 2) * scale)
+            };
+
+            this.addVoxels(VoxelUtils.createVoxelLine(rightStart, rightMid, legThickness), 4);
+            this.addVoxels(VoxelUtils.createVoxelLine(rightMid, rightEnd, legThickness), 4);
+
+            // Left leg (mirrored)
+            const leftStart = { x: -rightStart.x, y: rightStart.y, z: rightStart.z };
+            const leftMid = { x: -rightMid.x, y: rightMid.y, z: rightMid.z };
+            const leftEnd = { x: -rightEnd.x, y: rightEnd.y, z: rightEnd.z };
+
+            this.addVoxels(VoxelUtils.createVoxelLine(leftStart, leftMid, legThickness), 4);
+            this.addVoxels(VoxelUtils.createVoxelLine(leftMid, leftEnd, legThickness), 4);
+        });
+    }
+
+    // Animated antennae
+    generateAnimatedAntennae(scale, frameIndex) {
+        const waveOffset = Math.sin(frameIndex * Math.PI / 2) * 0.5;
+
+        // Right antenna
+        const rightBase = { x: Math.round(0.8 * scale), y: Math.round(2 * scale), z: Math.round(4 * scale) };
+        const rightTip = {
+            x: Math.round((2 + waveOffset) * scale),
+            y: Math.round(4 * scale),
+            z: Math.round(5 * scale)
+        };
+        this.addVoxels(VoxelUtils.createVoxelLine(rightBase, rightTip, 1), 4);
+
+        // Left antenna
+        const leftBase = { x: -rightBase.x, y: rightBase.y, z: rightBase.z };
+        const leftTip = { x: -rightTip.x, y: rightTip.y, z: rightTip.z };
+        this.addVoxels(VoxelUtils.createVoxelLine(leftBase, leftTip, 1), 4);
+    }
+
+    // Animated wings
+    generateAnimatedWings(scale, frameIndex, animType) {
+        let wingAngle = 0.2;
+
+        if (animType === 'idle') {
+            // Gentle flutter
+            wingAngle = 0.1 + Math.sin(frameIndex * Math.PI / 2) * 0.3;
+        } else if (animType === 'victory') {
+            // Rapid flutter
+            wingAngle = 0.2 + Math.sin(frameIndex * Math.PI) * 0.5;
+        }
+
+        const wingLength = Math.round(5 * scale);
+        const wingWidth = Math.round(3 * scale);
+
+        // Right wing
+        const rightWing = VoxelUtils.createVoxelWing(
+            { x: Math.round(1.5 * scale), y: Math.round(1.5 * scale), z: 0 },
+            wingLength,
+            wingWidth,
+            1,
+            wingAngle
+        );
+        this.addVoxels(rightWing, 5);
+
+        // Left wing
+        const leftWing = VoxelUtils.createVoxelWing(
+            { x: Math.round(-1.5 * scale), y: Math.round(1.5 * scale), z: 0 },
+            wingLength,
+            wingWidth,
+            -1,
+            wingAngle
+        );
+        this.addVoxels(leftWing, 5);
     }
 }
 
