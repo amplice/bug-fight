@@ -394,6 +394,15 @@
             </div>
 
             <div class="part-category">
+                <h3>Pattern</h3>
+                <div class="part-options" id="pattern-options">
+                    <div class="part-option selected" data-value="solid">Solid</div>
+                    <div class="part-option" data-value="striped">Striped</div>
+                    <div class="part-option" data-value="spotted">Spotted</div>
+                </div>
+            </div>
+
+            <div class="part-category">
                 <h3>Head Type</h3>
                 <div class="part-options" id="head-options">
                     <div class="part-option selected" data-value="round">Round</div>
@@ -574,6 +583,7 @@
             wingType: 'fly',
             defense: 'none',
             textureType: 'smooth',
+            pattern: 'solid',
             headType: 'round',
             thoraxType: 'compact',
             abdomenType: 'round',
@@ -718,6 +728,7 @@
                         case 'wing': currentConfig.wingType = value; break;
                         case 'defense': currentConfig.defense = value; break;
                         case 'texture': currentConfig.textureType = value; break;
+                        case 'pattern': currentConfig.pattern = value; break;
                         case 'head': currentConfig.headType = value; break;
                         case 'thorax': currentConfig.thoraxType = value; break;
                         case 'abdomen': currentConfig.abdomenType = value; break;
@@ -788,6 +799,8 @@
                 weapon: currentConfig.weapon,
                 defense: currentConfig.defense,
                 textureType: currentConfig.textureType,
+                pattern: currentConfig.pattern,
+                patternSeed: Math.floor(Math.random() * 10000),
                 mobility: currentConfig.mobility,
                 wingType: currentConfig.wingType,
                 legStyle: currentConfig.legStyle,
@@ -962,6 +975,7 @@
                 weapon: genome.weapon,
                 defense: genome.defense,
                 textureType: genome.textureType,
+                pattern: genome.pattern,
                 mobility: genome.mobility,
                 legStyle: genome.legStyle,
                 headType: genome.headType,
@@ -1039,6 +1053,7 @@
             const abdomenTypes = ['round', 'oval', 'pointed', 'bulbous', 'segmented', 'sac', 'plated', 'tailed'];
             const eyes = ['compound', 'simple', 'stalked', 'multiple', 'sunken'];
             const antennae = ['segmented', 'clubbed', 'whip', 'horned', 'nubs', 'none'];
+            const patterns = ['solid', 'striped', 'spotted'];
 
             currentConfig.weapon = weapons[Math.floor(Math.random() * weapons.length)];
             currentConfig.legStyle = legs[Math.floor(Math.random() * legs.length)];
@@ -1046,6 +1061,7 @@
             currentConfig.wingType = wingTypes[Math.floor(Math.random() * wingTypes.length)];
             currentConfig.defense = defense[Math.floor(Math.random() * defense.length)];
             currentConfig.textureType = textureTypes[Math.floor(Math.random() * textureTypes.length)];
+            currentConfig.pattern = patterns[Math.floor(Math.random() * patterns.length)];
             currentConfig.headType = headTypes[Math.floor(Math.random() * headTypes.length)];
             currentConfig.thoraxType = thoraxTypes[Math.floor(Math.random() * thoraxTypes.length)];
             currentConfig.abdomenType = abdomenTypes[Math.floor(Math.random() * abdomenTypes.length)];
@@ -1073,6 +1089,7 @@
                 'wing-options': currentConfig.wingType,
                 'defense-options': currentConfig.defense,
                 'texture-options': currentConfig.textureType,
+                'pattern-options': currentConfig.pattern,
                 'head-options': currentConfig.headType,
                 'thorax-options': currentConfig.thoraxType,
                 'abdomen-options': currentConfig.abdomenType,

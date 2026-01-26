@@ -222,6 +222,122 @@ class TextureGenerator {
 }
 
 // ============================================
+// PATTERN GENERATOR CLASS
+// ============================================
+
+class PatternGenerator {
+    constructor(size = 256) {
+        this.size = size;
+    }
+
+    /**
+     * Generate a pattern texture based on pattern type
+     * Returns a color map texture with the pattern baked in
+     */
+    generate(patternType, primaryColor, secondaryColor, patternSeed = 0) {
+        switch (patternType) {
+            case 'striped':
+                return this.generateStripes(primaryColor, secondaryColor, patternSeed);
+            case 'spotted':
+                return this.generateSpots(primaryColor, secondaryColor, patternSeed);
+            case 'solid':
+            default:
+                return null; // No pattern texture needed for solid
+        }
+    }
+
+    /**
+     * Striped pattern - horizontal bands like wasps/bees
+     */
+    generateStripes(primaryColor, secondaryColor, seed) {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.size;
+        canvas.height = this.size;
+        const ctx = canvas.getContext('2d');
+
+        // Fill with primary color
+        ctx.fillStyle = primaryColor;
+        ctx.fillRect(0, 0, this.size, this.size);
+
+        // Draw stripes with secondary/dark color
+        const stripeCount = 5 + (seed % 4); // 5-8 stripes
+        const stripeHeight = this.size / (stripeCount * 2);
+
+        ctx.fillStyle = secondaryColor;
+        for (let i = 0; i < stripeCount; i++) {
+            const y = (i * 2 + 1) * stripeHeight;
+            // Slightly irregular stripe edges
+            const variance = stripeHeight * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(0, y - variance * Math.sin(seed + i));
+            for (let x = 0; x <= this.size; x += 20) {
+                const waveY = y + Math.sin((x / 30) + seed + i) * variance;
+                ctx.lineTo(x, waveY);
+            }
+            ctx.lineTo(this.size, y + stripeHeight + variance * Math.sin(seed + i + 1));
+            for (let x = this.size; x >= 0; x -= 20) {
+                const waveY = y + stripeHeight + Math.sin((x / 30) + seed + i + 1) * variance;
+                ctx.lineTo(x, waveY);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+
+    /**
+     * Spotted pattern - irregular spots like ladybugs
+     */
+    generateSpots(primaryColor, secondaryColor, seed) {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.size;
+        canvas.height = this.size;
+        const ctx = canvas.getContext('2d');
+
+        // Fill with primary color
+        ctx.fillStyle = primaryColor;
+        ctx.fillRect(0, 0, this.size, this.size);
+
+        // Seeded random function
+        const seededRandom = (n) => {
+            const x = Math.sin(seed + n * 127.1) * 43758.5453;
+            return x - Math.floor(x);
+        };
+
+        // Draw spots
+        const spotCount = 8 + (seed % 8); // 8-15 spots
+        ctx.fillStyle = secondaryColor;
+
+        for (let i = 0; i < spotCount; i++) {
+            const x = seededRandom(i * 2) * this.size;
+            const y = seededRandom(i * 2 + 1) * this.size;
+            const radius = 8 + seededRandom(i * 3) * 20; // Variable size spots
+
+            // Slightly irregular circle
+            ctx.beginPath();
+            for (let a = 0; a < Math.PI * 2; a += 0.2) {
+                const r = radius * (0.85 + seededRandom(i * 10 + a * 5) * 0.3);
+                const px = x + Math.cos(a) * r;
+                const py = y + Math.sin(a) * r;
+                if (a === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+}
+
+// ============================================
 // BUG GENERATOR CLASS
 // ============================================
 
@@ -231,6 +347,7 @@ class BugGenerator3D {
         this.colors = this.generateColors();
         this.sizeMultiplier = genome.getSizeMultiplier ? genome.getSizeMultiplier() : 1;
         this.normalMap = null; // Cached normal map texture
+        this.patternMap = null; // Cached pattern color texture
     }
 
     generateColors() {
@@ -289,15 +406,28 @@ class BugGenerator3D {
     /**
      * Create material with given color
      * Set options.skipNormalMap = true to skip texture (for eyes, etc.)
+     * Set options.skipPattern = true to skip pattern (for dark/accent parts)
      */
     createMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
         const textureType = this.genome.textureType || 'smooth';
+        const patternType = this.genome.pattern || 'solid';
 
         // Generate and cache normal map if not already created
         if (!this.normalMap && !options.skipNormalMap) {
             const texGen = new TextureGenerator(256);
             this.normalMap = texGen.generate(textureType);
+        }
+
+        // Generate and cache pattern map if not already created (only for primary color parts)
+        if (!this.patternMap && !options.skipPattern && colorKey === 'primary' && patternType !== 'solid') {
+            const patGen = new PatternGenerator(256);
+            this.patternMap = patGen.generate(
+                patternType,
+                this.colors.primary,
+                this.colors.dark,
+                this.genome.patternSeed || 0
+            );
         }
 
         // Roughness and normal intensity vary by texture type
@@ -328,6 +458,13 @@ class BugGenerator3D {
             opacity: options.opacity || 1,
             side: options.side || THREE.FrontSide,
         };
+
+        // Add pattern map for primary color parts (stripes/spots)
+        if (!options.skipPattern && colorKey === 'primary' && this.patternMap) {
+            materialOptions.map = this.patternMap;
+            // When using a pattern map, set color to white so map colors show through
+            materialOptions.color = '#ffffff';
+        }
 
         // Add normal map unless explicitly skipped
         if (!options.skipNormalMap && this.normalMap) {
@@ -1499,11 +1636,23 @@ class BugGenerator3D {
     createChitinMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
         const textureType = this.genome.textureType || 'smooth';
+        const patternType = this.genome.pattern || 'solid';
 
         // Generate and cache normal map if not already created
         if (!this.normalMap) {
             const texGen = new TextureGenerator(256);
             this.normalMap = texGen.generate(textureType);
+        }
+
+        // Generate and cache pattern map (only for primary color parts)
+        if (!this.patternMap && colorKey === 'primary' && patternType !== 'solid') {
+            const patGen = new PatternGenerator(256);
+            this.patternMap = patGen.generate(
+                patternType,
+                this.colors.primary,
+                this.colors.dark,
+                this.genome.patternSeed || 0
+            );
         }
 
         // Roughness and normal intensity vary by texture type
@@ -1527,12 +1676,22 @@ class BugGenerator3D {
                 normalIntensity = 0.5;
         }
 
-        return new THREE.MeshStandardMaterial({
+        const materialOptions = {
             color: color,
             roughness: options.roughness ?? baseRoughness,
             metalness: options.metalness ?? 0.15,
             normalMap: this.normalMap,
             normalScale: new THREE.Vector2(normalIntensity, normalIntensity),
+        };
+
+        // Add pattern map for primary color parts (stripes/spots)
+        if (colorKey === 'primary' && this.patternMap) {
+            materialOptions.map = this.patternMap;
+            materialOptions.color = '#ffffff'; // Let map colors show through
+        }
+
+        return new THREE.MeshStandardMaterial({
+            ...materialOptions,
             ...options,
         });
     }
