@@ -292,17 +292,37 @@ class BugGenerator3D {
      */
     createMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
+        const textureType = this.genome.textureType || 'smooth';
 
         // Generate and cache normal map if not already created
         if (!this.normalMap && !options.skipNormalMap) {
-            const textureType = this.genome.textureType || 'smooth';
             const texGen = new TextureGenerator(256);
             this.normalMap = texGen.generate(textureType);
         }
 
+        // Roughness and normal intensity vary by texture type
+        let baseRoughness, normalIntensity;
+        switch (textureType) {
+            case 'smooth':
+                baseRoughness = 0.3;
+                normalIntensity = 0.3;
+                break;
+            case 'plated':
+                baseRoughness = 0.45;
+                normalIntensity = 0.5;
+                break;
+            case 'rough':
+                baseRoughness = 0.6;
+                normalIntensity = 0.6;
+                break;
+            default:
+                baseRoughness = 0.5;
+                normalIntensity = 0.4;
+        }
+
         const materialOptions = {
             color: color,
-            roughness: options.roughness || 0.6,
+            roughness: options.roughness || baseRoughness,
             metalness: options.metalness || 0.1,
             transparent: options.transparent || false,
             opacity: options.opacity || 1,
@@ -312,7 +332,7 @@ class BugGenerator3D {
         // Add normal map unless explicitly skipped
         if (!options.skipNormalMap && this.normalMap) {
             materialOptions.normalMap = this.normalMap;
-            materialOptions.normalScale = new THREE.Vector2(0.4, 0.4);
+            materialOptions.normalScale = new THREE.Vector2(normalIntensity, normalIntensity);
         }
 
         return new THREE.MeshStandardMaterial(materialOptions);
@@ -1478,20 +1498,41 @@ class BugGenerator3D {
 
     createChitinMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
+        const textureType = this.genome.textureType || 'smooth';
 
         // Generate and cache normal map if not already created
         if (!this.normalMap) {
-            const textureType = this.genome.textureType || 'smooth';
             const texGen = new TextureGenerator(256);
             this.normalMap = texGen.generate(textureType);
         }
 
+        // Roughness and normal intensity vary by texture type
+        // Smooth = glossy polished chitin, Plated = semi-gloss armor, Rough = matte weathered
+        let baseRoughness, normalIntensity;
+        switch (textureType) {
+            case 'smooth':
+                baseRoughness = 0.25;
+                normalIntensity = 0.3;
+                break;
+            case 'plated':
+                baseRoughness = 0.4;
+                normalIntensity = 0.6;
+                break;
+            case 'rough':
+                baseRoughness = 0.55;
+                normalIntensity = 0.7;
+                break;
+            default:
+                baseRoughness = 0.35;
+                normalIntensity = 0.5;
+        }
+
         return new THREE.MeshStandardMaterial({
             color: color,
-            roughness: options.roughness ?? 0.35,
+            roughness: options.roughness ?? baseRoughness,
             metalness: options.metalness ?? 0.15,
             normalMap: this.normalMap,
-            normalScale: new THREE.Vector2(0.5, 0.5),
+            normalScale: new THREE.Vector2(normalIntensity, normalIntensity),
             ...options,
         });
     }
