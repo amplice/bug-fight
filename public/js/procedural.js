@@ -70,6 +70,7 @@ class BugGenome {
         this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
         this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
+        this.textureType = ['smooth', 'plated', 'rough'][Math.floor(Math.random() * 3)];
 
         // Color
         this.color = {
@@ -104,6 +105,7 @@ class BugGenome {
         child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
         child.defense = Math.random() < 0.5 ? this.defense : other.defense;
         child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
+        child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
 
         child.color = {
             hue: this.blendHue(this.color.hue, other.color.hue),

@@ -2,6 +2,226 @@
 // Generates procedural 3D bugs from genome using primitive shapes
 
 // ============================================
+// TEXTURE GENERATOR CLASS
+// ============================================
+
+class TextureGenerator {
+    constructor(size = 256) {
+        this.size = size;
+    }
+
+    /**
+     * Generate a normal map texture based on texture type
+     */
+    generate(textureType) {
+        switch (textureType) {
+            case 'plated':
+                return this.generatePlated();
+            case 'rough':
+                return this.generateRough();
+            case 'smooth':
+            default:
+                return this.generateSmooth();
+        }
+    }
+
+    /**
+     * Smooth texture - subtle noise, almost flat
+     * Inspired by ants, wasps - clean, streamlined look
+     */
+    generateSmooth() {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.size;
+        canvas.height = this.size;
+        const ctx = canvas.getContext('2d');
+
+        // Base flat normal color (pointing up)
+        ctx.fillStyle = 'rgb(128, 128, 255)';
+        ctx.fillRect(0, 0, this.size, this.size);
+
+        // Add very subtle noise
+        const imageData = ctx.getImageData(0, 0, this.size, this.size);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+            // Very subtle variation (+/- 5)
+            const noiseR = (Math.random() - 0.5) * 10;
+            const noiseG = (Math.random() - 0.5) * 10;
+            data[i] = Math.max(0, Math.min(255, data[i] + noiseR));
+            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noiseG));
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+
+    /**
+     * Plated texture - overlapping chitin segments
+     * Inspired by beetles, roaches - armored, layered look
+     */
+    generatePlated() {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.size;
+        canvas.height = this.size;
+        const ctx = canvas.getContext('2d');
+
+        // Base flat normal
+        ctx.fillStyle = 'rgb(128, 128, 255)';
+        ctx.fillRect(0, 0, this.size, this.size);
+
+        const imageData = ctx.getImageData(0, 0, this.size, this.size);
+        const data = imageData.data;
+
+        // Horizontal bands with curved top edges
+        const bandHeight = 32;
+        const numBands = Math.ceil(this.size / bandHeight);
+
+        for (let band = 0; band < numBands; band++) {
+            const bandY = band * bandHeight;
+
+            for (let y = 0; y < bandHeight && bandY + y < this.size; y++) {
+                for (let x = 0; x < this.size; x++) {
+                    const idx = ((bandY + y) * this.size + x) * 4;
+
+                    // Normalized position within band (0-1)
+                    const t = y / bandHeight;
+
+                    // Create curved plate effect
+                    // Top of plate: lighter (raised) - G > 128
+                    // Bottom of plate: darker (shadow) - G < 128
+                    // Add slight horizontal curve too
+                    const curveX = Math.sin((x / this.size) * Math.PI) * 0.3;
+
+                    if (t < 0.15) {
+                        // Top edge - raised (lighter green = pointing up-toward camera)
+                        const edgeStrength = (0.15 - t) / 0.15;
+                        data[idx + 1] = 128 + 40 * edgeStrength + curveX * 20; // G channel
+                    } else if (t > 0.85) {
+                        // Bottom edge - shadow (darker green = pointing down-away)
+                        const shadowStrength = (t - 0.85) / 0.15;
+                        data[idx + 1] = 128 - 35 * shadowStrength; // G channel
+                        // Also slight indent on bottom
+                        data[idx + 2] = 255 - 20 * shadowStrength; // Less blue = recessed
+                    }
+
+                    // Add subtle noise
+                    data[idx] += (Math.random() - 0.5) * 6;
+                    data[idx + 1] += (Math.random() - 0.5) * 6;
+                }
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+
+    /**
+     * Rough texture - bumpy, tuberculate surface
+     * Inspired by weevils, bark beetles - rugged, weathered look
+     */
+    generateRough() {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.size;
+        canvas.height = this.size;
+        const ctx = canvas.getContext('2d');
+
+        // Base flat normal
+        ctx.fillStyle = 'rgb(128, 128, 255)';
+        ctx.fillRect(0, 0, this.size, this.size);
+
+        const imageData = ctx.getImageData(0, 0, this.size, this.size);
+        const data = imageData.data;
+
+        // Add Perlin-like noise base layer using simple value noise
+        const noiseScale = 16;
+        const noiseGrid = [];
+        const gridSize = Math.ceil(this.size / noiseScale) + 1;
+
+        for (let i = 0; i < gridSize * gridSize; i++) {
+            noiseGrid.push(Math.random());
+        }
+
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const smoothstep = (t) => t * t * (3 - 2 * t);
+
+        for (let y = 0; y < this.size; y++) {
+            for (let x = 0; x < this.size; x++) {
+                const idx = (y * this.size + x) * 4;
+
+                // Value noise interpolation
+                const gx = x / noiseScale;
+                const gy = y / noiseScale;
+                const x0 = Math.floor(gx);
+                const y0 = Math.floor(gy);
+                const x1 = x0 + 1;
+                const y1 = y0 + 1;
+
+                const sx = smoothstep(gx - x0);
+                const sy = smoothstep(gy - y0);
+
+                const n00 = noiseGrid[y0 * gridSize + x0] || 0;
+                const n10 = noiseGrid[y0 * gridSize + x1] || 0;
+                const n01 = noiseGrid[y1 * gridSize + x0] || 0;
+                const n11 = noiseGrid[y1 * gridSize + x1] || 0;
+
+                const noise = lerp(lerp(n00, n10, sx), lerp(n01, n11, sx), sy);
+
+                // Convert noise to normal map displacement
+                // Noise value affects both R and G channels
+                const displacement = (noise - 0.5) * 60;
+                data[idx] = 128 + displacement * 0.7;     // R - X direction
+                data[idx + 1] = 128 + displacement * 0.7; // G - Y direction
+            }
+        }
+
+        // Add random bumps
+        const numBumps = 80;
+        for (let i = 0; i < numBumps; i++) {
+            const bx = Math.random() * this.size;
+            const by = Math.random() * this.size;
+            const radius = 4 + Math.random() * 12;
+            const isRaised = Math.random() > 0.3; // 70% raised, 30% pits
+
+            for (let dy = -radius; dy <= radius; dy++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > radius) continue;
+
+                    const px = Math.floor(bx + dx) % this.size;
+                    const py = Math.floor(by + dy) % this.size;
+                    if (px < 0 || py < 0) continue;
+
+                    const idx = (py * this.size + px) * 4;
+
+                    // Calculate normal direction based on position on bump
+                    const normalStrength = (1 - dist / radius) * 40;
+                    const nx = (dx / radius) * normalStrength * (isRaised ? 1 : -1);
+                    const ny = (dy / radius) * normalStrength * (isRaised ? 1 : -1);
+
+                    data[idx] = Math.max(0, Math.min(255, data[idx] + nx));
+                    data[idx + 1] = Math.max(0, Math.min(255, data[idx + 1] + ny));
+                }
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+}
+
+// ============================================
 // BUG GENERATOR CLASS
 // ============================================
 
@@ -10,6 +230,7 @@ class BugGenerator3D {
         this.genome = genome;
         this.colors = this.generateColors();
         this.sizeMultiplier = genome.getSizeMultiplier ? genome.getSizeMultiplier() : 1;
+        this.normalMap = null; // Cached normal map texture
     }
 
     generateColors() {
@@ -67,17 +288,34 @@ class BugGenerator3D {
 
     /**
      * Create material with given color
+     * Set options.skipNormalMap = true to skip texture (for eyes, etc.)
      */
     createMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
-        return new THREE.MeshStandardMaterial({
+
+        // Generate and cache normal map if not already created
+        if (!this.normalMap && !options.skipNormalMap) {
+            const textureType = this.genome.textureType || 'smooth';
+            const texGen = new TextureGenerator(256);
+            this.normalMap = texGen.generate(textureType);
+        }
+
+        const materialOptions = {
             color: color,
             roughness: options.roughness || 0.6,
             metalness: options.metalness || 0.1,
             transparent: options.transparent || false,
             opacity: options.opacity || 1,
             side: options.side || THREE.FrontSide,
-        });
+        };
+
+        // Add normal map unless explicitly skipped
+        if (!options.skipNormalMap && this.normalMap) {
+            materialOptions.normalMap = this.normalMap;
+            materialOptions.normalScale = new THREE.Vector2(0.4, 0.4);
+        }
+
+        return new THREE.MeshStandardMaterial(materialOptions);
     }
 
     /**
@@ -740,8 +978,8 @@ class BugGenerator3D {
             metalness: 0.2,
         });
 
-        // Eye shine material
-        const shineMat = this.createMaterial('white');
+        // Eye shine material (no texture)
+        const shineMat = this.createMaterial('white', { skipNormalMap: true });
 
         // Eye positions adjusted based on head type
         const eyeBaseZ = headBaseZ + eyeOffsetZ;
@@ -813,9 +1051,9 @@ class BugGenerator3D {
                     eyeball.userData.isEye = true;
                     group.add(eyeball);
 
-                    // Pupil
+                    // Pupil (no texture)
                     const pupilGeo = new THREE.SphereGeometry(0.3 * scale, 6, 4);
-                    const pupilMat = this.createMaterial('black');
+                    const pupilMat = this.createMaterial('black', { skipNormalMap: true });
                     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
                     pupil.position.set(side * eyeSpread * 0.9 * scale, eyeBaseY + 3.3 * scale, headBaseZ + 1.7 * scale);
                     group.add(pupil);
@@ -1240,10 +1478,20 @@ class BugGenerator3D {
 
     createChitinMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
+
+        // Generate and cache normal map if not already created
+        if (!this.normalMap) {
+            const textureType = this.genome.textureType || 'smooth';
+            const texGen = new TextureGenerator(256);
+            this.normalMap = texGen.generate(textureType);
+        }
+
         return new THREE.MeshStandardMaterial({
             color: color,
             roughness: options.roughness ?? 0.35,
             metalness: options.metalness ?? 0.15,
+            normalMap: this.normalMap,
+            normalScale: new THREE.Vector2(0.5, 0.5),
             ...options,
         });
     }
