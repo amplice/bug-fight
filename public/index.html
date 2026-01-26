@@ -5,12 +5,152 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bug Fights - 24/7 Live</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* 3D-specific overrides */
+        #arena3d {
+            width: 900px;
+            height: 600px;
+            display: block;
+            border: 2px solid #333;
+            border-radius: 4px;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+
+        .camera-btn {
+            background: linear-gradient(180deg, #444 0%, #222 100%);
+            border: 2px solid #555;
+            color: #fff;
+            padding: 8px 16px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .camera-btn:hover {
+            background: linear-gradient(180deg, #555 0%, #333 100%);
+            border-color: #666;
+        }
+
+        .camera-btn.active {
+            background: linear-gradient(180deg, #666 0%, #444 100%);
+            border-color: #888;
+        }
+
+        .controls-hint {
+            color: #666;
+            font-size: 12px;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* 3D Roster Styles */
+        .roster-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .roster-item-3d {
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .roster-item-3d:hover {
+            border-color: #666;
+        }
+
+        .roster-bug-canvas {
+            width: 200px;
+            height: 150px;
+            border-radius: 4px;
+            cursor: grab;
+        }
+
+        .roster-bug-canvas:active {
+            cursor: grabbing;
+        }
+
+        .roster-bug-name {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            color: #fff;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .roster-bug-record {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 9px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .roster-bug-stats {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .roster-stat {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #333;
+        }
+
+        .roster-stat.blk { color: #f88; }
+        .roster-stat.spd { color: #8f8; }
+        .roster-stat.fry { color: #ff8; }
+        .roster-stat.ins { color: #8ff; }
+
+        .roster-controls-hint {
+            color: #666;
+            font-size: 10px;
+            text-align: center;
+            padding: 10px;
+            border-top: 1px solid #333;
+            margin-top: 10px;
+        }
+
+        .version-tag {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: #555;
+            margin-top: 8px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>BUG FIGHTS <span class="live-badge">LIVE 24/7</span></h1>
 
-        <canvas id="arena" width="900" height="600"></canvas>
+        <canvas id="arena3d" width="900" height="600"></canvas>
+
+        <div class="camera-controls">
+            <button class="camera-btn active" onclick="setCamera('front')" id="cam-front">1: Front</button>
+            <button class="camera-btn" onclick="setCamera('side')" id="cam-side">2: Side</button>
+            <button class="camera-btn" onclick="setCamera('top')" id="cam-top">3: Top</button>
+            <button class="camera-btn" onclick="setCamera('isometric')" id="cam-iso">4: Isometric</button>
+        </div>
+        <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-4 for presets, R to reset</div>
 
         <div class="selection-panel">
             <div class="fighter-card left">
@@ -105,6 +245,7 @@
                 <span class="badge construction">Always under construction!</span>
             </div>
             <div class="copyright">&copy; 1997-2026 Bug Fights Inc. All bugs reserved.</div>
+            <div class="version-tag">v0.3.0-alpha</div>
         </div>
     </div>
 
@@ -121,14 +262,278 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.142.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.142.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Game Scripts -->
     <script src="js/procedural.js"></script>
+    <script src="js/bugGenerator3d.js"></script>
     <script src="js/client.js"></script>
-    <script src="js/renderer.js"></script>
+    <script src="js/renderer3d.js"></script>
+
     <script>
+        // Camera button handling
+        function setCamera(preset) {
+            window.BugFightsRenderer3D.setCameraPreset(preset);
+
+            // Update button states
+            document.querySelectorAll('.camera-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('cam-' + (preset === 'isometric' ? 'iso' : preset)).classList.add('active');
+        }
+
+        // 3D Roster Viewer
+        class Roster3DViewer {
+            constructor() {
+                this.rosterModal = document.getElementById('roster-modal');
+                this.rosterGrid = document.getElementById('roster-grid');
+                this.rosterBtn = document.getElementById('roster-btn');
+                this.closeBtn = document.getElementById('close-roster');
+                this.bugScenes = [];
+                this.animationId = null;
+
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                this.rosterBtn.addEventListener('click', () => this.open());
+                this.closeBtn.addEventListener('click', () => this.close());
+                this.rosterModal.addEventListener('click', (e) => {
+                    if (e.target === this.rosterModal) this.close();
+                });
+            }
+
+            async open() {
+                this.rosterModal.classList.remove('hidden');
+                await this.loadRoster();
+                this.startAnimation();
+            }
+
+            close() {
+                this.rosterModal.classList.add('hidden');
+                this.stopAnimation();
+                this.cleanup();
+            }
+
+            async loadRoster() {
+                try {
+                    const response = await fetch('/api/roster');
+                    const roster = await response.json();
+                    this.populateRoster(roster);
+                } catch (err) {
+                    console.error('Failed to load roster:', err);
+                    this.rosterGrid.innerHTML = '<div style="color: #f88; text-align: center; padding: 20px;">Failed to load roster</div>';
+                }
+            }
+
+            populateRoster(roster) {
+                this.cleanup();
+                this.rosterGrid.innerHTML = '';
+
+                roster.forEach((bug, index) => {
+                    const item = this.createRosterItem(bug, index);
+                    this.rosterGrid.appendChild(item);
+                });
+
+                // Add controls hint at the bottom
+                const hint = document.createElement('div');
+                hint.className = 'roster-controls-hint';
+                hint.textContent = 'Drag to rotate bugs';
+                hint.style.gridColumn = '1 / -1';
+                this.rosterGrid.appendChild(hint);
+            }
+
+            createRosterItem(bug, index) {
+                const item = document.createElement('div');
+                item.className = 'roster-item-3d';
+
+                // Create canvas for 3D preview
+                const canvas = document.createElement('canvas');
+                canvas.className = 'roster-bug-canvas';
+                canvas.width = 400;  // Higher res for quality
+                canvas.height = 300;
+                item.appendChild(canvas);
+
+                // Bug name
+                const name = document.createElement('div');
+                name.className = 'roster-bug-name';
+                name.textContent = bug.name;
+                item.appendChild(name);
+
+                // Record
+                const record = document.createElement('div');
+                record.className = 'roster-bug-record';
+                record.textContent = `${bug.wins || 0}W - ${bug.losses || 0}L`;
+                item.appendChild(record);
+
+                // Stats - use bug.stats from API (or fall back to genome)
+                const bugStats = bug.stats || bug.genome || bug;
+                const stats = document.createElement('div');
+                stats.className = 'roster-bug-stats';
+                stats.innerHTML = `
+                    <span class="roster-stat blk">BLK ${bugStats.bulk}</span>
+                    <span class="roster-stat spd">SPD ${bugStats.speed}</span>
+                    <span class="roster-stat fry">FRY ${bugStats.fury}</span>
+                    <span class="roster-stat ins">INS ${bugStats.instinct}</span>
+                `;
+                item.appendChild(stats);
+
+                // Setup 3D scene for this bug - pass the genome data
+                this.setup3DScene(canvas, bug.genome || bug, index);
+
+                return item;
+            }
+
+            setup3DScene(canvas, bugData, index) {
+                try {
+                    // Create scene
+                    const scene = new THREE.Scene();
+                    scene.background = new THREE.Color(0x1a2a1a);
+
+                    // Create camera
+                    const camera = new THREE.PerspectiveCamera(50, canvas.width / canvas.height, 0.1, 100);
+                    camera.position.set(0, 1, 5);
+                    camera.lookAt(0, 0, 0);
+
+                    // Create renderer
+                    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+                    renderer.setSize(canvas.width, canvas.height);
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+                    // Lighting
+                    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+                    const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directional.position.set(5, 10, 5);
+                    scene.add(directional);
+                    const fill = new THREE.DirectionalLight(0x88ccff, 0.4);
+                    fill.position.set(-5, 5, -5);
+                    scene.add(fill);
+
+                    // Create bug
+                    const genome = new BugGenome(bugData);
+                    const generator = new BugGenerator3D(genome);
+                    const bugGroup = generator.generate();
+                    bugGroup.scale.setScalar(0.12);
+                    bugGroup.rotation.y = -Math.PI / 4;
+                    scene.add(bugGroup);
+
+                    // Initial render
+                    renderer.render(scene, camera);
+
+                // Create animator
+                const animator = new BugAnimator(bugGroup);
+
+                // Simple orbit controls via drag
+                let isDragging = false;
+                let prevX = 0;
+                let rotationY = 0;
+
+                canvas.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    prevX = e.clientX;
+                });
+
+                canvas.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        const deltaX = e.clientX - prevX;
+                        rotationY += deltaX * 0.01;
+                        bugGroup.rotation.y = rotationY;
+                        prevX = e.clientX;
+                    }
+                });
+
+                canvas.addEventListener('mouseup', () => isDragging = false);
+                canvas.addEventListener('mouseleave', () => isDragging = false);
+
+                // Touch support
+                canvas.addEventListener('touchstart', (e) => {
+                    isDragging = true;
+                    prevX = e.touches[0].clientX;
+                });
+
+                canvas.addEventListener('touchmove', (e) => {
+                    if (isDragging) {
+                        const deltaX = e.touches[0].clientX - prevX;
+                        rotationY += deltaX * 0.01;
+                        bugGroup.rotation.y = rotationY;
+                        prevX = e.touches[0].clientX;
+                    }
+                });
+
+                canvas.addEventListener('touchend', () => isDragging = false);
+
+                // Store scene data for animation loop
+                this.bugScenes.push({
+                    scene,
+                    camera,
+                    renderer,
+                    bugGroup,
+                    animator,
+                    rotationY
+                });
+                } catch (err) {
+                    console.error('Error creating 3D bug:', err, bugData);
+                }
+            }
+
+            startAnimation() {
+                const clock = new THREE.Clock();
+
+                const animate = () => {
+                    this.animationId = requestAnimationFrame(animate);
+                    const delta = clock.getDelta();
+
+                    this.bugScenes.forEach(sceneData => {
+                        // Animate the bug (idle animation)
+                        sceneData.animator.update(delta, 'idle');
+
+                        // Gentle auto-rotation when not dragging
+                        // (already handled by drag)
+
+                        // Render
+                        sceneData.renderer.render(sceneData.scene, sceneData.camera);
+                    });
+                };
+
+                animate();
+            }
+
+            stopAnimation() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+            }
+
+            cleanup() {
+                this.stopAnimation();
+
+                this.bugScenes.forEach(sceneData => {
+                    // Dispose of geometries and materials
+                    sceneData.scene.traverse(obj => {
+                        if (obj.geometry) obj.geometry.dispose();
+                        if (obj.material) {
+                            if (Array.isArray(obj.material)) {
+                                obj.material.forEach(m => m.dispose());
+                            } else {
+                                obj.material.dispose();
+                            }
+                        }
+                    });
+                    sceneData.renderer.dispose();
+                });
+
+                this.bugScenes = [];
+            }
+        }
+
+        // Initialize
+        let roster3DViewer;
+
         document.addEventListener('DOMContentLoaded', () => {
             window.BugFightsClient.init();
-            window.BugFightsRenderer.init();
+            window.BugFightsRenderer3D.init();
+            roster3DViewer = new Roster3DViewer();
         });
     </script>
 </body>

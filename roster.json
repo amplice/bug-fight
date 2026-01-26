@@ -25,8 +25,8 @@
         "patternSeed": 683
       },
       "name": "Fang Creep",
-      "wins": 375,
-      "losses": 292,
+      "wins": 535,
+      "losses": 426,
       "createdAt": "2026-01-20T23:05:17.584Z"
     },
     {
@@ -54,8 +54,8 @@
         "patternSeed": 6644
       },
       "name": "Slasher Mass",
-      "wins": 103,
-      "losses": 539,
+      "wins": 150,
+      "losses": 808,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -83,8 +83,8 @@
         "patternSeed": 6052
       },
       "name": "Gnasher Dash",
-      "wins": 362,
-      "losses": 313,
+      "wins": 546,
+      "losses": 448,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -112,8 +112,8 @@
         "patternSeed": 4470
       },
       "name": "Piercer Runner",
-      "wins": 528,
-      "losses": 85,
+      "wins": 771,
+      "losses": 116,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -141,8 +141,8 @@
         "patternSeed": 6374
       },
       "name": "Fang Orb",
-      "wins": 257,
-      "losses": 410,
+      "wins": 387,
+      "losses": 583,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -170,8 +170,8 @@
         "patternSeed": 6186
       },
       "name": "Breaker Runner",
-      "wins": 6,
-      "losses": 628,
+      "wins": 11,
+      "losses": 914,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -199,8 +199,8 @@
         "patternSeed": 2945
       },
       "name": "Toxic Link",
-      "wins": 560,
-      "losses": 133,
+      "wins": 789,
+      "losses": 184,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -228,8 +228,8 @@
         "patternSeed": 2577
       },
       "name": "Ripper Blob",
-      "wins": 574,
-      "losses": 104,
+      "wins": 810,
+      "losses": 138,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -257,8 +257,8 @@
         "patternSeed": 8581
       },
       "name": "Lancer Dome",
-      "wins": 372,
-      "losses": 309,
+      "wins": 540,
+      "losses": 434,
       "createdAt": "2026-01-20T23:05:17.592Z"
     },
     {
@@ -286,10 +286,10 @@
         "patternSeed": 3435
       },
       "name": "Biter Blob",
-      "wins": 155,
-      "losses": 479,
+      "wins": 222,
+      "losses": 710,
       "createdAt": "2026-01-20T23:05:17.592Z"
     }
   ],
-  "savedAt": "2026-01-22T14:05:59.146Z"
+  "savedAt": "2026-01-26T01:22:09.446Z"
 }

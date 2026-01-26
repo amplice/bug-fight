@@ -554,7 +554,7 @@ class Fighter {
                 this.executeAggressiveAI(opponent, dx, dy, dz, dist, attackRange);
                 break;
             case 'circling':
-                this.executeCirclingAI(opponent, dx, dy, dz, dist);
+                this.executeCirclingAI(opponent, dx, dy, dz, dist, attackRange);
                 break;
             case 'retreating':
                 this.executeRetreatingAI(opponent, dx, dy, dz, dist);
@@ -616,182 +616,253 @@ class Fighter {
         const staminaPercent = this.stamina / this.maxStamina;
         const staminaFactor = 0.5 + staminaPercent * 0.5;
         const speed = baseSpeed * (0.7 + this.drives.aggression * 0.6) * staminaFactor;
+        const instinctFactor = this.genome.instinct / 100;
+
+        // 3D distance calculations
+        const horizDist = Math.sqrt(dx * dx + dz * dz);  // XZ plane distance
+        const heightDiff = opponent.y - this.y;  // Positive = opponent higher
 
         if (this.isFlying) {
-            const heightAdvantage = this.y < opponent.y - 30;
-            const instinctFactor = this.genome.instinct / 100;
-            const opponentCornered = opponent.isCornered(120);
+            // TRUE 3D AERIAL COMBAT
+            const hasHeightAdvantage = this.y < opponent.y - 40;  // We're above them
+            const canDive = hasHeightAdvantage && horizDist < 200 && staminaPercent > 0.4;
 
-            if (heightAdvantage && dist < attackRange * 1.5) {
-                // Dive attack - with herding if high instinct
-                let attackDir = Math.sign(dx);
-                if (instinctFactor > 0.4 && opponentCornered) {
-                    // Push toward wall during dive
-                    const opponentWallSide = opponent.getNearestWallSide();
-                    attackDir = opponentWallSide === 'left' ? -0.5 : 0.5;
+            if (opponent.isFlying) {
+                // AIR-TO-AIR DOGFIGHT
+                // Maintain height advantage while pursuing
+                const targetHeight = opponent.y - 60 - (instinctFactor * 40);  // Higher instinct = more height advantage
+
+                // Pursuit in full 3D space
+                this.vx += Math.sign(dx) * speed * 1.2;
+                this.vz += Math.sign(dz) * speed * 1.2;  // Full z pursuit
+
+                // Height management - try to get above opponent
+                if (this.y > targetHeight) {
+                    this.vy -= 0.6;  // Climb to get above
+                } else if (this.y < targetHeight - 50) {
+                    this.vy += 0.4;  // Don't go too far above
                 }
-                this.vx += attackDir * speed * 2;
-                this.vy += 0.8;
-                this.vz += Math.sign(dz) * speed;  // 3D: approach in z
+
+                // Banking maneuvers - strafe while pursuing
+                if (dist < attackRange * 2 && instinctFactor > 0.3) {
+                    const strafeDir = Math.sin(this.moveTimer / 10) * instinctFactor;
+                    // Strafe perpendicular to approach direction
+                    const perpX = -dz / (horizDist || 1);
+                    const perpZ = dx / (horizDist || 1);
+                    this.vx += perpX * strafeDir * speed * 2;
+                    this.vz += perpZ * strafeDir * speed * 2;
+                }
+
+                // Slight bobbing for natural flight
+                this.vy += Math.sin(this.moveTimer / 6) * 0.15;
+                this.vz += Math.cos(this.moveTimer / 8) * 0.1;
+
+            } else if (canDive) {
+                // DIVE ATTACK on ground opponent
+                // Commit to dive - accelerate downward at target
+                const diveAngle = Math.atan2(heightDiff, horizDist);
+                const diveSpeed = speed * 3;  // Fast dive
+
+                this.vx += Math.sign(dx) * diveSpeed * Math.cos(diveAngle);
+                this.vy += 1.2;  // Strong downward force
+                this.vz += Math.sign(dz) * diveSpeed * 0.8;
+
+                // Mark as diving for damage bonus
+                this.isDiving = true;
+
             } else if (staminaPercent < 0.3) {
-                this.vx += Math.sign(dx) * speed * 0.5;
-                this.vy -= 0.4;
-            } else if (opponent.isFlying) {
-                // 3D: full 3D pursuit of flying opponent
-                this.vx += Math.sign(dx) * speed;
-                this.vy += this.y > opponent.y ? -0.5 : 0.3;
-                this.vz += Math.sign(dz) * speed * 0.8;  // 3D: z pursuit
+                // LOW STAMINA - retreat upward
+                this.vx += Math.sign(dx) * speed * 0.3;
+                this.vy -= 0.6;  // Climb away
+                this.vz += Math.sign(dz) * speed * 0.3;
+                this.isDiving = false;
+
             } else {
-                // Hovering over ground opponent - high instinct: herd toward walls
-                const idealHeight = opponent.y - 80;
+                // POSITIONING - circle above ground opponent
+                const idealHeight = opponent.y - 100 - (instinctFactor * 50);
+                const idealDist = 120 + (1 - this.drives.aggression) * 80;
+
+                // Adjust height
                 if (this.y > idealHeight) {
-                    this.vy -= 0.4;
-                } else {
-                    this.vy += 0.2;
+                    this.vy -= 0.5;
+                } else if (this.y < idealHeight - 30) {
+                    this.vy += 0.3;
                 }
 
-                // Approach with herding angle
-                let approachDir = Math.sign(dx);
-                if (instinctFactor > 0.4 && dist < attackRange * 3) {
-                    const opponentNearerWall = opponent.getNearestWallSide();
-                    const herdBias = opponentNearerWall === 'left' ? -0.3 : 0.3;
-                    approachDir += herdBias * instinctFactor;
-                }
-                this.vx += approachDir * speed * 1.2;
-                this.vz += Math.sign(dz) * speed * 0.6;  // 3D: close z gap
+                // Circle around opponent in 3D - figure-8 pattern
+                const circlePhase = this.moveTimer / 25;
+                const circleRadius = idealDist;
+                const targetX = opponent.x + Math.cos(circlePhase) * circleRadius;
+                const targetZ = opponent.z + Math.sin(circlePhase * 2) * circleRadius * 0.6;  // Figure-8 in z
+
+                this.vx += (targetX - this.x) * 0.03;
+                this.vz += (targetZ - this.z) * 0.03;
+
+                // Occasional altitude changes
+                this.vy += Math.sin(this.moveTimer / 15) * 0.2;
+
+                this.isDiving = false;
             }
-            if (!heightAdvantage || dist > attackRange * 2) {
-                this.vy += Math.sin(this.moveTimer / 8) * 0.2;
-                // 3D: slight z weaving
-                this.vz += Math.sin(this.moveTimer / 12) * 0.1;
-            }
+
         } else if (this.onWall) {
+            // WALL ATTACK POSITIONING
             this.vy = Math.sign(dy) * speed * 3;
-            const horizDist = Math.sqrt(dx * dx + dz * dz);  // 3D: horizontal distance includes z
-            if (horizDist < 150 && Math.abs(dy) < 50 && Math.random() < 0.03 + this.drives.aggression * 0.05) {
-                this.jump(1.0);
-                this.vx = Math.sign(dx) * 8;
-                this.vz = Math.sign(dz) * 4;  // 3D: jump toward opponent in z
-            }
-        } else {
-            // Ground bug aggressive behavior with instinct-based cornering
-            const instinctFactor = this.genome.instinct / 100;
 
-            // Check if opponent is cornered
+            if (horizDist < 150 && Math.abs(dy) < 60 && Math.random() < 0.03 + this.drives.aggression * 0.05) {
+                // Wall pounce in full 3D
+                this.jump(1.0);
+                const pounceDir = this.wallSide === 'left' ? 1 : -1;
+                this.vx = pounceDir * 10;
+                this.vz = Math.sign(dz) * 6;  // Strong z-component for 3D pounce
+            }
+
+        } else {
+            // GROUND BUG - 3D FLANKING AND PURSUIT
             const opponentCornered = opponent.isCornered(120);
             const opponentWallSide = opponent.getNearestWallSide();
 
-            // High instinct: try to cut off escape and push toward wall
+            // HIGH INSTINCT: 3D flanking maneuvers
             if (instinctFactor > 0.4 && dist < attackRange * 3) {
-                // If opponent is cornered, press the advantage - stay between them and center
                 if (opponentCornered) {
+                    // Press cornered opponent - cut off escape
                     const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
                     const cutoffX = opponentWallSide === 'left'
-                        ? opponent.x + 60  // Position to their right (toward center)
-                        : opponent.x - 60; // Position to their left (toward center)
+                        ? opponent.x + 60
+                        : opponent.x - 60;
 
-                    // Move to cutoff position instead of directly at opponent
                     const cutoffDx = cutoffX - this.x;
                     if (Math.abs(cutoffDx) > 30) {
-                        this.vx += Math.sign(cutoffDx) * speed * (0.8 + instinctFactor * 0.4);
+                        this.vx += Math.sign(cutoffDx) * speed * 1.2;
                     } else {
-                        // In position - now push toward wall
                         this.vx += Math.sign(dx) * speed;
                     }
-                } else {
-                    // Try to herd opponent toward nearest wall
-                    const opponentNearerWall = opponent.getNearestWallSide();
-                    const herdDirection = opponentNearerWall === 'left' ? -1 : 1;
+                    // Pin them against wall in z too
+                    this.vz += Math.sign(dz) * speed * 0.8;
 
-                    // Approach at an angle to push toward wall
-                    const angleOffset = herdDirection * instinctFactor * 0.5;
-                    this.vx += (Math.sign(dx) + angleOffset) * speed;
+                } else {
+                    // FLANKING: approach from the side in z-axis
+                    const flankPhase = this.moveTimer / 20;
+                    const flankOffset = Math.sin(flankPhase) * 60 * instinctFactor;
+                    const targetZ = opponent.z + flankOffset;
+
+                    this.vx += Math.sign(dx) * speed;
+                    this.vz += (targetZ - this.z) * 0.04 + Math.sign(dz) * speed * 0.3;
                 }
             } else {
-                // Low instinct or far away: just chase directly
+                // Direct pursuit in 3D
                 this.vx += Math.sign(dx) * speed;
+                this.vz += Math.sign(dz) * speed * 0.7;  // Strong z pursuit
             }
 
-            // 3D: Ground bugs also adjust z position to close distance
-            this.vz += Math.sign(dz) * speed * 0.5;
-
-            // Jump at flying/elevated opponents
+            // Jump at elevated opponents
             if (opponent.isFlying || opponent.onWall || opponent.y < this.y - 50) {
-                if (this.grounded && dist < attackRange * 2 && Math.random() < 0.04 + this.drives.aggression * 0.06) {
+                if (this.grounded && horizDist < attackRange * 2.5 && Math.random() < 0.05 + this.drives.aggression * 0.08) {
                     this.jump(1.0);
-                    this.vx += Math.sign(dx) * 3;
-                    this.vz += Math.sign(dz) * 2;  // 3D: z component of jump
+                    // Jump toward opponent in full 3D
+                    const jumpDist = Math.sqrt(dx * dx + dz * dz);
+                    if (jumpDist > 0) {
+                        this.vx += (dx / jumpDist) * 5;
+                        this.vz += (dz / jumpDist) * 4;
+                    }
                 }
             }
         }
     }
 
-    executeCirclingAI(opponent, dx, dy, dz, dist) {
+    executeCirclingAI(opponent, dx, dy, dz, dist, attackRange) {
         const speed = 0.2 + (this.genome.speed / 200);
-        const circleRadius = 60 + this.drives.caution * 60;
+        const circleRadius = 80 + this.drives.caution * 80;  // Increased for better 3D space
         const instinctFactor = this.genome.instinct / 100;
 
-        this.circleAngle += (this.side === 'left' ? 0.04 : -0.04) * (this.genome.speed / 50);
+        // Circular motion speed - faster for speedy bugs
+        const circleSpeed = (this.side === 'left' ? 0.05 : -0.05) * (this.genome.speed / 50);
+        this.circleAngle += circleSpeed;
 
-        // High instinct: avoid circling into walls
+        // Separate angle for vertical oscillation
+        const verticalAngle = this.moveTimer / 20;
+
+        // High instinct: avoid walls
         const iAmCornered = this.isCornered(100);
         const wallAvoidance = iAmCornered ? this.getEscapeDirection() * instinctFactor * 0.8 : 0;
 
         if (this.isFlying) {
-            // 3D: Circle in the XZ plane around opponent
-            let targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
-            let targetZ = opponent.z + Math.sin(this.circleAngle) * circleRadius;  // 3D: z component
-            const targetY = opponent.y - 60 + Math.sin(this.circleAngle * 0.5) * circleRadius * 0.3;
+            // TRUE 3D AERIAL CIRCLING - orbit in a tilted ellipse around opponent
+            const orbitTilt = 0.4;  // How much the orbit tilts in Y
+            const zRadius = circleRadius * 0.8;  // Elliptical orbit
 
-            // Adjust target to avoid walls
+            let targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
+            let targetZ = opponent.z + Math.sin(this.circleAngle) * zRadius;
+            let targetY = opponent.y - 80 + Math.sin(this.circleAngle) * circleRadius * orbitTilt;
+
+            // Add vertical bobbing for more dynamic flight
+            targetY += Math.sin(verticalAngle) * 30;
+
+            // Wall avoidance
             if (instinctFactor > 0.3) {
                 const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
-                const wallBias = (arenaCenter - targetX) * instinctFactor * 0.3;
+                const wallBias = (arenaCenter - targetX) * instinctFactor * 0.2;
                 targetX += wallBias;
-                // 3D: also avoid front/back walls
-                const zCenter = (ARENA.frontWall + ARENA.backWall) / 2;
-                targetZ = clamp(targetZ, ARENA.backWall + 60, ARENA.frontWall - 60);
+                targetZ = clamp(targetZ, ARENA.backWall + 80, ARENA.frontWall - 80);
             }
 
-            this.vx += (targetX - this.x) * 0.025;
-            this.vy += (targetY - this.y) * 0.025;
-            this.vz += (targetZ - this.z) * 0.025;  // 3D: z movement
-            if (!opponent.isFlying && this.y > opponent.y - 40) {
-                this.vy -= 0.3;
+            // Ceiling/floor avoidance
+            targetY = clamp(targetY, ARENA.ceilingY + 60, ARENA.floorY - 60);
+
+            // Smooth movement toward target
+            this.vx += (targetX - this.x) * 0.035;
+            this.vy += (targetY - this.y) * 0.035;
+            this.vz += (targetZ - this.z) * 0.035;
+
+            // Maintain height advantage over grounded opponents
+            if (!opponent.isFlying && this.y > opponent.y - 50) {
+                this.vy -= 0.4;
             }
+
+            // Subtle z-weave for unpredictability
+            this.vz += Math.sin(this.moveTimer / 8) * 0.15;
+
         } else if (this.isWallcrawler && this.onWall) {
-            const targetY = opponent.y;
-            this.vy = Math.sign(targetY - this.y) * speed * 2;
-        } else {
-            // 3D: Ground circling in XZ plane
-            let circleForceX = Math.cos(this.circleAngle) * speed * 2;
-            let circleForceZ = Math.sin(this.circleAngle) * speed * 1.5;  // 3D: z circle force
+            // Wall circling - move up and down while tracking
+            const targetY = opponent.y + Math.sin(this.circleAngle * 2) * 50;
+            this.vy = clamp((targetY - this.y) * 0.1, -speed * 3, speed * 3);
 
-            // High instinct: bias movement away from walls while circling
+        } else {
+            // GROUND BUG - Full 3D circling around opponent
+            // Circle in the XZ plane with occasional feints
+            const effectiveRadius = circleRadius * (1 + Math.sin(verticalAngle) * 0.2);
+            let targetX = opponent.x + Math.cos(this.circleAngle) * effectiveRadius;
+            let targetZ = opponent.z + Math.sin(this.circleAngle) * effectiveRadius * 0.8;
+
+            // Wall avoidance
             if (iAmCornered && instinctFactor > 0.3) {
-                circleForceX += wallAvoidance * speed * 3;
-                // Reverse circle direction if it would push us into wall
-                const predictedX = this.x + circleForceX * 10;
+                targetX += wallAvoidance * 50;
+                // Reverse direction if heading into wall
+                const predictedX = this.x + (targetX - this.x) * 0.5;
                 if (predictedX < ARENA.leftWall + 80 || predictedX > ARENA.rightWall - 80) {
-                    this.circleAngle += Math.PI; // Reverse direction
+                    this.circleAngle += Math.PI;
+                    targetX = opponent.x + Math.cos(this.circleAngle) * effectiveRadius;
                 }
             }
 
-            // 3D: also check z walls
-            const predictedZ = this.z + circleForceZ * 10;
-            if (predictedZ < ARENA.backWall + 60 || predictedZ > ARENA.frontWall - 60) {
-                circleForceZ *= -0.5;  // Reduce z force near z walls
-            }
+            // Z-wall avoidance
+            targetZ = clamp(targetZ, ARENA.backWall + 60, ARENA.frontWall - 60);
 
-            this.vx += circleForceX;
-            this.vz += circleForceZ;  // 3D: z movement
-            if (this.grounded && Math.random() < 0.02) {
-                this.jump(0.5);
+            // Move toward target position
+            this.vx += (targetX - this.x) * 0.04;
+            this.vz += (targetZ - this.z) * 0.04;
+
+            // Occasional hop for unpredictability
+            if (this.grounded && Math.random() < 0.015 + instinctFactor * 0.02) {
+                this.jump(0.4);
+                // Small lateral hop
+                this.vx += (Math.random() - 0.5) * 3;
+                this.vz += (Math.random() - 0.5) * 3;
             }
         }
 
-        const breakoutTime = Math.floor(120 - this.drives.aggression * 80);
-        if (this.aiStateTimer > breakoutTime) {
+        // Break out of circling when aggressive enough - faster engagement
+        const breakoutTime = Math.floor(60 - this.drives.aggression * 50);
+        if (this.aiStateTimer > breakoutTime || dist < attackRange * 1.2) {
             this.aiState = 'aggressive';
             this.aiStateTimer = 0;
         }
@@ -801,75 +872,126 @@ class Fighter {
         const speed = 0.25 + (this.genome.speed / 200);
         const instinctFactor = this.genome.instinct / 100;
 
-        // High instinct: don't retreat into walls - retreat toward center or sideways
+        // Calculate escape vectors
         const iAmCornered = this.isCornered(100);
+        const iAmCorneredZ = this.z > ARENA.frontWall - 80 || this.z < ARENA.backWall + 80;
         const escapeDir = this.getEscapeDirection();
-        const retreatDir = -Math.sign(dx); // Default: away from opponent
-        const retreatDirZ = -Math.sign(dz);  // 3D: away from opponent in z
+        const escapeDirZ = this.z > 0 ? -1 : 1;  // Toward z-center
+
+        // Default: away from opponent
+        const retreatDir = -Math.sign(dx) || (Math.random() > 0.5 ? 1 : -1);
+        const retreatDirZ = -Math.sign(dz) || (Math.random() > 0.5 ? 1 : -1);
 
         if (this.isFlying) {
-            // Flying: retreat with wall awareness - 3D
+            // FLYING RETREAT - use full 3D space to escape
+            // Primary strategy: gain altitude while creating distance
+
+            // Climb away - higher = safer
+            this.vy -= 0.7;
+
+            // Wall-aware horizontal retreat
             let retreatX = retreatDir;
-            let retreatZ = retreatDirZ * 0.5;  // 3D: retreat in z too
-            if (iAmCornered && instinctFactor > 0.3) {
-                // Don't fly into wall - bias toward center
-                retreatX = escapeDir * 0.7 + retreatDir * 0.3;
+            let retreatZ = retreatDirZ;
+
+            if (iAmCornered) {
+                // X-cornered: escape toward center
+                retreatX = escapeDir * 0.8 + retreatDir * 0.2;
             }
-            this.vx += retreatX * speed * 1.5;
-            this.vz += retreatZ * speed;  // 3D: z retreat
-            this.vy -= 0.5;
+            if (iAmCorneredZ) {
+                // Z-cornered: escape toward z-center
+                retreatZ = escapeDirZ * 0.8 + retreatDirZ * 0.2;
+            }
+
+            // High instinct: evasive maneuvers while retreating
+            if (instinctFactor > 0.4) {
+                const evadePhase = this.moveTimer / 6;
+                retreatX += Math.sin(evadePhase) * instinctFactor * 0.5;
+                retreatZ += Math.cos(evadePhase) * instinctFactor * 0.5;
+            }
+
+            this.vx += retreatX * speed * 1.8;
+            this.vz += retreatZ * speed * 1.5;
+
+            // Ceiling bounce
             if (this.y < ARENA.ceilingY + 80) {
-                this.vy += 0.3;
+                this.vy += 0.5;
             }
-            // 3D: bounce off z walls
-            if (this.z > ARENA.frontWall - 60) this.vz -= 0.3;
-            if (this.z < ARENA.backWall + 60) this.vz += 0.3;
+
+            // If opponent is also flying and close, perform evasive dive
+            if (opponent.isFlying && dist < 150 && Math.random() < 0.03) {
+                this.vy += 1.5;  // Sudden dive
+                this.vz += (Math.random() > 0.5 ? 1 : -1) * speed * 3;
+            }
+
         } else if (this.isWallcrawler) {
             if (this.onWall) {
+                // Climb up for safety
                 this.vy = -speed * 4;
             } else {
-                const nearestWall = this.x < ARENA.width / 2 ? 'left' : 'right';
+                // Rush to nearest wall for safety
+                const nearestWall = this.x < (ARENA.leftWall + ARENA.rightWall) / 2 ? 'left' : 'right';
                 this.vx += nearestWall === 'left' ? -speed * 3 : speed * 3;
+                // Also retreat in z
+                this.vz += retreatDirZ * speed * 0.5;
             }
-        } else {
-            // Ground retreat with wall awareness
-            if (iAmCornered && instinctFactor > 0.3) {
-                // Cornered! High instinct bugs try to escape sideways/past opponent
-                const panicFactor = this.getWallProximity(); // 0-1, higher = more cornered
 
-                if (panicFactor > 0.8 && instinctFactor > 0.5) {
-                    // Critically cornered - try to slip past opponent
-                    // Jump over or dash through
-                    if (this.grounded && Math.random() < 0.15 * instinctFactor) {
+        } else {
+            // GROUND RETREAT - 3D escape routes
+            const panicFactor = this.getWallProximity();
+            const panicFactorZ = Math.abs(this.z) / (ARENA.frontWall - 50);
+
+            if ((iAmCornered || iAmCorneredZ) && instinctFactor > 0.3) {
+                // CORNERED - use 3D space to escape
+
+                if (panicFactor > 0.7 || panicFactorZ > 0.7) {
+                    // Critically cornered - desperate escape
+                    if (this.grounded && Math.random() < 0.12 * instinctFactor) {
                         this.jump(1.0);
-                        this.vx += escapeDir * 6; // Dash toward center
-                        this.vz += retreatDirZ * 3;  // 3D: z escape
+                        // Jump in best escape direction
+                        if (iAmCornered) {
+                            this.vx += escapeDir * 7;
+                        } else {
+                            this.vx += retreatDir * 4;
+                        }
+                        if (iAmCorneredZ) {
+                            this.vz += escapeDirZ * 6;
+                        } else {
+                            this.vz += retreatDirZ * 4;
+                        }
                     } else {
-                        // Strafe toward center
-                        this.vx += escapeDir * speed * 2;
-                        this.vz += retreatDirZ * speed;  // 3D: z retreat
+                        // Strafe escape in 3D
+                        this.vx += (iAmCornered ? escapeDir : retreatDir) * speed * 1.5;
+                        this.vz += (iAmCorneredZ ? escapeDirZ : retreatDirZ) * speed * 1.5;
                     }
                 } else {
-                    // Cornered but not critical - retreat at angle toward center
-                    this.vx += (retreatDir * 0.5 + escapeDir * 0.5 * instinctFactor) * speed;
-                    this.vz += retreatDirZ * speed * 0.5;  // 3D: z retreat
+                    // Partially cornered - angled retreat
+                    this.vx += (retreatDir * 0.4 + escapeDir * 0.6 * instinctFactor) * speed * 1.2;
+                    this.vz += (retreatDirZ * 0.4 + escapeDirZ * 0.6 * instinctFactor) * speed * 1.2;
                 }
+
             } else {
-                // Not cornered or low instinct - normal retreat
-                this.vx += retreatDir * speed;
-                this.vz += retreatDirZ * speed * 0.3;  // 3D: slight z retreat
+                // Not cornered - standard 3D retreat
+                this.vx += retreatDir * speed * 1.2;
+                this.vz += retreatDirZ * speed * 0.8;
+
+                // Slight lateral movement for unpredictability
+                if (instinctFactor > 0.3) {
+                    const dodgeDir = Math.sin(this.moveTimer / 5) * instinctFactor;
+                    this.vz += dodgeDir * speed;
+                }
             }
 
-            if (this.grounded && Math.random() < 0.05) {
-                this.jump(0.6);
-                // Jump toward center if cornered, away from opponent otherwise
-                this.vx += (iAmCornered && instinctFactor > 0.4) ? escapeDir * 3 : retreatDir * 3;
-                this.vz += retreatDirZ * 2;  // 3D: z jump
+            // Occasional retreat hop
+            if (this.grounded && Math.random() < 0.04 + instinctFactor * 0.02) {
+                this.jump(0.5);
+                this.vx += (iAmCornered ? escapeDir : retreatDir) * 2;
+                this.vz += (iAmCorneredZ ? escapeDirZ : retreatDirZ) * 2;
             }
         }
 
-        const retreatDuration = Math.floor(40 + this.drives.caution * 60 - this.drives.aggression * 30);
-        if (this.aiStateTimer > retreatDuration || dist > 300) {
+        // Exit retreat when safe
+        const retreatDuration = Math.floor(50 + this.drives.caution * 50 - this.drives.aggression * 25);
+        if (this.aiStateTimer > retreatDuration || dist > 280) {
             this.aiState = 'circling';
             this.aiStateTimer = 0;
         }
@@ -1014,6 +1136,10 @@ class Fighter {
             x: Math.round(this.x * 10) / 10,
             y: Math.round(this.y * 10) / 10,
             z: Math.round(this.z * 10) / 10,  // 3D: z coordinate
+            // Velocity for visual tilt/banking
+            vx: Math.round(this.vx * 10) / 10,
+            vy: Math.round(this.vy * 10) / 10,
+            vz: Math.round(this.vz * 10) / 10,
             hp: this.hp,
             maxHp: this.maxHp,
             stamina: Math.round(this.stamina),
@@ -1024,6 +1150,7 @@ class Fighter {
             facingRight: this.facingRight,
             onWall: this.onWall,
             wallSide: this.wallSide,
+            grounded: this.grounded,
             squash: Math.round(this.squash * 100) / 100,
             stretch: Math.round(this.stretch * 100) / 100,
             lungeX: Math.round(this.lungeX * 10) / 10,
@@ -1045,6 +1172,7 @@ class Fighter {
             // 3D mobility info
             isFlying: this.isFlying,
             isWallcrawler: this.isWallcrawler,
+            isDiving: this.isDiving || false,
         };
     }
 }
@@ -1344,6 +1472,20 @@ class Simulation {
             if (hitRoll > dodgeRoll) {
                 // Calculate damage
                 let damage = Math.floor((attacker.genome.bulk + attacker.genome.fury) / 10) + rollDice(6);
+
+                // DIVE ATTACK BONUS - flying bug attacking from above
+                const isDiveAttack = attacker.isFlying && attacker.isDiving && attacker.y < target.y;
+                if (isDiveAttack) {
+                    const heightBonus = Math.min(1.5, 1 + Math.abs(target.y - attacker.y) / 200);
+                    damage = Math.floor(damage * heightBonus);
+                    this.addEvent('commentary', 'DIVE ATTACK!', '#f80');
+                }
+
+                // HEIGHT ADVANTAGE BONUS - any bug attacking from above
+                const heightAdvantage = target.y - attacker.y;
+                if (heightAdvantage > 40 && !isDiveAttack) {
+                    damage = Math.floor(damage * 1.15);  // 15% bonus
+                }
 
                 // Defense reduction
                 if (target.genome.defense === 'shell') {

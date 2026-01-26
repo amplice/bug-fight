@@ -1,6 +1,6 @@
 {
   "name": "bugfights",
-  "version": "1.0.0",
+  "version": "0.3.0-alpha",
   "description": "24/7 Bug Fighting Simulation",
   "main": "server/index.js",
   "scripts": {

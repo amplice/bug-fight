@@ -15,7 +15,7 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 4. **No spectacle for spectacle's sake** - Effects serve clarity, not flash
 
 ## Current State
-Core emergent combat system implemented. Stripped scripted spectacle in favor of behavior-driven fights.
+**3D-only mode.** Core emergent combat system with full 3D rendering. Bugs fight in a true 3D arena with height, depth, and tactical positioning.
 
 ### Implemented Systems
 
@@ -42,10 +42,29 @@ Core emergent combat system implemented. Stripped scripted spectacle in favor of
 - High aggression = faster approach, quicker engagement
 - High caution = wider circling, longer retreat
 
-**Mobility Tactics:**
-- **Flyers**: Maintain height advantage, dive attacks from above, retreat upward when hurt, circle above ground opponents
-- **Wallcrawlers**: Actively seek walls when exhausted/retreating, climb to match opponent height, pounce attacks from wall, use walls for stamina recovery
-- **Ground bugs**: Use tactical positioning based on instinct
+**True 3D Combat:**
+- Bugs fight in full 3D space with height (Y), width (X), and depth (Z)
+- AI uses all three dimensions for tactical positioning
+- Distance calculations and collision use full 3D vectors
+
+**Mobility Tactics (3D-Enhanced):**
+- **Flyers**:
+  - Air-to-air dogfights with full 3D pursuit
+  - Gain altitude advantage before diving
+  - Dive attacks from above deal bonus damage (up to 50% based on height)
+  - Banking/strafing maneuvers while pursuing
+  - Figure-8 circling patterns in 3D space
+  - Retreat upward and laterally when hurt
+- **Wallcrawlers**:
+  - Actively seek walls when exhausted/retreating
+  - Climb to match opponent height
+  - Wall-to-wall pounce attacks with Z-axis targeting
+  - Use walls for stamina recovery
+  - Visual wall-climbing rotation
+- **Ground bugs**:
+  - 3D flanking maneuvers (approach from side/behind in Z-axis)
+  - Use full arena depth for tactical positioning
+  - Jump attacks target opponents in all 3 dimensions
 
 **Positioning (Instinct-based):**
 - High instinct bugs think tactically about space
@@ -54,15 +73,18 @@ Core emergent combat system implemented. Stripped scripted spectacle in favor of
 - Flank during circling instead of head-on approach
 - Maintain optimal weapon range (back off if too close)
 
-**Visual Legibility (Body Language):**
-- **Posture tilt**: Aggressive bugs lean forward, cautious bugs lean back
-- **Exhaustion droop**: Low stamina bugs droop forward
-- **Color tint**: High aggression = red tint, high caution = blue tint
+**Visual Legibility (3D Body Language):**
+- **Velocity-based tilt**: Bugs bank into turns and pitch when climbing/diving
+- **Wing speed**: Flying bugs' wing beat increases with speed
+- **Motion trails**: Fast-moving bugs leave colored trails (orange=diving, blue=flying, red=aggressive)
+- **Dive animation**: Nose-down pitch during dive attacks
+- **Wall-climbing pose**: Bugs rotate to face wall when climbing
 - **State indicator**: Small symbol below health bar shows AI state
   - → = aggressive (red)
   - ◯ = circling (yellow)
   - ← = retreating (blue)
   - ✕ = stunned (red)
+- **Color tint**: Subtle aggression (red) / caution (blue) emissive tint
 
 ### Removed (Scripted/Forced Drama)
 - Finishing moves system
@@ -77,6 +99,11 @@ Core emergent combat system implemented. Stripped scripted spectacle in favor of
 - Aggressive vs cautious = cat and mouse
 - Momentum shifts when drives flip from damage
 - Natural rhythm: engage → exhaust → circle → recover → re-engage
+- **3D-specific emergent behaviors:**
+  - Flyer vs flyer = aerial dogfights with altitude advantage battles
+  - Flyer vs ground = dive bombing and evasive retreats
+  - Ground vs ground = 3D flanking and cornering maneuvers
+  - Wallcrawler ambushes = climb high, wait, pounce from above
 
 ## Architecture
 
@@ -145,12 +172,14 @@ const rng = createSeededRNG(seed);
 
 ### Files
 - `server/index.js` - HTTP server, WebSocket handling
-- `server/simulation.js` - Game engine, Fighter class, combat loop
+- `server/simulation.js` - Game engine, Fighter class, 3D combat AI
 - `server/roster.js` - Persistent bug roster management
-- `public/index.html` - Canvas and betting UI
+- `server/BugGenome.js` - Bug genetics and genome generation
+- `public/index.html` - 3D arena and betting UI
 - `public/js/client.js` - WebSocket client, betting logic, UI updates
-- `public/js/renderer.js` - Canvas rendering, animations, pre-fight screen
-- `public/js/procedural.js` - BugGenome, sprite generation
+- `public/js/renderer3d.js` - Three.js 3D rendering, camera controls, effects
+- `public/js/bugGenerator3d.js` - 3D bug mesh generation, BugAnimator class
+- `public/js/procedural.js` - Client-side BugGenome for stats display
 
 ### Key Stats
 - **Bulk** - HP, stamina pool
@@ -180,17 +209,21 @@ Keep these simple. They affect range and damage type, not complex behaviors.
 
 ## Running
 
-**Server-Authoritative Mode (Production):**
 ```bash
 npm install
 npm start
 ```
-Then open http://localhost:8080 (or http://142.93.44.112:8080)
+Then open http://localhost:8080
 
-All viewers see the same fights in real-time via WebSocket.
-
-**Legacy Client-Only Mode:**
-Open `index.html` directly in browser (each viewer sees different fights).
+All viewers see the same 3D fights in real-time via WebSocket.
 
 ## Git Workflow
 Commit and push after every significant change (new features, bug fixes, architecture changes). Don't let work pile up uncommitted.
+
+## Version History
+
+**Last 2D-only commit:** `bcd6826` - "Add knockback, wall stuns, and wall-aware AI"
+- To restore 2D version: `git checkout bcd6826`
+- This was the final stable 2D version before 3D conversion began
+
+**Current version:** `v0.3.0-alpha` - Full 3D with shape-based bugs

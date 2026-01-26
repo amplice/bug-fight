@@ -7,6 +7,7 @@ const path = require('path');
 const WebSocket = require('ws');
 
 const { Simulation, TICK_RATE, TICK_MS } = require('./simulation');
+const { version } = require('../package.json');
 
 // ============================================
 // HTTP SERVER (Static Files)
@@ -159,9 +160,10 @@ setInterval(gameLoop, TICK_MS);
 const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, () => {
+    const versionPadded = version.padEnd(14);
     console.log(`
 ╔════════════════════════════════════════════╗
-║         BUG FIGHTS SERVER v1.0             ║
+║         BUG FIGHTS SERVER ${versionPadded}║
 ╠════════════════════════════════════════════╣
 ║  HTTP Server:  http://localhost:${PORT}       ║
 ║  WebSocket:    ws://localhost:${PORT}         ║
