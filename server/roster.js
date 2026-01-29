@@ -6,7 +6,7 @@ const path = require('path');
 const BugGenome = require('./BugGenome');
 
 const ROSTER_FILE = path.join(__dirname, '..', 'roster.json');
-const ROSTER_SIZE = 10;
+const ROSTER_SIZE = 20;
 
 class RosterManager {
     constructor() {

@@ -324,8 +324,8 @@ class Fighter {
         // Left bug faces right (+X), right bug faces left (-X)
         this.facingAngle = side === 'left' ? Math.PI / 2 : -Math.PI / 2;
 
-        // Combat stats
-        this.maxHp = 30 + Math.floor(genome.bulk * 1.2);
+        // Combat stats - high HP for longer fights (3-4 min target)
+        this.maxHp = 150 + Math.floor(genome.bulk * 5);
         this.hp = this.maxHp;
         this.poisoned = 0;
         this.attackCooldown = 40 + Math.random() * 35;
@@ -1743,7 +1743,7 @@ class Simulation {
             new Fighter(genome2, 'right', bug2.name),
         ];
 
-        this.attackCooldowns = [40 + Math.random() * 35, 40 + Math.random() * 35];
+        this.attackCooldowns = [30 + Math.random() * 25, 30 + Math.random() * 25];
 
         // Initialize fight logger
         fightLogger.reset(bug1.name, bug2.name);
@@ -2066,9 +2066,9 @@ class Simulation {
                 });
 
                 // Reset cooldown with penalty for missing
-                const baseCD = 75 - attacker.genome.speed / 4;
-                const missPenalty = 15 + attackerMomentum * 20;
-                this.attackCooldowns[attackerIndex] = baseCD + missPenalty + Math.random() * 20;
+                const baseCD = 55 - attacker.genome.speed / 4;
+                const missPenalty = 10 + attackerMomentum * 15;
+                this.attackCooldowns[attackerIndex] = baseCD + missPenalty + Math.random() * 15;
                 return;
             }
 
@@ -2175,14 +2175,14 @@ class Simulation {
                     this.addEvent('commentary', 'CAUGHT OFF-BALANCE!', '#f80');
                 }
 
-                const baseKnockback = isCrit ? 5 : 3;  // Reduced from 12/7
-                const knockbackForce = baseKnockback * Math.sqrt(massRatio) * weaponKnockback * defenseResist * momentumVulnerability * (0.8 + damageRatio * 0.2);
+                const baseKnockback = isCrit ? 8 : 5;  // Increased from 5/3
+                const knockbackForce = baseKnockback * Math.sqrt(massRatio) * weaponKnockback * defenseResist * momentumVulnerability * (0.8 + damageRatio * 0.3);
 
                 // 3D: Calculate 3D direction vector for knockback
                 const dirZ = dist > 0 ? dz / dist : 0;
                 target.vx += dirX * knockbackForce;
-                target.vy += dirY * knockbackForce * 0.2 - 1; // Reduced upward pop
-                target.vz += dirZ * knockbackForce * 0.5;  // 3D: z knockback reduced
+                target.vy += dirY * knockbackForce * 0.3 - 2; // More upward pop
+                target.vz += dirZ * knockbackForce * 0.6;  // More z knockback
 
                 // Track knockback state for wall stun detection
                 target.isKnockedBack = true;
@@ -2245,9 +2245,9 @@ class Simulation {
                 });
             }
 
-            // Reset cooldown - longer for more readable fights
-            const baseCD = 75 - attacker.genome.speed / 4;
-            this.attackCooldowns[attackerIndex] = baseCD + Math.random() * 25;
+            // Reset cooldown
+            const baseCD = 55 - attacker.genome.speed / 4;
+            this.attackCooldowns[attackerIndex] = baseCD + Math.random() * 20;
         }
     }
 

@@ -539,8 +539,9 @@ function updateBugs(state, deltaTime) {
             const stayY = isDead ? floorY : bug.userData.deathFall.lastAliveY;
             bug.position.set(fallX, stayY, fallZ);
         } else {
-            // Normal positioning
-            bug.position.set(pos3d.x, pos3d.y, pos3d.z);
+            // Normal positioning - clamp Y to stay within arena bounds
+            const clampedY = Math.min(pos3d.y, ARENA_3D.maxY - 20);  // Keep below ceiling with small margin
+            bug.position.set(pos3d.x, clampedY, pos3d.z);
         }
 
         // === ROTATION TO FACE OPPONENT ===
@@ -639,6 +640,19 @@ function updateBugs(state, deltaTime) {
 
             // Combine: apply q1 first, then q2
             bug.quaternion.copy(q1).premultiply(q2);
+
+            // Push bug position toward wall so feet touch the surface
+            // The bug's body center is offset from the wall, so push it closer
+            const wallOffset = 15;  // Distance to push toward wall
+            if (fighter.wallSide === 'left') {
+                bug.position.x = ARENA_3D.minX + wallOffset;
+            } else if (fighter.wallSide === 'right') {
+                bug.position.x = ARENA_3D.maxX - wallOffset;
+            } else if (fighter.wallSide === 'front') {
+                bug.position.z = ARENA_3D.maxZ - wallOffset;
+            } else if (fighter.wallSide === 'back') {
+                bug.position.z = ARENA_3D.minZ + wallOffset;
+            }
         }
 
         // Animation - pass velocity for speed-based animations
@@ -701,30 +715,57 @@ function clamp3D(value, min, max) {
 // EFFECTS
 // ============================================
 
-function createHitParticles(x, y, z, color = 0xffff00, count = 8) {
-    const particleGeo = new THREE.SphereGeometry(2, 4, 4);
-    const particleMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1 });
+function createHitParticles(x, y, z, color = 0xffff00, count = 8, isCrit = false) {
+    // Mix of spark shapes for more dynamic effect
+    const sphereGeo = new THREE.SphereGeometry(2, 4, 4);
+    const sparkGeo = new THREE.ConeGeometry(1.5, 6, 4);  // Elongated sparks
 
     for (let i = 0; i < count; i++) {
-        if (hitParticles.length >= 100) {
+        if (hitParticles.length >= 150) {
             const old = hitParticles.shift();
             scene.remove(old.mesh);
         }
 
-        const mesh = new THREE.Mesh(particleGeo.clone(), particleMat.clone());
-        mesh.position.set(x, y, z);
+        // Vary particle size - crits get bigger particles
+        const sizeScale = isCrit ? 1.5 + Math.random() * 0.5 : 0.8 + Math.random() * 0.6;
+        const useSpark = Math.random() > 0.4;  // 60% sparks, 40% spheres
 
-        const speed = 3 + Math.random() * 5;
+        const geo = useSpark ? sparkGeo.clone() : sphereGeo.clone();
+        const mat = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 1,
+            emissive: color,
+            emissiveIntensity: 0.5
+        });
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.scale.setScalar(sizeScale);
+
+        // Faster, more explosive speed
+        const speed = (isCrit ? 8 : 5) + Math.random() * 6;
         const angleXZ = Math.random() * Math.PI * 2;
-        const angleY = (Math.random() - 0.3) * Math.PI;
+        const angleY = (Math.random() - 0.2) * Math.PI;  // Bias slightly upward
+
+        const vx = Math.cos(angleXZ) * Math.cos(angleY) * speed;
+        const vy = Math.sin(angleY) * speed + 3;
+        const vz = Math.sin(angleXZ) * Math.cos(angleY) * speed;
+
+        // Orient spark in direction of travel
+        if (useSpark) {
+            mesh.lookAt(x + vx, y + vy, z + vz);
+            mesh.rotateX(Math.PI / 2);
+        }
 
         hitParticles.push({
             mesh: mesh,
-            vx: Math.cos(angleXZ) * Math.cos(angleY) * speed,
-            vy: Math.sin(angleY) * speed + 2,
-            vz: Math.sin(angleXZ) * Math.cos(angleY) * speed,
+            vx: vx,
+            vy: vy,
+            vz: vz,
             life: 1.0,
-            decay: 0.03 + Math.random() * 0.02,
+            decay: 0.04 + Math.random() * 0.02,  // Slightly faster decay
+            isSpark: useSpark,
         });
 
         scene.add(mesh);
@@ -857,10 +898,27 @@ function updateEffects() {
         p.mesh.position.x += p.vx;
         p.mesh.position.y += p.vy;
         p.mesh.position.z += p.vz;
-        p.vy -= 0.15;
+        p.vy -= 0.2;  // Slightly more gravity
+        p.vx *= 0.98;  // Air resistance
+        p.vz *= 0.98;
         p.life -= p.decay;
-        p.mesh.material.opacity = p.life;
-        p.mesh.scale.setScalar(p.life);
+        p.mesh.material.opacity = Math.pow(p.life, 0.5);  // Fade out more gradually at first
+
+        // Sparks orient to direction of travel and shrink lengthwise
+        if (p.isSpark) {
+            const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
+            if (speed > 0.5) {
+                p.mesh.lookAt(
+                    p.mesh.position.x + p.vx,
+                    p.mesh.position.y + p.vy,
+                    p.mesh.position.z + p.vz
+                );
+                p.mesh.rotateX(Math.PI / 2);
+            }
+            p.mesh.scale.set(p.life, p.life * 1.5, p.life);  // Elongated fade
+        } else {
+            p.mesh.scale.setScalar(p.life * 0.8 + 0.2);  // Don't shrink to nothing
+        }
 
         if (p.life <= 0) {
             scene.remove(p.mesh);
@@ -895,16 +953,27 @@ function processEvents(events) {
     events.forEach(event => {
         if (event.type === 'hit') {
             const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
-            const color = event.data.isPoison ? 0x00ff00 : event.data.isCrit ? 0xffff00 : 0xff8800;
-            createHitParticles(pos3d.x, pos3d.y, pos3d.z, color, event.data.isCrit ? 15 : 8);
-            createDamageNumber(pos3d.x, pos3d.y, pos3d.z, event.data.damage, event.data.isCrit, event.data.isPoison);
-            screenShake.intensity = Math.min(10, screenShake.intensity + (event.data.isCrit ? 3 : 1));
+            const isCrit = event.data.isCrit;
+            const isPoison = event.data.isPoison;
+
+            // Color by damage type - orange normal, yellow crit, green poison
+            const color = isPoison ? 0x00ff00 : isCrit ? 0xffff00 : 0xff6600;
+
+            // More particles for bigger hits, even more for crits
+            const particleCount = isCrit ? 20 : 12;
+            createHitParticles(pos3d.x, pos3d.y, pos3d.z, color, particleCount, isCrit);
+            createDamageNumber(pos3d.x, pos3d.y, pos3d.z, event.data.damage, isCrit, isPoison);
+
+            // Stronger screen shake - scales with damage
+            const damageShake = Math.min(event.data.damage / 10, 2);
+            const critBonus = isCrit ? 4 : 0;
+            screenShake.intensity = Math.min(15, screenShake.intensity + damageShake + critBonus + 2);
         }
 
         if (event.type === 'wallImpact') {
             const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
-            createHitParticles(pos3d.x, pos3d.y, pos3d.z, 0x888888, 12);
-            screenShake.intensity = Math.min(10, screenShake.intensity + event.data.stunApplied / 5);
+            createHitParticles(pos3d.x, pos3d.y, pos3d.z, 0x888888, 15, false);
+            screenShake.intensity = Math.min(12, screenShake.intensity + event.data.stunApplied / 3);
         }
     });
 }
