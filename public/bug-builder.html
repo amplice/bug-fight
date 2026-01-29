@@ -184,34 +184,39 @@
             padding-bottom: 10px;
         }
 
-        .color-picker {
+        .color-palette {
             margin-bottom: 20px;
         }
 
-        .color-picker label {
+        .color-palette label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             color: #8b949e;
             font-size: 0.85em;
         }
 
-        .color-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
+        .color-swatches {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
         }
 
-        .color-row input[type="color"] {
-            width: 40px;
-            height: 30px;
-            border: none;
-            border-radius: 4px;
+        .color-swatch {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 6px;
             cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.1s, border-color 0.1s;
         }
 
-        .color-row input[type="range"] {
-            flex: 1;
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+
+        .color-swatch.selected {
+            border-color: #58a6ff;
+            box-shadow: 0 0 8px rgba(88, 166, 255, 0.5);
         }
 
         .slider-group {
@@ -390,15 +395,8 @@
                     <div class="part-option selected" data-value="smooth">Smooth</div>
                     <div class="part-option" data-value="plated">Plated</div>
                     <div class="part-option" data-value="rough">Rough</div>
-                </div>
-            </div>
-
-            <div class="part-category">
-                <h3>Pattern</h3>
-                <div class="part-options" id="pattern-options">
-                    <div class="part-option selected" data-value="solid">Solid</div>
-                    <div class="part-option" data-value="striped">Striped</div>
                     <div class="part-option" data-value="spotted">Spotted</div>
+                    <div class="part-option" data-value="striped">Striped</div>
                 </div>
             </div>
 
@@ -473,6 +471,7 @@
                     <button onclick="playAnimation()">Animate</button>
                     <select id="anim-state" onchange="setAnimState(this.value)">
                         <option value="idle">Idle/Walk</option>
+                        <option value="jump">Jump</option>
                         <option value="attack">Attack</option>
                         <option value="hit">Hit</option>
                         <option value="death">Death</option>
@@ -489,22 +488,33 @@
         <div class="stats-panel">
             <h2>Appearance</h2>
 
-            <div class="color-picker">
-                <div class="color-row">
-                    <label>Primary Color</label>
-                    <input type="color" id="primary-color" value="#4a7c59">
-                </div>
-                <div class="slider-group">
-                    <label>Hue <span id="hue-value">120</span></label>
-                    <input type="range" id="hue-slider" min="0" max="360" value="120">
-                </div>
-                <div class="slider-group">
-                    <label>Saturation <span id="sat-value">50</span>%</label>
-                    <input type="range" id="sat-slider" min="0" max="100" value="50">
-                </div>
-                <div class="slider-group">
-                    <label>Lightness <span id="light-value">40</span>%</label>
-                    <input type="range" id="light-slider" min="10" max="80" value="40">
+            <div class="color-palette">
+                <label>Bug Color</label>
+                <div class="color-swatches" id="color-swatches">
+                    <!-- Row 1: Blacks and grays -->
+                    <div class="color-swatch" data-color="jet-black" style="background: #1a1a1a;" title="Jet Black"></div>
+                    <div class="color-swatch" data-color="charcoal" style="background: #2d2d2d;" title="Charcoal"></div>
+                    <div class="color-swatch" data-color="slate" style="background: #4a4a4a;" title="Slate"></div>
+                    <div class="color-swatch" data-color="ash" style="background: #6b6b6b;" title="Ash"></div>
+                    <div class="color-swatch" data-color="stone" style="background: #8a8a7a;" title="Stone"></div>
+                    <!-- Row 2: Browns -->
+                    <div class="color-swatch" data-color="dark-brown" style="background: #2a1810;" title="Dark Brown"></div>
+                    <div class="color-swatch" data-color="chocolate" style="background: #3d2817;" title="Chocolate"></div>
+                    <div class="color-swatch" data-color="chestnut" style="background: #6b4423;" title="Chestnut"></div>
+                    <div class="color-swatch" data-color="tan" style="background: #a67c52;" title="Tan"></div>
+                    <div class="color-swatch" data-color="cream" style="background: #d4c4a8;" title="Cream"></div>
+                    <!-- Row 3: Reds/Oranges -->
+                    <div class="color-swatch" data-color="rust" style="background: #8b4513;" title="Rust"></div>
+                    <div class="color-swatch" data-color="mahogany" style="background: #6b1c1c;" title="Mahogany"></div>
+                    <div class="color-swatch" data-color="amber" style="background: #b8860b;" title="Amber"></div>
+                    <div class="color-swatch" data-color="copper" style="background: #a0522d;" title="Copper"></div>
+                    <div class="color-swatch" data-color="ochre" style="background: #cc7722;" title="Ochre"></div>
+                    <!-- Row 4: Greens/Blues -->
+                    <div class="color-swatch selected" data-color="forest" style="background: #2d4a2d;" title="Forest Green"></div>
+                    <div class="color-swatch" data-color="moss" style="background: #4a5d3a;" title="Moss"></div>
+                    <div class="color-swatch" data-color="olive" style="background: #5c5c3d;" title="Olive"></div>
+                    <div class="color-swatch" data-color="teal" style="background: #2f4f4f;" title="Teal"></div>
+                    <div class="color-swatch" data-color="navy" style="background: #1e3a5f;" title="Navy"></div>
                 </div>
             </div>
 
@@ -575,6 +585,30 @@
         // Part preview scenes
         let partPreviews = {};
 
+        // Realistic bug color palette
+        const BUG_COLORS = {
+            'jet-black':   { hue: 0,   sat: 0,  light: 10 },
+            'charcoal':    { hue: 0,   sat: 0,  light: 18 },
+            'slate':       { hue: 0,   sat: 0,  light: 29 },
+            'ash':         { hue: 0,   sat: 0,  light: 42 },
+            'stone':       { hue: 60,  sat: 8,  light: 51 },
+            'dark-brown':  { hue: 20,  sat: 40, light: 12 },
+            'chocolate':   { hue: 25,  sat: 45, light: 17 },
+            'chestnut':    { hue: 25,  sat: 50, light: 28 },
+            'tan':         { hue: 28,  sat: 35, light: 49 },
+            'cream':       { hue: 40,  sat: 30, light: 74 },
+            'rust':        { hue: 25,  sat: 75, light: 31 },
+            'mahogany':    { hue: 0,   sat: 60, light: 27 },
+            'amber':       { hue: 45,  sat: 85, light: 38 },
+            'copper':      { hue: 20,  sat: 60, light: 40 },
+            'ochre':       { hue: 35,  sat: 75, light: 47 },
+            'forest':      { hue: 120, sat: 30, light: 24 },
+            'moss':        { hue: 95,  sat: 25, light: 30 },
+            'olive':       { hue: 60,  sat: 20, light: 30 },
+            'teal':        { hue: 180, sat: 25, light: 25 },
+            'navy':        { hue: 215, sat: 55, light: 25 },
+        };
+
         // Current genome configuration
         let currentConfig = {
             weapon: 'mandibles',
@@ -583,15 +617,12 @@
             wingType: 'fly',
             defense: 'none',
             textureType: 'smooth',
-            pattern: 'solid',
             headType: 'round',
             thoraxType: 'compact',
             abdomenType: 'round',
             eyeStyle: 'compound',
             antennaStyle: 'segmented',
-            hue: 120,
-            saturation: 50,
-            lightness: 40,
+            colorName: 'forest',
             bulk: 50,
             speed: 50,
             fury: 50,
@@ -728,7 +759,6 @@
                         case 'wing': currentConfig.wingType = value; break;
                         case 'defense': currentConfig.defense = value; break;
                         case 'texture': currentConfig.textureType = value; break;
-                        case 'pattern': currentConfig.pattern = value; break;
                         case 'head': currentConfig.headType = value; break;
                         case 'thorax': currentConfig.thoraxType = value; break;
                         case 'abdomen': currentConfig.abdomenType = value; break;
@@ -740,8 +770,8 @@
                 });
             });
 
-            // Sliders
-            const sliders = ['hue', 'sat', 'light', 'bulk', 'speed', 'fury', 'instinct'];
+            // Stat sliders
+            const sliders = ['bulk', 'speed', 'fury', 'instinct'];
             sliders.forEach(name => {
                 const slider = document.getElementById(`${name}-slider`);
                 if (slider) {
@@ -750,37 +780,23 @@
                         const display = document.getElementById(`${name}-value`);
                         if (display) display.textContent = value;
 
-                        switch (name) {
-                            case 'hue': currentConfig.hue = value; break;
-                            case 'sat': currentConfig.saturation = value; break;
-                            case 'light': currentConfig.lightness = value; break;
-                            case 'bulk': currentConfig.bulk = value; break;
-                            case 'speed': currentConfig.speed = value; break;
-                            case 'fury': currentConfig.fury = value; break;
-                            case 'instinct': currentConfig.instinct = value; break;
-                        }
-
+                        currentConfig[name] = value;
                         rebuildBug();
                     });
                 }
             });
 
-            // Color picker
-            const colorPicker = document.getElementById('primary-color');
-            colorPicker.addEventListener('input', (e) => {
-                const hex = e.target.value;
-                const hsl = hexToHSL(hex);
-                currentConfig.hue = hsl.h;
-                currentConfig.saturation = hsl.s;
-                currentConfig.lightness = hsl.l;
+            // Color swatches
+            const swatchContainer = document.getElementById('color-swatches');
+            swatchContainer.addEventListener('click', (e) => {
+                const swatch = e.target.closest('.color-swatch');
+                if (!swatch) return;
 
-                document.getElementById('hue-slider').value = hsl.h;
-                document.getElementById('sat-slider').value = hsl.s;
-                document.getElementById('light-slider').value = hsl.l;
-                document.getElementById('hue-value').textContent = hsl.h;
-                document.getElementById('sat-value').textContent = hsl.s;
-                document.getElementById('light-value').textContent = hsl.l;
+                // Deselect all, select clicked
+                swatchContainer.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+                swatch.classList.add('selected');
 
+                currentConfig.colorName = swatch.dataset.color;
                 rebuildBug();
             });
         }
@@ -799,8 +815,6 @@
                 weapon: currentConfig.weapon,
                 defense: currentConfig.defense,
                 textureType: currentConfig.textureType,
-                pattern: currentConfig.pattern,
-                patternSeed: Math.floor(Math.random() * 10000),
                 mobility: currentConfig.mobility,
                 wingType: currentConfig.wingType,
                 legStyle: currentConfig.legStyle,
@@ -810,9 +824,9 @@
                 eyeStyle: currentConfig.eyeStyle,
                 antennaStyle: currentConfig.antennaStyle,
                 color: {
-                    hue: currentConfig.hue,
-                    saturation: currentConfig.saturation / 100,
-                    lightness: currentConfig.lightness / 100,
+                    hue: BUG_COLORS[currentConfig.colorName].hue,
+                    saturation: BUG_COLORS[currentConfig.colorName].sat / 100,
+                    lightness: BUG_COLORS[currentConfig.colorName].light / 100,
                 },
                 getSizeMultiplier: function() {
                     const bulkFactor = this.bulk / 50;
@@ -975,7 +989,6 @@
                 weapon: genome.weapon,
                 defense: genome.defense,
                 textureType: genome.textureType,
-                pattern: genome.pattern,
                 mobility: genome.mobility,
                 legStyle: genome.legStyle,
                 headType: genome.headType,
@@ -1047,13 +1060,12 @@
             const mobility = ['ground', 'winged', 'wallcrawler'];
             const wingTypes = ['fly', 'beetle', 'dragonfly'];
             const defense = ['none', 'shell', 'agility', 'toxic'];
-            const textureTypes = ['smooth', 'plated', 'rough'];
+            const textureTypes = ['smooth', 'plated', 'rough', 'spotted', 'striped'];
             const headTypes = ['round', 'triangular', 'square', 'elongated', 'shield'];
             const thoraxTypes = ['compact', 'elongated', 'wide', 'humped', 'segmented'];
             const abdomenTypes = ['round', 'oval', 'pointed', 'bulbous', 'segmented', 'sac', 'plated', 'tailed'];
             const eyes = ['compound', 'simple', 'stalked', 'multiple', 'sunken'];
             const antennae = ['segmented', 'clubbed', 'whip', 'horned', 'nubs', 'none'];
-            const patterns = ['solid', 'striped', 'spotted'];
 
             currentConfig.weapon = weapons[Math.floor(Math.random() * weapons.length)];
             currentConfig.legStyle = legs[Math.floor(Math.random() * legs.length)];
@@ -1061,15 +1073,13 @@
             currentConfig.wingType = wingTypes[Math.floor(Math.random() * wingTypes.length)];
             currentConfig.defense = defense[Math.floor(Math.random() * defense.length)];
             currentConfig.textureType = textureTypes[Math.floor(Math.random() * textureTypes.length)];
-            currentConfig.pattern = patterns[Math.floor(Math.random() * patterns.length)];
             currentConfig.headType = headTypes[Math.floor(Math.random() * headTypes.length)];
             currentConfig.thoraxType = thoraxTypes[Math.floor(Math.random() * thoraxTypes.length)];
             currentConfig.abdomenType = abdomenTypes[Math.floor(Math.random() * abdomenTypes.length)];
             currentConfig.eyeStyle = eyes[Math.floor(Math.random() * eyes.length)];
             currentConfig.antennaStyle = antennae[Math.floor(Math.random() * antennae.length)];
-            currentConfig.hue = Math.floor(Math.random() * 360);
-            currentConfig.saturation = 30 + Math.floor(Math.random() * 50);
-            currentConfig.lightness = 25 + Math.floor(Math.random() * 35);
+            const colorNames = Object.keys(BUG_COLORS);
+            currentConfig.colorName = colorNames[Math.floor(Math.random() * colorNames.length)];
             currentConfig.bulk = 20 + Math.floor(Math.random() * 80);
             currentConfig.speed = 20 + Math.floor(Math.random() * 80);
             currentConfig.fury = 20 + Math.floor(Math.random() * 80);
@@ -1089,7 +1099,6 @@
                 'wing-options': currentConfig.wingType,
                 'defense-options': currentConfig.defense,
                 'texture-options': currentConfig.textureType,
-                'pattern-options': currentConfig.pattern,
                 'head-options': currentConfig.headType,
                 'thorax-options': currentConfig.thoraxType,
                 'abdomen-options': currentConfig.abdomenType,
@@ -1106,26 +1115,23 @@
                 }
             });
 
-            // Update sliders
-            document.getElementById('hue-slider').value = currentConfig.hue;
-            document.getElementById('sat-slider').value = currentConfig.saturation;
-            document.getElementById('light-slider').value = currentConfig.lightness;
+            // Update stat sliders
             document.getElementById('bulk-slider').value = currentConfig.bulk;
             document.getElementById('speed-slider').value = currentConfig.speed;
             document.getElementById('fury-slider').value = currentConfig.fury;
             document.getElementById('instinct-slider').value = currentConfig.instinct;
 
-            // Update displays
-            document.getElementById('hue-value').textContent = currentConfig.hue;
-            document.getElementById('sat-value').textContent = currentConfig.saturation;
-            document.getElementById('light-value').textContent = currentConfig.lightness;
+            // Update stat displays
             document.getElementById('bulk-value').textContent = currentConfig.bulk;
             document.getElementById('speed-value').textContent = currentConfig.speed;
             document.getElementById('fury-value').textContent = currentConfig.fury;
             document.getElementById('instinct-value').textContent = currentConfig.instinct;
 
-            // Update color picker
-            document.getElementById('primary-color').value = hslToHex(currentConfig.hue, currentConfig.saturation, currentConfig.lightness);
+            // Update color swatches
+            const swatchContainer = document.getElementById('color-swatches');
+            swatchContainer.querySelectorAll('.color-swatch').forEach(swatch => {
+                swatch.classList.toggle('selected', swatch.dataset.color === currentConfig.colorName);
+            });
         }
 
         function exportGenome() {

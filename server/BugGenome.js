@@ -1,6 +1,30 @@
 // Bug Fights - Bug Genome (Server Module)
 // Handles bug stats, traits, colors, and breeding
 
+// Realistic bug color palette
+const BUG_COLORS = [
+    { hue: 0,   sat: 0,   light: 10 },  // jet black
+    { hue: 0,   sat: 0,   light: 18 },  // charcoal
+    { hue: 0,   sat: 0,   light: 29 },  // slate
+    { hue: 0,   sat: 0,   light: 42 },  // ash
+    { hue: 60,  sat: 8,   light: 51 },  // stone
+    { hue: 20,  sat: 40,  light: 12 },  // dark brown
+    { hue: 25,  sat: 45,  light: 17 },  // chocolate
+    { hue: 25,  sat: 50,  light: 28 },  // chestnut
+    { hue: 28,  sat: 35,  light: 49 },  // tan
+    { hue: 40,  sat: 30,  light: 74 },  // cream
+    { hue: 25,  sat: 75,  light: 31 },  // rust
+    { hue: 0,   sat: 60,  light: 27 },  // mahogany
+    { hue: 45,  sat: 85,  light: 38 },  // amber
+    { hue: 20,  sat: 60,  light: 40 },  // copper
+    { hue: 35,  sat: 75,  light: 47 },  // ochre
+    { hue: 120, sat: 30,  light: 24 },  // forest
+    { hue: 95,  sat: 25,  light: 30 },  // moss
+    { hue: 60,  sat: 20,  light: 30 },  // olive
+    { hue: 180, sat: 25,  light: 25 },  // teal
+    { hue: 215, sat: 55,  light: 25 },  // navy
+];
+
 class BugGenome {
     constructor(data = null) {
         if (data) {
@@ -51,20 +75,22 @@ class BugGenome {
         this.legCount = [4, 6, 8][Math.floor(Math.random() * 3)];
         this.legStyle = ['straight', 'curved-back', 'curved-forward', 'short'][Math.floor(Math.random() * 4)];
 
-        this.pattern = ['solid', 'striped', 'spotted'][Math.floor(Math.random() * 3)];
-
-        this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
+        this.weapon = ['mandibles', 'stinger', 'fangs', 'claws', 'pincers', 'horn'][Math.floor(Math.random() * 6)];
         this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
-        this.textureType = ['smooth', 'plated', 'rough'][Math.floor(Math.random() * 3)];
+        this.textureType = ['smooth', 'plated', 'rough', 'spotted', 'striped'][Math.floor(Math.random() * 5)];
+        this.eyeStyle = ['compound', 'simple', 'stalked', 'multiple'][Math.floor(Math.random() * 4)];
+        this.antennaStyle = ['segmented', 'clubbed', 'whip', 'horned', 'none'][Math.floor(Math.random() * 5)];
+        this.wingType = ['fly', 'beetle', 'dragonfly', 'none'][Math.floor(Math.random() * 4)];
 
+        // Pick from realistic color palette
+        const colorChoice = BUG_COLORS[Math.floor(Math.random() * BUG_COLORS.length)];
         this.color = {
-            hue: Math.random() * 360,
-            saturation: 0.5 + Math.random() * 0.4,
-            lightness: 0.35 + Math.random() * 0.25
+            hue: colorChoice.hue,
+            saturation: colorChoice.sat / 100,
+            lightness: colorChoice.light / 100
         };
         this.accentHue = (this.color.hue + 30 + Math.random() * 60) % 360;
-        this.patternSeed = Math.floor(Math.random() * 10000);
     }
 
     breed(other) {
@@ -86,11 +112,13 @@ class BugGenome {
         child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
         child.headType = Math.random() < 0.5 ? this.headType : other.headType;
         child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
-        child.pattern = Math.random() < 0.5 ? this.pattern : other.pattern;
         child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
         child.defense = Math.random() < 0.5 ? this.defense : other.defense;
         child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
         child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
+        child.eyeStyle = Math.random() < 0.5 ? this.eyeStyle : other.eyeStyle;
+        child.antennaStyle = Math.random() < 0.5 ? this.antennaStyle : other.antennaStyle;
+        child.wingType = Math.random() < 0.5 ? this.wingType : other.wingType;
 
         child.color = {
             hue: this.blendHue(this.color.hue, other.color.hue),
@@ -98,7 +126,6 @@ class BugGenome {
             lightness: (this.color.lightness + other.color.lightness) / 2
         };
         child.accentHue = this.blendHue(this.accentHue, other.accentHue);
-        child.patternSeed = Math.floor(Math.random() * 10000);
 
         return child;
     }
@@ -122,7 +149,9 @@ class BugGenome {
             mandibles: ['Crusher', 'Gnasher', 'Chomper', 'Breaker'],
             stinger: ['Piercer', 'Stabber', 'Lancer', 'Spike'],
             fangs: ['Venom', 'Toxic', 'Biter', 'Fang'],
-            claws: ['Slasher', 'Ripper', 'Shredder', 'Razor']
+            claws: ['Slasher', 'Ripper', 'Shredder', 'Razor'],
+            pincers: ['Gripper', 'Clamper', 'Pincher', 'Snapper'],
+            horn: ['Charger', 'Ramhorn', 'Gorer', 'Impaler']
         };
         const suffixes = {
             round: ['Blob', 'Orb', 'Ball', 'Dome'],
@@ -152,14 +181,15 @@ class BugGenome {
             headType: this.headType,
             legCount: this.legCount,
             legStyle: this.legStyle,
-            pattern: this.pattern,
             weapon: this.weapon,
             defense: this.defense,
             mobility: this.mobility,
             textureType: this.textureType,
+            eyeStyle: this.eyeStyle,
+            antennaStyle: this.antennaStyle,
+            wingType: this.wingType,
             color: this.color,
-            accentHue: this.accentHue,
-            patternSeed: this.patternSeed
+            accentHue: this.accentHue
         };
     }
 }

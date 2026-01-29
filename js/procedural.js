@@ -63,13 +63,11 @@ class BugGenome {
         this.legCount = [4, 6, 8][Math.floor(Math.random() * 3)];
         this.legStyle = ['straight', 'curved-back', 'curved-forward', 'short'][Math.floor(Math.random() * 4)];
 
-        // Pattern type
-        this.pattern = ['solid', 'striped', 'spotted'][Math.floor(Math.random() * 3)];
-
         // Combat types
         this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
         this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
+        this.textureType = ['smooth', 'plated', 'rough', 'spotted', 'striped'][Math.floor(Math.random() * 5)];
 
         // Color
         this.color = {
@@ -78,7 +76,6 @@ class BugGenome {
             lightness: 0.35 + Math.random() * 0.25
         };
         this.accentHue = (this.color.hue + 30 + Math.random() * 60) % 360;
-        this.patternSeed = Math.floor(Math.random() * 10000);
     }
 
     breed(other) {
@@ -100,10 +97,10 @@ class BugGenome {
         child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
         child.headType = Math.random() < 0.5 ? this.headType : other.headType;
         child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
-        child.pattern = Math.random() < 0.5 ? this.pattern : other.pattern;
         child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
         child.defense = Math.random() < 0.5 ? this.defense : other.defense;
         child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
+        child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
 
         child.color = {
             hue: this.blendHue(this.color.hue, other.color.hue),
@@ -111,7 +108,6 @@ class BugGenome {
             lightness: (this.color.lightness + other.color.lightness) / 2
         };
         child.accentHue = this.blendHue(this.accentHue, other.accentHue);
-        child.patternSeed = Math.floor(Math.random() * 10000);
 
         return child;
     }
@@ -936,33 +932,33 @@ class BugSpriteGenerator {
     applyPattern(grid) {
         const g = this.genome;
 
-        switch (g.pattern) {
-            case 'striped':
-                this.applyStripes(grid);
-                break;
-            case 'spotted':
-                this.applySpots(grid);
-                break;
+        // Spotted and striped are texture types
+        if (g.textureType === 'spotted') {
+            this.applySpots(grid);
+        } else if (g.textureType === 'striped') {
+            this.applyStripes(grid);
         }
     }
 
     applyStripes(grid) {
-        // Ridge-style vertical stripes - dark lines through the body
-        const stripeSpacing = Math.max(3, Math.floor(this.size / 8));
-        for (let x = 0; x < this.size; x++) {
-            if (x % stripeSpacing === 0) {
-                for (let y = 0; y < this.size; y++) {
-                    // Only apply to body pixels (not background)
-                    if (grid[y][x] !== 0) {
-                        grid[y][x] = 1; // Dark outline color for stripe
-                    }
+        const stripeWidth = 3;
+        const stripeColor = this.genome.color.lightness > 0.45 ? 5 : 6;
+
+        for (let y = 0; y < this.size; y++) {
+            // Horizontal stripes
+            const inStripe = Math.floor(y / stripeWidth) % 2 === 0;
+            if (!inStripe) continue;
+
+            for (let x = 0; x < this.size; x++) {
+                if (grid[y][x] === 3) { // Only on body color
+                    grid[y][x] = stripeColor;
                 }
             }
         }
     }
 
     applySpots(grid) {
-        const seed = this.genome.patternSeed || 0;
+        const seed = Math.floor(Math.random() * 10000);
         const spotCount = 5 + (seed % 4);
 
         const seededRandom = (n) => {
@@ -1076,7 +1072,7 @@ class BugFactory {
                 thoraxType: genome.thoraxType,
                 headType: genome.headType,
                 legStyle: genome.legStyle,
-                pattern: genome.pattern,
+                textureType: genome.textureType,
                 weapon: genome.weapon,
                 defense: genome.defense,
                 mobility: genome.mobility

@@ -209,10 +209,35 @@ Keep these simple. They affect range and damage type, not complex behaviors.
 
 ## Running
 
+The server runs in a **tmux session** called `bugfights` for persistence across Claude sessions.
+
+**Common commands:**
+- **Start/Restart server**: `tmux kill-session -t bugfights 2>/dev/null; tmux new-session -d -s bugfights "cd /home/play/bugfights && node server/index.js"`
+- **View logs**: `tmux attach -t bugfights` (detach with `Ctrl+B` then `D`)
+- **Check status**: `tmux list-sessions`
+- **Kill server**: `tmux kill-session -t bugfights`
+
+**Debug fight action (see what's happening in fights):**
+```bash
+tmux capture-pane -t bugfights -p -S -100
+```
+This captures the last 100 lines of fight logs showing:
+- Combat events (⚔️ hits, 💨 dodges, ❌ misses) with damage and momentum
+- AI state transitions (🔥 aggressive, 🔄 circling, 🏃 retreating, 💫 stunned)
+- Periodic summaries (📈) every 10s with HP, attacks, hit rates
+- Stalemate warnings (⚠️ at 10s, 🚨 at 20s) with detailed diagnosis
+- Fight results with final stats
+
+Use `-S -200` or higher for more history. Useful for diagnosing why bugs are behaving certain ways (both retreating, low stamina, flyer vs grounder mismatches, etc.)
+
+When user says "restart the server", "kill the server", "start the server", etc. - they mean the tmux session.
+
+**Manual run (without tmux):**
 ```bash
 npm install
 npm start
 ```
+
 Then open http://localhost:8080
 
 All viewers see the same 3D fights in real-time via WebSocket.

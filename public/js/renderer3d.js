@@ -34,6 +34,7 @@ let arena = {};
 let bugMeshes = [null, null];
 let bugAnimators = [null, null];
 let lastTime = performance.now();
+let walls = { left: null, right: null, front: null, back: null };
 
 // Camera presets
 const CAMERA_PRESETS = {
@@ -43,7 +44,19 @@ const CAMERA_PRESETS = {
     isometric: { position: { x: 500, y: 400, z: 500 }, target: { x: 0, y: 100, z: 0 } },
 };
 
-let currentPreset = 'front';
+let currentPreset = 'action';  // Default to action camera
+
+// Action camera state
+let actionCamera = {
+    enabled: true,
+    currentPos: { x: 0, y: 300, z: 600 },
+    currentTarget: { x: 0, y: 100, z: 0 },
+    smoothing: 0.03,  // Lower = smoother/slower
+    minDistance: 250,  // Minimum zoom distance
+    maxDistance: 700,  // Maximum zoom distance
+    heightOffset: 150,  // Camera height above midpoint
+    behindOffset: 400,  // Base distance behind the action
+};
 let currentFightNumber = 0;
 
 // Effects
@@ -68,7 +81,7 @@ function initThreeJS() {
     scene.background = new THREE.Color(0x0d1117);
 
     camera = new THREE.PerspectiveCamera(60, 900 / 600, 1, 5000);
-    setCameraPreset('front');
+    setCameraPreset('action');  // Default to action camera
 
     const canvas = document.getElementById('arena3d');
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -151,29 +164,31 @@ function buildArena() {
     const substrateMat = new THREE.PointsMaterial({ size: 5, vertexColors: true, sizeAttenuation: true });
     scene.add(new THREE.Points(substrateGeo, substrateMat));
 
-    // Walls (transparent)
-    const wallMat = new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.1, side: THREE.DoubleSide });
+    // Walls (transparent, with individual materials for climb highlighting)
+    const createWallMat = () => new THREE.MeshBasicMaterial({
+        color: 0x333333, transparent: true, opacity: 0.1, side: THREE.DoubleSide
+    });
 
     const sideWallGeo = new THREE.PlaneGeometry(ARENA_3D.depth, ARENA_3D.height);
-    const leftWall = new THREE.Mesh(sideWallGeo, wallMat);
-    leftWall.position.set(ARENA_3D.minX, ARENA_3D.height / 2, 0);
-    leftWall.rotation.y = Math.PI / 2;
-    scene.add(leftWall);
+    walls.left = new THREE.Mesh(sideWallGeo, createWallMat());
+    walls.left.position.set(ARENA_3D.minX, ARENA_3D.height / 2, 0);
+    walls.left.rotation.y = Math.PI / 2;
+    scene.add(walls.left);
 
-    const rightWall = new THREE.Mesh(sideWallGeo.clone(), wallMat);
-    rightWall.position.set(ARENA_3D.maxX, ARENA_3D.height / 2, 0);
-    rightWall.rotation.y = -Math.PI / 2;
-    scene.add(rightWall);
+    walls.right = new THREE.Mesh(sideWallGeo.clone(), createWallMat());
+    walls.right.position.set(ARENA_3D.maxX, ARENA_3D.height / 2, 0);
+    walls.right.rotation.y = -Math.PI / 2;
+    scene.add(walls.right);
 
     const frontWallGeo = new THREE.PlaneGeometry(ARENA_3D.width, ARENA_3D.height);
-    const frontWall = new THREE.Mesh(frontWallGeo, wallMat);
-    frontWall.position.set(0, ARENA_3D.height / 2, ARENA_3D.maxZ);
-    frontWall.rotation.y = Math.PI;
-    scene.add(frontWall);
+    walls.front = new THREE.Mesh(frontWallGeo, createWallMat());
+    walls.front.position.set(0, ARENA_3D.height / 2, ARENA_3D.maxZ);
+    walls.front.rotation.y = Math.PI;
+    scene.add(walls.front);
 
-    const backWall = new THREE.Mesh(frontWallGeo.clone(), wallMat);
-    backWall.position.set(0, ARENA_3D.height / 2, ARENA_3D.minZ);
-    scene.add(backWall);
+    walls.back = new THREE.Mesh(frontWallGeo.clone(), createWallMat());
+    walls.back.position.set(0, ARENA_3D.height / 2, ARENA_3D.minZ);
+    scene.add(walls.back);
 
     // Ceiling
     const ceilingMat = new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.05, side: THREE.DoubleSide });
@@ -256,14 +271,98 @@ function addPlants() {
 // ============================================
 
 function setCameraPreset(presetName) {
+    if (presetName === 'action') {
+        currentPreset = 'action';
+        actionCamera.enabled = true;
+        return;
+    }
+
     const preset = CAMERA_PRESETS[presetName];
     if (!preset) return;
 
     currentPreset = presetName;
+    actionCamera.enabled = false;
     camera.position.set(preset.position.x, preset.position.y, preset.position.z);
     if (controls) {
         controls.target.set(preset.target.x, preset.target.y, preset.target.z);
         controls.update();
+    }
+}
+
+function updateActionCamera(state) {
+    if (!actionCamera.enabled || !state || !state.fighters || state.fighters.length < 2) {
+        return;
+    }
+
+    const f1 = state.fighters[0];
+    const f2 = state.fighters[1];
+
+    if (!f1 || !f2) return;
+
+    // Get 3D positions
+    const pos1 = map2Dto3D(f1.x, f1.y, f1.z || 0);
+    const pos2 = map2Dto3D(f2.x, f2.y, f2.z || 0);
+
+    // Calculate midpoint between bugs
+    const midX = (pos1.x + pos2.x) / 2;
+    const midY = (pos1.y + pos2.y) / 2;
+    const midZ = (pos1.z + pos2.z) / 2;
+
+    // Calculate distance between bugs for zoom
+    const dx = pos2.x - pos1.x;
+    const dy = pos2.y - pos1.y;
+    const dz = pos2.z - pos1.z;
+    const bugDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    // Calculate camera distance based on bug separation
+    // Closer bugs = closer camera, further bugs = further camera
+    const zoomFactor = Math.max(actionCamera.minDistance,
+                                Math.min(actionCamera.maxDistance,
+                                         bugDistance * 1.2 + 200));
+
+    // Calculate camera angle - orbit around the action
+    // Use midpoint position to determine viewing angle
+    const angleFromCenter = Math.atan2(midX, midZ);
+
+    // Position camera to see both bugs well
+    // Offset perpendicular to the line between bugs for better view
+    const perpAngle = Math.atan2(dx, dz) + Math.PI / 2;
+
+    // Target position - looking at the midpoint, slightly above
+    const targetX = midX;
+    const targetY = Math.max(80, midY);
+    const targetZ = midZ;
+
+    // Camera position - behind and above the action
+    // Mix between perpendicular view and front view for dynamic feel
+    const cameraAngle = perpAngle * 0.6 + angleFromCenter * 0.4;
+    const idealX = midX + Math.sin(cameraAngle) * zoomFactor;
+    const idealY = targetY + actionCamera.heightOffset + (bugDistance * 0.15);
+    const idealZ = midZ + Math.cos(cameraAngle) * zoomFactor;
+
+    // Smooth interpolation
+    const smoothing = actionCamera.smoothing;
+    actionCamera.currentPos.x += (idealX - actionCamera.currentPos.x) * smoothing;
+    actionCamera.currentPos.y += (idealY - actionCamera.currentPos.y) * smoothing;
+    actionCamera.currentPos.z += (idealZ - actionCamera.currentPos.z) * smoothing;
+
+    actionCamera.currentTarget.x += (targetX - actionCamera.currentTarget.x) * smoothing * 1.5;
+    actionCamera.currentTarget.y += (targetY - actionCamera.currentTarget.y) * smoothing * 1.5;
+    actionCamera.currentTarget.z += (targetZ - actionCamera.currentTarget.z) * smoothing * 1.5;
+
+    // Apply to camera
+    camera.position.set(
+        actionCamera.currentPos.x,
+        actionCamera.currentPos.y,
+        actionCamera.currentPos.z
+    );
+
+    if (controls) {
+        controls.target.set(
+            actionCamera.currentTarget.x,
+            actionCamera.currentTarget.y,
+            actionCamera.currentTarget.z
+        );
     }
 }
 
@@ -273,6 +372,7 @@ function onKeyDown(event) {
         case '2': setCameraPreset('side'); break;
         case '3': setCameraPreset('top'); break;
         case '4': setCameraPreset('isometric'); break;
+        case '5': setCameraPreset('action'); break;
         case 'r': case 'R': setCameraPreset(currentPreset); break;
     }
 }
@@ -305,6 +405,23 @@ function updateBugs(state, deltaTime) {
     if (!state.fighters || state.fighters.length < 2) return;
     if (!state.bugs || state.bugs.length < 2) return;
 
+    // Reset wall highlighting
+    Object.values(walls).forEach(wall => {
+        if (wall && wall.material) {
+            wall.material.color.setHex(0x333333);
+            wall.material.opacity = 0.1;
+        }
+    });
+
+    // Highlight walls being climbed
+    state.fighters.forEach(fighter => {
+        if (fighter.onWall && fighter.wallSide && walls[fighter.wallSide]) {
+            const wall = walls[fighter.wallSide];
+            wall.material.color.setHex(0x44ff88);  // Green tint
+            wall.material.opacity = 0.2;
+        }
+    });
+
     // Check for new fight
     if (state.fightNumber !== currentFightNumber) {
         // Clear old bugs
@@ -336,69 +453,205 @@ function updateBugs(state, deltaTime) {
         const bug = bugMeshes[index];
         const animator = bugAnimators[index];
 
-        // Position
+        // Position from server
         const pos3d = map2Dto3D(fighter.x, fighter.y, fighter.z || 0);
-        bug.position.set(pos3d.x, pos3d.y, pos3d.z);
 
-        // === VELOCITY-BASED ROTATION ===
+        // Death/Victory fall handling - bugs fall to ground client-side
+        const isDead = fighter.state === 'death';
+        const isVictory = fighter.state === 'victory';
+        const floorY = 20;  // Floor level in 3D coordinates
+
+        // Initialize death fall tracking
+        if (!bug.userData.deathFall) {
+            bug.userData.deathFall = {
+                active: false,
+                startY: 0,
+                currentY: 0,
+                velocityY: 0,
+                landed: false,
+                lastAliveY: pos3d.y,  // Track position before death
+                lastAliveX: pos3d.x,
+                lastAliveZ: pos3d.z
+            };
+        }
+
+        // Track position while alive (save last known airborne position)
+        if (!isDead && !isVictory) {
+            bug.userData.deathFall.lastAliveY = pos3d.y;
+            bug.userData.deathFall.lastAliveX = pos3d.x;
+            bug.userData.deathFall.lastAliveZ = pos3d.z;
+            bug.userData.deathFall.active = false;
+            bug.userData.deathFall.landed = false;
+        }
+
+        // Victory bugs stay where they are (no fall, no teleport)
+        if (isVictory && !bug.userData.deathFall.active) {
+            bug.userData.deathFall.active = true;
+            bug.userData.deathFall.landed = true;  // Don't fall, just stay
+            console.log(`Bug ${index} victory - staying at Y=${bug.userData.deathFall.lastAliveY.toFixed(1)}`);
+        }
+
+        // Dead bugs fall to ground using LAST ALIVE position (not current server position)
+        if (isDead && !bug.userData.deathFall.active) {
+            const startY = bug.userData.deathFall.lastAliveY;
+            // Only fall if we were above ground
+            if (startY > floorY + 5) {
+                bug.userData.deathFall.active = true;
+                bug.userData.deathFall.startY = startY;
+                bug.userData.deathFall.currentY = startY;
+                bug.userData.deathFall.velocityY = 0;
+                bug.userData.deathFall.landed = false;
+                console.log(`Bug ${index} death fall starting from Y=${startY.toFixed(1)}`);
+            } else {
+                // Already on ground, mark as landed immediately
+                bug.userData.deathFall.active = true;
+                bug.userData.deathFall.landed = true;
+            }
+        }
+
+        // Animate the fall (dead bugs only)
+        if (isDead && bug.userData.deathFall.active && !bug.userData.deathFall.landed) {
+            // Apply gravity
+            bug.userData.deathFall.velocityY -= 0.8;  // Gravity (negative because Y+ is up in 3D)
+            bug.userData.deathFall.currentY += bug.userData.deathFall.velocityY;
+
+            // Check for floor collision
+            if (bug.userData.deathFall.currentY <= floorY) {
+                bug.userData.deathFall.currentY = floorY;
+                // Small bounce
+                if (Math.abs(bug.userData.deathFall.velocityY) > 3) {
+                    bug.userData.deathFall.velocityY = -bug.userData.deathFall.velocityY * 0.3;
+                } else {
+                    bug.userData.deathFall.velocityY = 0;
+                    bug.userData.deathFall.landed = true;
+                    console.log(`Bug ${index} landed on floor`);
+                }
+            }
+
+            // Use saved X/Z position (where bug was when it died) and falling Y
+            const fallX = bug.userData.deathFall.lastAliveX;
+            const fallZ = bug.userData.deathFall.lastAliveZ;
+            bug.position.set(fallX, bug.userData.deathFall.currentY, fallZ);
+        } else if (bug.userData.deathFall.active && bug.userData.deathFall.landed) {
+            // Dead: stay on floor, Victory: stay at last position
+            const fallX = bug.userData.deathFall.lastAliveX;
+            const fallZ = bug.userData.deathFall.lastAliveZ;
+            const stayY = isDead ? floorY : bug.userData.deathFall.lastAliveY;
+            bug.position.set(fallX, stayY, fallZ);
+        } else {
+            // Normal positioning
+            bug.position.set(pos3d.x, pos3d.y, pos3d.z);
+        }
+
+        // === ROTATION TO FACE OPPONENT ===
         const vx = fighter.vx || 0;
         const vy = fighter.vy || 0;
         const vz = fighter.vz || 0;
         const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
 
-        // Base rotation (facing direction)
-        let baseRotY = fighter.facingRight ? 0 : Math.PI;
+        // Use facingAngle from server (angle toward opponent in XZ plane)
+        // Server: atan2(dx, dz) where 0 = +Z direction, PI/2 = +X direction
+        // Three.js: rotation.y of 0 = facing +Z (bug's head is at +Z in local space)
+        // These match! No adjustment needed.
+        let baseRotY = fighter.facingAngle !== undefined
+            ? fighter.facingAngle
+            : (fighter.facingRight ? Math.PI / 2 : -Math.PI / 2);
 
-        // Banking (roll) based on lateral velocity - lean into turns
-        const maxBank = Math.PI / 6;  // 30 degrees max
-        const bankAmount = clamp3D(-vz * 0.1, -maxBank, maxBank);
+        // Banking (roll) based on lateral velocity - lean into turns (reduced)
+        const maxBank = Math.PI / 8;  // 22.5 degrees max (was 30)
+        const bankAmount = clamp3D(-vz * 0.05, -maxBank, maxBank);
 
-        // Pitch based on vertical velocity - tilt up/down when climbing/diving
-        const maxPitch = Math.PI / 5;  // 36 degrees max
-        const pitchAmount = clamp3D(vy * 0.08, -maxPitch, maxPitch);
+        // Pitch based on vertical velocity - tilt up/down when climbing/diving (reduced)
+        const maxPitch = Math.PI / 6;  // 30 degrees max (was 36)
+        const pitchAmount = clamp3D(vy * 0.05, -maxPitch, maxPitch);
 
-        // Yaw adjustment when strafing
-        const strafeYaw = clamp3D(vz * 0.05, -Math.PI / 8, Math.PI / 8);
+        // Apply rotations with smoothing (skip if on wall or dead - they have special handling)
+        if (!fighter.onWall && !isDead) {
+            const smoothFactor = 0.12;
+            bug.userData.targetRotX = bug.userData.targetRotX || 0;
+            bug.userData.targetRotY = bug.userData.targetRotY || baseRotY;
+            bug.userData.targetRotZ = bug.userData.targetRotZ || 0;
 
-        // Apply rotations with smoothing
-        const smoothFactor = 0.15;
-        bug.userData.targetRotX = bug.userData.targetRotX || 0;
-        bug.userData.targetRotY = bug.userData.targetRotY || baseRotY;
-        bug.userData.targetRotZ = bug.userData.targetRotZ || 0;
+            bug.userData.targetRotX = pitchAmount;
+            bug.userData.targetRotY = baseRotY;
+            bug.userData.targetRotZ = bankAmount;
 
-        bug.userData.targetRotX = pitchAmount;
-        bug.userData.targetRotY = baseRotY + strafeYaw;
-        bug.userData.targetRotZ = bankAmount;
+            bug.rotation.x += (bug.userData.targetRotX - bug.rotation.x) * smoothFactor;
+            bug.rotation.y += (bug.userData.targetRotY - bug.rotation.y) * smoothFactor;
+            bug.rotation.z += (bug.userData.targetRotZ - bug.rotation.z) * smoothFactor;
 
-        bug.rotation.x += (bug.userData.targetRotX - bug.rotation.x) * smoothFactor;
-        bug.rotation.y += (bug.userData.targetRotY - bug.rotation.y) * smoothFactor;
-        bug.rotation.z += (bug.userData.targetRotZ - bug.rotation.z) * smoothFactor;
+            // Additional visual effects for flying bugs (not dead/victory)
+            if (fighter.isFlying && !isDead && !isVictory) {
+                // Hovering bob when slow
+                if (speed < 3) {
+                    const bob = Math.sin(performance.now() / 200) * 3;
+                    bug.position.y += bob;
+                }
 
-        // Additional visual effects for flying bugs
-        if (fighter.isFlying) {
-            // Hovering bob when slow
-            if (speed < 3) {
-                const bob = Math.sin(performance.now() / 200) * 3;
-                bug.position.y += bob;
-            }
-
-            // Diving visual - stronger pitch
-            if (fighter.isDiving) {
-                bug.rotation.x = Math.max(bug.rotation.x, Math.PI / 4);  // Force nose-down
+                // Diving visual - stronger pitch
+                if (fighter.isDiving) {
+                    bug.rotation.x = Math.max(bug.rotation.x, Math.PI / 4);  // Force nose-down
+                }
             }
         }
 
-        // Wall climbing visual
-        if (fighter.onWall) {
-            if (fighter.wallSide === 'left') {
-                bug.rotation.z = -Math.PI / 2;
-            } else if (fighter.wallSide === 'right') {
-                bug.rotation.z = Math.PI / 2;
-            }
+        // Wall climbing visual - two-step quaternion approach
+        //
+        // Bug model: Head at +Z, Feet at -Y
+        // Goal: Feet toward wall, Head pointing up
+        //
+        // Step 1: Rotate so feet (-Y local) point toward wall
+        // Step 2: Rotate around that axis so head (+Z) points up
+        //
+        // Skip for dead bugs - they fall off walls
+        if (fighter.onWall && !isDead) {
+            // Where should feet point? Toward the wall surface.
+            const feetTarget = new THREE.Vector3();
+            if (fighter.wallSide === 'left') feetTarget.set(-1, 0, 0);
+            else if (fighter.wallSide === 'right') feetTarget.set(1, 0, 0);
+            else if (fighter.wallSide === 'front') feetTarget.set(0, 0, 1);
+            else if (fighter.wallSide === 'back') feetTarget.set(0, 0, -1);
+
+            // Step 1: Rotate local -Y to align with feetTarget
+            const localDown = new THREE.Vector3(0, -1, 0);
+            const q1 = new THREE.Quaternion().setFromUnitVectors(localDown, feetTarget);
+
+            // After q1, where does the head (+Z) end up?
+            const localForward = new THREE.Vector3(0, 0, 1);
+            const headAfterQ1 = localForward.clone().applyQuaternion(q1);
+
+            // Step 2: We want head to point up (+Y world), but constrained to rotate around feetTarget axis
+            const headTarget = new THREE.Vector3(0, 1, 0);
+
+            // Project both vectors onto the plane perpendicular to feetTarget
+            const headProj = headAfterQ1.clone().sub(feetTarget.clone().multiplyScalar(headAfterQ1.dot(feetTarget))).normalize();
+            const targetProj = headTarget.clone().sub(feetTarget.clone().multiplyScalar(headTarget.dot(feetTarget))).normalize();
+
+            // Angle between them (rotation around feetTarget axis)
+            let angle = Math.acos(Math.max(-1, Math.min(1, headProj.dot(targetProj))));
+
+            // Determine sign using cross product
+            const cross = new THREE.Vector3().crossVectors(headProj, targetProj);
+            if (cross.dot(feetTarget) < 0) angle = -angle;
+
+            // Create rotation around feetTarget axis
+            const q2 = new THREE.Quaternion().setFromAxisAngle(feetTarget, angle);
+
+            // Combine: apply q1 first, then q2
+            bug.quaternion.copy(q1).premultiply(q2);
         }
 
         // Animation - pass velocity for speed-based animations
-        animator.update(deltaTime, fighter.state, fighter);
+        // Override grounded state for death/victory fall
+        const animFighter = { ...fighter };
+        if (bug.userData.deathFall.active) {
+            animFighter.grounded = bug.userData.deathFall.landed;
+            // Override onWall too - dead bugs aren't on walls
+            if (isDead || isVictory) {
+                animFighter.onWall = false;
+            }
+        }
+        animator.update(deltaTime, fighter.state, animFighter);
 
         // Flash effect (hit feedback)
         if (fighter.flashTimer > 0 && fighter.flashTimer % 2 === 0) {
@@ -740,6 +993,9 @@ function render3D(state) {
     const deltaTime = (now - lastTime) / 1000;
     lastTime = now;
 
+    // Update action camera before controls
+    updateActionCamera(state);
+
     if (controls) controls.update();
 
     updateBugs(state, deltaTime);
@@ -770,7 +1026,7 @@ function initRenderer3D() {
     initThreeJS();
     gameLoop3D();
     console.log('3D Renderer initialized');
-    console.log('Camera: 1=Front, 2=Side, 3=Top, 4=Isometric, R=Reset, Mouse=Orbit');
+    console.log('Camera: 1=Front, 2=Side, 3=Top, 4=Isometric, 5=Action (default), R=Reset, Mouse=Orbit');
 }
 
 // Export

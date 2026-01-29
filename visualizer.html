@@ -364,16 +364,6 @@
                     </div>
                 </div>
 
-                <!-- Pattern -->
-                <div class="control-group">
-                    <h3>PATTERN</h3>
-                    <div class="option-buttons" id="pattern-options">
-                        <button class="option-btn selected" data-value="solid">Solid</button>
-                        <button class="option-btn" data-value="striped">Striped</button>
-                        <button class="option-btn" data-value="spotted">Spotted</button>
-                    </div>
-                </div>
-
                 <!-- Combat Types -->
                 <div class="control-group">
                     <h3>COMBAT TYPES</h3>
@@ -478,7 +468,6 @@
                 headType: document.querySelector('#head-options .selected')?.dataset.value || 'round',
                 legCount: parseInt(document.querySelector('#legcount-options .selected')?.dataset.value || '3'),
                 legStyle: document.querySelector('#leg-options .selected')?.dataset.value || 'straight',
-                pattern: document.querySelector('#pattern-options .selected')?.dataset.value || 'solid',
                 weapon: document.querySelector('#weapon-options .selected')?.dataset.value || 'mandibles',
                 defense: document.querySelector('#defense-options .selected')?.dataset.value || 'shell',
                 mobility: document.querySelector('#mobility-options .selected')?.dataset.value || 'ground',
@@ -507,7 +496,6 @@
                 headType: sel.headType,
                 legCount: sel.legCount,
                 legStyle: sel.legStyle,
-                pattern: sel.pattern,
                 weapon: sel.weapon,
                 defense: sel.defense,
                 mobility: sel.mobility,
@@ -534,7 +522,7 @@
                 `Size: ${currentBug.size}px | ` +
                 `BLK:${g.bulk} SPD:${g.speed} FRY:${g.fury} INS:${g.instinct}<br>` +
                 `Abd:${g.abdomenType} Thx:${g.thoraxType} Hd:${g.headType}<br>` +
-                `Legs:${g.legCount}x ${g.legStyle} / ${g.pattern}`;
+                `Legs:${g.legCount}x ${g.legStyle}`;
 
             // Update color preview
             const hue = parseInt(document.getElementById('hue-slider').value);
@@ -664,7 +652,6 @@
                         headType: 'round',
                         legCount: 6,
                         legStyle: 'straight',
-                        pattern: 'solid',
                         weapon: 'mandibles',
                         defense: 'shell',
                         mobility: 'ground',
@@ -741,9 +728,6 @@
             document.querySelectorAll('#leg-options .option-btn').forEach(b => {
                 b.classList.toggle('selected', b.dataset.value === g.legStyle);
             });
-            document.querySelectorAll('#pattern-options .option-btn').forEach(b => {
-                b.classList.toggle('selected', b.dataset.value === g.pattern);
-            });
             document.querySelectorAll('#weapon-options .option-btn').forEach(b => {
                 b.classList.toggle('selected', b.dataset.value === g.weapon);
             });
@@ -791,7 +775,6 @@
             setupOptionButtons('head-options', createBugFromSelections);
             setupOptionButtons('legcount-options', createBugFromSelections);
             setupOptionButtons('leg-options', createBugFromSelections);
-            setupOptionButtons('pattern-options', createBugFromSelections);
             setupOptionButtons('weapon-options', createBugFromSelections);
             setupOptionButtons('defense-options', createBugFromSelections);
             setupOptionButtons('mobility-options', createBugFromSelections);

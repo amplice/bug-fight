@@ -2,341 +2,647 @@
 // Generates procedural 3D bugs from genome using primitive shapes
 
 // ============================================
-// TEXTURE GENERATOR CLASS
+// CHITIN TEXTURE GENERATOR CLASS
+// Creates realistic insect exoskeleton textures
 // ============================================
 
-class TextureGenerator {
-    constructor(size = 256) {
+class ChitinTextureGenerator {
+    constructor(size = 512) {
         this.size = size;
+        // Noise helpers
+        this.noiseGrid = null;
+        this.initNoise();
+    }
+
+    initNoise() {
+        // Pre-generate noise grid for consistent patterns
+        const gridSize = 32;
+        this.noiseGrid = [];
+        for (let i = 0; i < gridSize * gridSize; i++) {
+            this.noiseGrid.push(Math.random());
+        }
+    }
+
+    // Seeded random for reproducible results
+    seededRandom(seed) {
+        const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+        return x - Math.floor(x);
+    }
+
+    // Value noise with smooth interpolation
+    noise2D(x, y, scale = 1) {
+        const gridSize = 32;
+        x = x * scale;
+        y = y * scale;
+
+        const x0 = Math.floor(x) & 31;
+        const y0 = Math.floor(y) & 31;
+        const x1 = (x0 + 1) & 31;
+        const y1 = (y0 + 1) & 31;
+
+        const sx = x - Math.floor(x);
+        const sy = y - Math.floor(y);
+
+        // Smoothstep
+        const tx = sx * sx * (3 - 2 * sx);
+        const ty = sy * sy * (3 - 2 * sy);
+
+        const n00 = this.noiseGrid[y0 * gridSize + x0];
+        const n10 = this.noiseGrid[y0 * gridSize + x1];
+        const n01 = this.noiseGrid[y1 * gridSize + x0];
+        const n11 = this.noiseGrid[y1 * gridSize + x1];
+
+        const nx0 = n00 + tx * (n10 - n00);
+        const nx1 = n01 + tx * (n11 - n01);
+
+        return nx0 + ty * (nx1 - nx0);
+    }
+
+    // Fractal Brownian Motion - layered noise for organic look
+    fbm(x, y, octaves = 4) {
+        let value = 0;
+        let amplitude = 0.5;
+        let frequency = 1;
+        let maxValue = 0;
+
+        for (let i = 0; i < octaves; i++) {
+            value += amplitude * this.noise2D(x * frequency, y * frequency, 0.1);
+            maxValue += amplitude;
+            amplitude *= 0.5;
+            frequency *= 2;
+        }
+
+        return value / maxValue;
     }
 
     /**
-     * Generate a normal map texture based on texture type
+     * Generate complete texture set for a texture type
+     * Returns { diffuse, normal, roughness } textures
      */
-    generate(textureType) {
+    generate(textureType, primaryColor, secondaryColor, seed = 0) {
         switch (textureType) {
             case 'plated':
-                return this.generatePlated();
+                return this.generatePlated(primaryColor, secondaryColor, seed);
             case 'rough':
-                return this.generateRough();
+                return this.generateRough(primaryColor, secondaryColor, seed);
+            case 'spotted':
+                return this.generateSpotted(primaryColor, secondaryColor, seed);
+            case 'striped':
+                return this.generateStriped(primaryColor, secondaryColor, seed);
             case 'smooth':
             default:
-                return this.generateSmooth();
+                return this.generateSmooth(primaryColor, secondaryColor, seed);
         }
     }
 
-    /**
-     * Smooth texture - subtle noise, almost flat
-     * Inspired by ants, wasps - clean, streamlined look
-     */
-    generateSmooth() {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.size;
-        canvas.height = this.size;
-        const ctx = canvas.getContext('2d');
+    // Parse hex color to RGB object
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 128, g: 128, b: 128 };
+    }
 
-        // Base flat normal color (pointing up)
-        ctx.fillStyle = 'rgb(128, 128, 255)';
-        ctx.fillRect(0, 0, this.size, this.size);
-
-        // Add very subtle noise
-        const imageData = ctx.getImageData(0, 0, this.size, this.size);
-        const data = imageData.data;
-
-        for (let i = 0; i < data.length; i += 4) {
-            // Very subtle variation (+/- 5)
-            const noiseR = (Math.random() - 0.5) * 10;
-            const noiseG = (Math.random() - 0.5) * 10;
-            data[i] = Math.max(0, Math.min(255, data[i] + noiseR));
-            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noiseG));
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+    // Blend two colors
+    blendColors(c1, c2, t) {
+        return {
+            r: Math.round(c1.r + (c2.r - c1.r) * t),
+            g: Math.round(c1.g + (c2.g - c1.g) * t),
+            b: Math.round(c1.b + (c2.b - c1.b) * t)
+        };
     }
 
     /**
-     * Plated texture - overlapping chitin segments
-     * Inspired by beetles, roaches - armored, layered look
+     * SMOOTH CHITIN - Sleek wasp/ant exoskeleton
+     * Satin finish - not glossy plastic, more natural matte-ish
      */
-    generatePlated() {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.size;
-        canvas.height = this.size;
-        const ctx = canvas.getContext('2d');
+    generateSmooth(primaryColor, secondaryColor, seed) {
+        const size = this.size;
+        const primary = this.hexToRgb(primaryColor);
 
-        // Base flat normal
-        ctx.fillStyle = 'rgb(128, 128, 255)';
-        ctx.fillRect(0, 0, this.size, this.size);
+        const diffuseCanvas = document.createElement('canvas');
+        const normalCanvas = document.createElement('canvas');
+        const roughnessCanvas = document.createElement('canvas');
 
-        const imageData = ctx.getImageData(0, 0, this.size, this.size);
-        const data = imageData.data;
+        [diffuseCanvas, normalCanvas, roughnessCanvas].forEach(c => {
+            c.width = size;
+            c.height = size;
+        });
 
-        // Horizontal bands with curved top edges
-        const bandHeight = 32;
-        const numBands = Math.ceil(this.size / bandHeight);
+        const diffuseCtx = diffuseCanvas.getContext('2d');
+        const normalCtx = normalCanvas.getContext('2d');
+        const roughnessCtx = roughnessCanvas.getContext('2d');
 
-        for (let band = 0; band < numBands; band++) {
-            const bandY = band * bandHeight;
+        const diffuseData = diffuseCtx.createImageData(size, size);
+        const normalData = normalCtx.createImageData(size, size);
+        const roughnessData = roughnessCtx.createImageData(size, size);
 
-            for (let y = 0; y < bandHeight && bandY + y < this.size; y++) {
-                for (let x = 0; x < this.size; x++) {
-                    const idx = ((bandY + y) * this.size + x) * 4;
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const idx = (y * size + x) * 4;
+                const nx = x / size;
+                const ny = y / size;
 
-                    // Normalized position within band (0-1)
-                    const t = y / bandHeight;
+                // Very subtle color variation to break up uniformity
+                const variation = this.fbm(nx * 2 + seed * 0.1, ny * 2 + seed * 0.1, 1) * 0.05;
+                const r = Math.max(0, Math.min(255, primary.r + (variation * 30)));
+                const g = Math.max(0, Math.min(255, primary.g + (variation * 30)));
+                const b = Math.max(0, Math.min(255, primary.b + (variation * 30)));
 
-                    // Create curved plate effect
-                    // Top of plate: lighter (raised) - G > 128
-                    // Bottom of plate: darker (shadow) - G < 128
-                    // Add slight horizontal curve too
-                    const curveX = Math.sin((x / this.size) * Math.PI) * 0.3;
+                diffuseData.data[idx] = r;
+                diffuseData.data[idx + 1] = g;
+                diffuseData.data[idx + 2] = b;
+                diffuseData.data[idx + 3] = 255;
 
-                    if (t < 0.15) {
-                        // Top edge - raised (lighter green = pointing up-toward camera)
-                        const edgeStrength = (0.15 - t) / 0.15;
-                        data[idx + 1] = 128 + 40 * edgeStrength + curveX * 20; // G channel
-                    } else if (t > 0.85) {
-                        // Bottom edge - shadow (darker green = pointing down-away)
-                        const shadowStrength = (t - 0.85) / 0.15;
-                        data[idx + 1] = 128 - 35 * shadowStrength; // G channel
-                        // Also slight indent on bottom
-                        data[idx + 2] = 255 - 20 * shadowStrength; // Less blue = recessed
-                    }
+                // Normal - flat, no bumps
+                normalData.data[idx] = 128;
+                normalData.data[idx + 1] = 128;
+                normalData.data[idx + 2] = 255;
+                normalData.data[idx + 3] = 255;
 
-                    // Add subtle noise
-                    data[idx] += (Math.random() - 0.5) * 6;
-                    data[idx + 1] += (Math.random() - 0.5) * 6;
+                // Roughness - satin finish (higher = more matte, less plastic)
+                roughnessData.data[idx] = 160;
+                roughnessData.data[idx + 1] = 160;
+                roughnessData.data[idx + 2] = 160;
+                roughnessData.data[idx + 3] = 255;
+            }
+        }
+
+        diffuseCtx.putImageData(diffuseData, 0, 0);
+        normalCtx.putImageData(normalData, 0, 0);
+        roughnessCtx.putImageData(roughnessData, 0, 0);
+
+        return this.createTextures(diffuseCanvas, normalCanvas, roughnessCanvas);
+    }
+
+    /**
+     * PLATED CHITIN - Beetle armor with overlapping segments
+     * Visible plate edges, highlights on ridges, darker in crevices
+     */
+    generatePlated(primaryColor, secondaryColor, seed) {
+        const size = this.size;
+        const primary = this.hexToRgb(primaryColor);
+        const secondary = this.hexToRgb(secondaryColor);
+        const dark = { r: primary.r * 0.3, g: primary.g * 0.3, b: primary.b * 0.3 };
+        const highlight = {
+            r: Math.min(255, primary.r * 1.4),
+            g: Math.min(255, primary.g * 1.4),
+            b: Math.min(255, primary.b * 1.4)
+        };
+
+        const diffuseCanvas = document.createElement('canvas');
+        const normalCanvas = document.createElement('canvas');
+        const roughnessCanvas = document.createElement('canvas');
+
+        [diffuseCanvas, normalCanvas, roughnessCanvas].forEach(c => {
+            c.width = size;
+            c.height = size;
+        });
+
+        const diffuseCtx = diffuseCanvas.getContext('2d');
+        const normalCtx = normalCanvas.getContext('2d');
+        const roughnessCtx = roughnessCanvas.getContext('2d');
+
+        const diffuseData = diffuseCtx.createImageData(size, size);
+        const normalData = normalCtx.createImageData(size, size);
+        const roughnessData = roughnessCtx.createImageData(size, size);
+
+        // Horizontal armor bands - like beetle segments
+        const plateCount = 5 + Math.floor(this.seededRandom(seed) * 3); // 5-7 plates
+        const plateHeight = size / plateCount;
+        const grooveWidth = 6; // pixels for groove between plates
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const idx = (y * size + x) * 4;
+
+                // Which plate are we on?
+                const plateIndex = Math.floor(y / plateHeight);
+                const posInPlate = y % plateHeight;
+
+                // Groove at top of each plate
+                const isGroove = posInPlate < grooveWidth;
+                const grooveDepth = isGroove ? 1 - (posInPlate / grooveWidth) : 0;
+
+                // Ridge/highlight just below groove
+                const isRidge = posInPlate >= grooveWidth && posInPlate < grooveWidth + 8;
+                const ridgeStrength = isRidge ? 1 - ((posInPlate - grooveWidth) / 8) : 0;
+
+                // Subtle per-plate color variation
+                const plateVariation = this.seededRandom(plateIndex + seed) * 0.08 - 0.04;
+                let color = {
+                    r: Math.max(0, Math.min(255, primary.r * (1 + plateVariation))),
+                    g: Math.max(0, Math.min(255, primary.g * (1 + plateVariation))),
+                    b: Math.max(0, Math.min(255, primary.b * (1 + plateVariation)))
+                };
+
+                // Darken grooves
+                if (isGroove) {
+                    color = this.blendColors(color, dark, grooveDepth * 0.7);
                 }
+
+                // Highlight ridges
+                if (isRidge) {
+                    color = this.blendColors(color, highlight, ridgeStrength * 0.3);
+                }
+
+                diffuseData.data[idx] = color.r;
+                diffuseData.data[idx + 1] = color.g;
+                diffuseData.data[idx + 2] = color.b;
+                diffuseData.data[idx + 3] = 255;
+
+                // Normal map - grooves indent, ridges protrude
+                let normalY = 128;
+                if (isGroove) {
+                    normalY = 128 + grooveDepth * 60; // pointing down into groove
+                } else if (isRidge) {
+                    normalY = 128 - ridgeStrength * 40; // pointing up from ridge
+                }
+
+                normalData.data[idx] = 128;
+                normalData.data[idx + 1] = normalY;
+                normalData.data[idx + 2] = 255;
+                normalData.data[idx + 3] = 255;
+
+                // Roughness - glossy plates, matte grooves
+                let roughness = 50; // glossy armor
+                if (isGroove) {
+                    roughness = 50 + grooveDepth * 130;
+                }
+
+                roughnessData.data[idx] = roughness;
+                roughnessData.data[idx + 1] = roughness;
+                roughnessData.data[idx + 2] = roughness;
+                roughnessData.data[idx + 3] = 255;
             }
         }
 
-        ctx.putImageData(imageData, 0, 0);
+        diffuseCtx.putImageData(diffuseData, 0, 0);
+        normalCtx.putImageData(normalData, 0, 0);
+        roughnessCtx.putImageData(roughnessData, 0, 0);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+        return this.createTextures(diffuseCanvas, normalCanvas, roughnessCanvas);
     }
 
     /**
-     * Rough texture - bumpy, tuberculate surface
-     * Inspired by weevils, bark beetles - rugged, weathered look
+     * ROUGH CHITIN - Bumpy, weathered surface with pits and protrusions
+     * Like old beetles, crickets - worn, textured exoskeleton
      */
-    generateRough() {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.size;
-        canvas.height = this.size;
-        const ctx = canvas.getContext('2d');
+    generateRough(primaryColor, secondaryColor, seed) {
+        const size = this.size;
+        const primary = this.hexToRgb(primaryColor);
+        const secondary = this.hexToRgb(secondaryColor);
 
-        // Base flat normal
-        ctx.fillStyle = 'rgb(128, 128, 255)';
-        ctx.fillRect(0, 0, this.size, this.size);
+        const diffuseCanvas = document.createElement('canvas');
+        const normalCanvas = document.createElement('canvas');
+        const roughnessCanvas = document.createElement('canvas');
 
-        const imageData = ctx.getImageData(0, 0, this.size, this.size);
-        const data = imageData.data;
+        [diffuseCanvas, normalCanvas, roughnessCanvas].forEach(c => {
+            c.width = size;
+            c.height = size;
+        });
 
-        // Add Perlin-like noise base layer using simple value noise
-        const noiseScale = 16;
-        const noiseGrid = [];
-        const gridSize = Math.ceil(this.size / noiseScale) + 1;
+        const diffuseCtx = diffuseCanvas.getContext('2d');
+        const normalCtx = normalCanvas.getContext('2d');
+        const roughnessCtx = roughnessCanvas.getContext('2d');
 
-        for (let i = 0; i < gridSize * gridSize; i++) {
-            noiseGrid.push(Math.random());
-        }
+        const diffuseData = diffuseCtx.createImageData(size, size);
+        const normalData = normalCtx.createImageData(size, size);
+        const roughnessData = roughnessCtx.createImageData(size, size);
 
-        const lerp = (a, b, t) => a + (b - a) * t;
-        const smoothstep = (t) => t * t * (3 - 2 * t);
+        // Seeded random for consistent bumps
+        const seededRand = (n) => {
+            const x = Math.sin(seed + n * 127.1) * 43758.5453;
+            return x - Math.floor(x);
+        };
 
-        for (let y = 0; y < this.size; y++) {
-            for (let x = 0; x < this.size; x++) {
-                const idx = (y * this.size + x) * 4;
+        // Initialize normal map with base noise
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const idx = (y * size + x) * 4;
+                const nx = x / size;
+                const ny = y / size;
 
-                // Value noise interpolation
-                const gx = x / noiseScale;
-                const gy = y / noiseScale;
-                const x0 = Math.floor(gx);
-                const y0 = Math.floor(gy);
-                const x1 = x0 + 1;
-                const y1 = y0 + 1;
+                // Color variation
+                const variation = this.fbm(nx + seed * 0.1, ny + seed * 0.1, 2) * 0.2;
+                const color = this.blendColors(primary, secondary, Math.abs(variation));
 
-                const sx = smoothstep(gx - x0);
-                const sy = smoothstep(gy - y0);
+                diffuseData.data[idx] = color.r;
+                diffuseData.data[idx + 1] = color.g;
+                diffuseData.data[idx + 2] = color.b;
+                diffuseData.data[idx + 3] = 255;
 
-                const n00 = noiseGrid[y0 * gridSize + x0] || 0;
-                const n10 = noiseGrid[y0 * gridSize + x1] || 0;
-                const n01 = noiseGrid[y1 * gridSize + x0] || 0;
-                const n11 = noiseGrid[y1 * gridSize + x1] || 0;
+                // Base normal with subtle noise
+                const baseNoise = this.fbm(nx * 4, ny * 4, 2) * 30;
+                normalData.data[idx] = 128 + baseNoise;
+                normalData.data[idx + 1] = 128 + baseNoise;
+                normalData.data[idx + 2] = 255;
+                normalData.data[idx + 3] = 255;
 
-                const noise = lerp(lerp(n00, n10, sx), lerp(n01, n11, sx), sy);
-
-                // Convert noise to normal map displacement
-                // Noise value affects both R and G channels
-                const displacement = (noise - 0.5) * 60;
-                data[idx] = 128 + displacement * 0.7;     // R - X direction
-                data[idx + 1] = 128 + displacement * 0.7; // G - Y direction
+                // Matte roughness
+                roughnessData.data[idx] = 180 + seededRand(x + y * size) * 40;
+                roughnessData.data[idx + 1] = roughnessData.data[idx];
+                roughnessData.data[idx + 2] = roughnessData.data[idx];
+                roughnessData.data[idx + 3] = 255;
             }
         }
 
-        // Add random bumps
-        const numBumps = 80;
+        // Add random bumps and pits
+        const numBumps = 60 + Math.floor(seededRand(seed) * 40);
         for (let i = 0; i < numBumps; i++) {
-            const bx = Math.random() * this.size;
-            const by = Math.random() * this.size;
-            const radius = 4 + Math.random() * 12;
-            const isRaised = Math.random() > 0.3; // 70% raised, 30% pits
+            const bx = seededRand(i * 2) * size;
+            const by = seededRand(i * 2 + 1) * size;
+            const radius = 4 + seededRand(i * 3) * 14;
+            const isRaised = seededRand(i * 4) > 0.35; // 65% raised, 35% pits
 
             for (let dy = -radius; dy <= radius; dy++) {
                 for (let dx = -radius; dx <= radius; dx++) {
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     if (dist > radius) continue;
 
-                    const px = Math.floor(bx + dx) % this.size;
-                    const py = Math.floor(by + dy) % this.size;
-                    if (px < 0 || py < 0) continue;
-
-                    const idx = (py * this.size + px) * 4;
+                    const px = (Math.floor(bx + dx) + size) % size;
+                    const py = (Math.floor(by + dy) + size) % size;
+                    const idx = (py * size + px) * 4;
 
                     // Calculate normal direction based on position on bump
-                    const normalStrength = (1 - dist / radius) * 40;
-                    const nx = (dx / radius) * normalStrength * (isRaised ? 1 : -1);
-                    const ny = (dy / radius) * normalStrength * (isRaised ? 1 : -1);
+                    const normalStrength = (1 - dist / radius) * 45;
+                    const bnx = (dx / radius) * normalStrength * (isRaised ? 1 : -1);
+                    const bny = (dy / radius) * normalStrength * (isRaised ? 1 : -1);
 
-                    data[idx] = Math.max(0, Math.min(255, data[idx] + nx));
-                    data[idx + 1] = Math.max(0, Math.min(255, data[idx + 1] + ny));
+                    normalData.data[idx] = Math.max(0, Math.min(255, normalData.data[idx] + bnx));
+                    normalData.data[idx + 1] = Math.max(0, Math.min(255, normalData.data[idx + 1] + bny));
+
+                    // Darken pits slightly in diffuse
+                    if (!isRaised) {
+                        const darkening = (1 - dist / radius) * 0.15;
+                        diffuseData.data[idx] *= (1 - darkening);
+                        diffuseData.data[idx + 1] *= (1 - darkening);
+                        diffuseData.data[idx + 2] *= (1 - darkening);
+                    }
                 }
             }
         }
 
-        ctx.putImageData(imageData, 0, 0);
+        diffuseCtx.putImageData(diffuseData, 0, 0);
+        normalCtx.putImageData(normalData, 0, 0);
+        roughnessCtx.putImageData(roughnessData, 0, 0);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
-    }
-}
-
-// ============================================
-// PATTERN GENERATOR CLASS
-// ============================================
-
-class PatternGenerator {
-    constructor(size = 256) {
-        this.size = size;
+        return this.createTextures(diffuseCanvas, normalCanvas, roughnessCanvas);
     }
 
     /**
-     * Generate a pattern texture based on pattern type
-     * Returns a color map texture with the pattern baked in
+     * SPOTTED CHITIN - Bold spots like ladybugs or leopard beetles
+     * Large, clearly visible spots with slight depth
      */
-    generate(patternType, primaryColor, secondaryColor, patternSeed = 0) {
-        switch (patternType) {
-            case 'striped':
-                return this.generateStripes(primaryColor, secondaryColor, patternSeed);
-            case 'spotted':
-                return this.generateSpots(primaryColor, secondaryColor, patternSeed);
-            case 'solid':
-            default:
-                return null; // No pattern texture needed for solid
-        }
-    }
+    generateSpotted(primaryColor, secondaryColor, seed) {
+        const size = this.size;
+        const primary = this.hexToRgb(primaryColor);
+        const secondary = this.hexToRgb(secondaryColor);
 
-    /**
-     * Striped pattern - horizontal bands like wasps/bees
-     */
-    generateStripes(primaryColor, secondaryColor, seed) {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.size;
-        canvas.height = this.size;
-        const ctx = canvas.getContext('2d');
+        // Make spots darker/contrasting version of secondary color
+        const spotColor = {
+            r: Math.max(0, secondary.r * 0.3),
+            g: Math.max(0, secondary.g * 0.3),
+            b: Math.max(0, secondary.b * 0.3)
+        };
 
-        // Fill with primary color
-        ctx.fillStyle = primaryColor;
-        ctx.fillRect(0, 0, this.size, this.size);
+        const diffuseCanvas = document.createElement('canvas');
+        const normalCanvas = document.createElement('canvas');
+        const roughnessCanvas = document.createElement('canvas');
 
-        // Draw stripes with secondary/dark color
-        const stripeCount = 5 + (seed % 4); // 5-8 stripes
-        const stripeHeight = this.size / (stripeCount * 2);
+        [diffuseCanvas, normalCanvas, roughnessCanvas].forEach(c => {
+            c.width = size;
+            c.height = size;
+        });
 
-        ctx.fillStyle = secondaryColor;
-        for (let i = 0; i < stripeCount; i++) {
-            const y = (i * 2 + 1) * stripeHeight;
-            // Slightly irregular stripe edges
-            const variance = stripeHeight * 0.15;
-            ctx.beginPath();
-            ctx.moveTo(0, y - variance * Math.sin(seed + i));
-            for (let x = 0; x <= this.size; x += 20) {
-                const waveY = y + Math.sin((x / 30) + seed + i) * variance;
-                ctx.lineTo(x, waveY);
-            }
-            ctx.lineTo(this.size, y + stripeHeight + variance * Math.sin(seed + i + 1));
-            for (let x = this.size; x >= 0; x -= 20) {
-                const waveY = y + stripeHeight + Math.sin((x / 30) + seed + i + 1) * variance;
-                ctx.lineTo(x, waveY);
-            }
-            ctx.closePath();
-            ctx.fill();
-        }
+        const diffuseCtx = diffuseCanvas.getContext('2d');
+        const normalCtx = normalCanvas.getContext('2d');
+        const roughnessCtx = roughnessCanvas.getContext('2d');
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
-    }
+        const diffuseData = diffuseCtx.createImageData(size, size);
+        const normalData = normalCtx.createImageData(size, size);
+        const roughnessData = roughnessCtx.createImageData(size, size);
 
-    /**
-     * Spotted pattern - irregular spots like ladybugs
-     */
-    generateSpots(primaryColor, secondaryColor, seed) {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.size;
-        canvas.height = this.size;
-        const ctx = canvas.getContext('2d');
-
-        // Fill with primary color
-        ctx.fillStyle = primaryColor;
-        ctx.fillRect(0, 0, this.size, this.size);
-
-        // Seeded random function
-        const seededRandom = (n) => {
+        // Seeded random
+        const seededRand = (n) => {
             const x = Math.sin(seed + n * 127.1) * 43758.5453;
             return x - Math.floor(x);
         };
 
-        // Draw spots
-        const spotCount = 8 + (seed % 8); // 8-15 spots
-        ctx.fillStyle = secondaryColor;
+        // Create spot map
+        const spotMap = new Float32Array(size * size);
+
+        // Generate spots - fewer but larger and more prominent
+        const spotCount = 12 + Math.floor(seededRand(seed * 7) * 10); // 12-22 spots
+        const spots = [];
 
         for (let i = 0; i < spotCount; i++) {
-            const x = seededRandom(i * 2) * this.size;
-            const y = seededRandom(i * 2 + 1) * this.size;
-            const radius = 8 + seededRandom(i * 3) * 20; // Variable size spots
-
-            // Slightly irregular circle
-            ctx.beginPath();
-            for (let a = 0; a < Math.PI * 2; a += 0.2) {
-                const r = radius * (0.85 + seededRandom(i * 10 + a * 5) * 0.3);
-                const px = x + Math.cos(a) * r;
-                const py = y + Math.sin(a) * r;
-                if (a === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-            ctx.fill();
+            spots.push({
+                x: seededRand(i * 2) * size,
+                y: seededRand(i * 2 + 1) * size,
+                radius: 15 + seededRand(i * 3) * 30, // Larger spots (15-45 px)
+                irregularity: 0.15 + seededRand(i * 4) * 0.2 // How wobbly the edge is
+            });
         }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+        // Fill base color and calculate spot coverage
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const idx = (y * size + x) * 4;
+                let inSpot = 0;
+
+                // Check each spot
+                for (let s = 0; s < spots.length; s++) {
+                    const spot = spots[s];
+                    // Handle wrapping for seamless texture
+                    let dx = x - spot.x;
+                    let dy = y - spot.y;
+                    if (dx > size / 2) dx -= size;
+                    if (dx < -size / 2) dx += size;
+                    if (dy > size / 2) dy -= size;
+                    if (dy < -size / 2) dy += size;
+
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    // Irregular edge using angle-based noise
+                    const angle = Math.atan2(dy, dx);
+                    const edgeNoise = seededRand(s * 100 + Math.floor(angle * 10)) * spot.irregularity;
+                    const effectiveRadius = spot.radius * (1 + edgeNoise);
+
+                    if (dist < effectiveRadius) {
+                        // Soft edge falloff
+                        const edge = effectiveRadius * 0.85;
+                        if (dist < edge) {
+                            inSpot = 1;
+                        } else {
+                            inSpot = Math.max(inSpot, 1 - (dist - edge) / (effectiveRadius - edge));
+                        }
+                    }
+                }
+
+                spotMap[y * size + x] = inSpot;
+
+                // Blend colors based on spot coverage
+                const color = this.blendColors(primary, spotColor, inSpot);
+
+                diffuseData.data[idx] = color.r;
+                diffuseData.data[idx + 1] = color.g;
+                diffuseData.data[idx + 2] = color.b;
+                diffuseData.data[idx + 3] = 255;
+
+                // Normal - spots are slightly recessed
+                const recess = inSpot * 15;
+                normalData.data[idx] = 128;
+                normalData.data[idx + 1] = 128 - recess;
+                normalData.data[idx + 2] = 255;
+                normalData.data[idx + 3] = 255;
+
+                // Roughness - spots slightly more matte
+                const roughness = 130 + inSpot * 40;
+                roughnessData.data[idx] = roughness;
+                roughnessData.data[idx + 1] = roughness;
+                roughnessData.data[idx + 2] = roughness;
+                roughnessData.data[idx + 3] = 255;
+            }
+        }
+
+        diffuseCtx.putImageData(diffuseData, 0, 0);
+        normalCtx.putImageData(normalData, 0, 0);
+        roughnessCtx.putImageData(roughnessData, 0, 0);
+
+        return this.createTextures(diffuseCanvas, normalCanvas, roughnessCanvas);
+    }
+
+    /**
+     * STRIPED CHITIN - Horizontal bands like a sailor shirt
+     * Stripes wrap around body segments like rings
+     */
+    generateStriped(primaryColor, secondaryColor, seed) {
+        const size = this.size;
+        const primary = this.hexToRgb(primaryColor);
+        const secondary = this.hexToRgb(secondaryColor);
+
+        // Make stripes a darker/contrasting color
+        const stripeColor = {
+            r: Math.max(0, secondary.r * 0.35),
+            g: Math.max(0, secondary.g * 0.35),
+            b: Math.max(0, secondary.b * 0.35)
+        };
+
+        const diffuseCanvas = document.createElement('canvas');
+        const normalCanvas = document.createElement('canvas');
+        const roughnessCanvas = document.createElement('canvas');
+
+        [diffuseCanvas, normalCanvas, roughnessCanvas].forEach(c => {
+            c.width = size;
+            c.height = size;
+        });
+
+        const diffuseCtx = diffuseCanvas.getContext('2d');
+        const normalCtx = normalCanvas.getContext('2d');
+        const roughnessCtx = roughnessCanvas.getContext('2d');
+
+        const diffuseData = diffuseCtx.createImageData(size, size);
+        const normalData = normalCtx.createImageData(size, size);
+        const roughnessData = roughnessCtx.createImageData(size, size);
+
+        // Seeded random
+        const seededRand = (n) => {
+            const x = Math.sin(seed + n * 127.1) * 43758.5453;
+            return x - Math.floor(x);
+        };
+
+        // Stripe parameters - horizontal bands in texture space
+        // These will wrap around when applied to spheres
+        const stripeCount = 3 + Math.floor(seededRand(seed) * 3); // 3-5 stripes
+        const stripeWidth = size / (stripeCount * 2); // Width of each stripe
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const idx = (y * size + x) * 4;
+
+                // Calculate stripe based on Y position (horizontal bands)
+                // This creates rings when texture wraps around sphere
+                const stripePhase = (y / size) * stripeCount * 2;
+                const inStripe = (stripePhase % 2) < 1;
+
+                // Soft edge transition
+                const stripeT = stripePhase % 1;
+                const edgeSoftness = 0.15;
+                let stripeFactor = 0;
+
+                if (inStripe) {
+                    if (stripeT < edgeSoftness) {
+                        stripeFactor = stripeT / edgeSoftness;
+                    } else if (stripeT > 1 - edgeSoftness) {
+                        stripeFactor = (1 - stripeT) / edgeSoftness;
+                    } else {
+                        stripeFactor = 1;
+                    }
+                }
+
+                // Blend colors
+                const color = this.blendColors(primary, stripeColor, stripeFactor);
+
+                diffuseData.data[idx] = color.r;
+                diffuseData.data[idx + 1] = color.g;
+                diffuseData.data[idx + 2] = color.b;
+                diffuseData.data[idx + 3] = 255;
+
+                // Normal - flat
+                normalData.data[idx] = 128;
+                normalData.data[idx + 1] = 128;
+                normalData.data[idx + 2] = 255;
+                normalData.data[idx + 3] = 255;
+
+                // Roughness - satin finish
+                roughnessData.data[idx] = 140;
+                roughnessData.data[idx + 1] = 140;
+                roughnessData.data[idx + 2] = 140;
+                roughnessData.data[idx + 3] = 255;
+            }
+        }
+
+        diffuseCtx.putImageData(diffuseData, 0, 0);
+        normalCtx.putImageData(normalData, 0, 0);
+        roughnessCtx.putImageData(roughnessData, 0, 0);
+
+        return this.createTextures(diffuseCanvas, normalCanvas, roughnessCanvas);
+    }
+
+    createTextures(diffuseCanvas, normalCanvas, roughnessCanvas) {
+        const createTex = (canvas) => {
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.anisotropy = 4;
+            return tex;
+        };
+
+        return {
+            diffuse: createTex(diffuseCanvas),
+            normal: createTex(normalCanvas),
+            roughness: createTex(roughnessCanvas)
+        };
     }
 }
 
+// Legacy TextureGenerator for backwards compatibility
+class TextureGenerator {
+    constructor(size = 256) {
+        this.chitinGen = new ChitinTextureGenerator(size);
+    }
+
+    generate(textureType) {
+        // Return just the normal map for backwards compatibility
+        const textures = this.chitinGen.generate(textureType, '#888888', '#666666', 0);
+        return textures.normal;
+    }
+}
 // ============================================
 // BUG GENERATOR CLASS
 // ============================================
@@ -346,9 +652,10 @@ class BugGenerator3D {
         this.genome = genome;
         this.colors = this.generateColors();
         this.sizeMultiplier = genome.getSizeMultiplier ? genome.getSizeMultiplier() : 1;
-        this.normalMap = null; // Cached normal map texture
-        this.patternMap = null; // Cached pattern color texture
+        // Cached chitin textures (diffuse, normal, roughness)
+        this.chitinTextures = null;
     }
+
 
     generateColors() {
         const g = this.genome;
@@ -404,72 +711,140 @@ class BugGenerator3D {
     }
 
     /**
-     * Create material with given color
-     * Set options.skipNormalMap = true to skip texture (for eyes, etc.)
-     * Set options.skipPattern = true to skip pattern (for dark/accent parts)
+     * Remap UVs for cylindrical mapping around Z axis
+     * Makes stripes wrap around the body like rings
+     */
+    remapUVsForStripes(geometry) {
+        const pos = geometry.attributes.position;
+        const uv = geometry.attributes.uv;
+
+        // Find Z bounds for normalization
+        let minZ = Infinity, maxZ = -Infinity;
+        for (let i = 0; i < pos.count; i++) {
+            const z = pos.getZ(i);
+            minZ = Math.min(minZ, z);
+            maxZ = Math.max(maxZ, z);
+        }
+        const zRange = maxZ - minZ || 1;
+
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            const z = pos.getZ(i);
+
+            // U wraps around the XY plane (around Z axis)
+            const u = (Math.atan2(y, x) / Math.PI + 1) / 2;
+
+            // V maps along the Z axis (normalized to actual geometry bounds)
+            const v = (z - minZ) / zRange;
+
+            uv.setXY(i, u, v);
+        }
+
+        uv.needsUpdate = true;
+        return geometry;
+    }
+
+    /**
+     * Check if texture needs UV remapping for horizontal bands
+     * (striped and plated both need bands to wrap around body)
+     */
+    needsStripeUVs() {
+        const t = this.genome.textureType;
+        return t === 'striped' || t === 'plated';
+    }
+
+    /**
+     * Create sphere geometry, with UV remapping if striped
+     */
+    createBodySphere(radius, widthSegments, heightSegments) {
+        const geo = new THREE.SphereGeometry(radius, widthSegments, heightSegments);
+        return geo;
+    }
+
+    /**
+     * Apply UV remapping after scaling if needed
+     */
+    finalizeBodyGeometry(geometry) {
+        if (this.needsStripeUVs()) {
+            this.remapUVsForStripes(geometry);
+        }
+        return geometry;
+    }
+
+    /**
+     * Create material with realistic chitin texture
+     * Set options.skipTexture = true to skip texture (for eyes, etc.)
      */
     createMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
         const textureType = this.genome.textureType || 'smooth';
-        const patternType = this.genome.pattern || 'solid';
-
-        // Generate and cache normal map if not already created
-        if (!this.normalMap && !options.skipNormalMap) {
-            const texGen = new TextureGenerator(256);
-            this.normalMap = texGen.generate(textureType);
-        }
-
-        // Generate and cache pattern map if not already created (only for primary color parts)
-        if (!this.patternMap && !options.skipPattern && colorKey === 'primary' && patternType !== 'solid') {
-            const patGen = new PatternGenerator(256);
-            this.patternMap = patGen.generate(
-                patternType,
+        // Generate and cache chitin textures if not already created
+        if (!this.chitinTextures && !options.skipTexture) {
+            const chitinGen = new ChitinTextureGenerator(512);
+            this.chitinTextures = chitinGen.generate(
+                textureType,
                 this.colors.primary,
                 this.colors.dark,
-                this.genome.patternSeed || 0
+                Math.random() * 10000
             );
         }
 
-        // Roughness and normal intensity vary by texture type
-        let baseRoughness, normalIntensity;
+        // Normal intensity varies by texture type
+        let normalIntensity;
         switch (textureType) {
             case 'smooth':
-                baseRoughness = 0.3;
-                normalIntensity = 0.3;
+                normalIntensity = 0.4;
                 break;
             case 'plated':
-                baseRoughness = 0.45;
-                normalIntensity = 0.5;
+                normalIntensity = 0.7;
                 break;
             case 'rough':
-                baseRoughness = 0.6;
-                normalIntensity = 0.6;
+                normalIntensity = 0.8;
+                break;
+            case 'spotted':
+                normalIntensity = 0.5;
+                break;
+            case 'striped':
+                normalIntensity = 0.4;
                 break;
             default:
-                baseRoughness = 0.5;
-                normalIntensity = 0.4;
+                normalIntensity = 0.5;
         }
 
         const materialOptions = {
-            color: color,
-            roughness: options.roughness || baseRoughness,
-            metalness: options.metalness || 0.1,
+            metalness: options.metalness || 0.15,
             transparent: options.transparent || false,
             opacity: options.opacity || 1,
             side: options.side || THREE.FrontSide,
         };
 
-        // Add pattern map for primary color parts (stripes/spots)
-        if (!options.skipPattern && colorKey === 'primary' && this.patternMap) {
-            materialOptions.map = this.patternMap;
-            // When using a pattern map, set color to white so map colors show through
-            materialOptions.color = '#ffffff';
+        // Add emissive properties if specified
+        if (options.emissive !== undefined) {
+            materialOptions.emissive = options.emissive;
+            materialOptions.emissiveIntensity = options.emissiveIntensity || 0.2;
         }
 
-        // Add normal map unless explicitly skipped
-        if (!options.skipNormalMap && this.normalMap) {
-            materialOptions.normalMap = this.normalMap;
+        // Use chitin textures for realistic appearance
+        if (!options.skipTexture && this.chitinTextures) {
+            if (colorKey === 'primary') {
+                // Use chitin diffuse map for primary color parts
+                materialOptions.map = this.chitinTextures.diffuse;
+                materialOptions.color = '#ffffff'; // Let texture color show through
+            } else {
+                // For non-primary parts, tint with color but still use texture detail
+                materialOptions.color = color;
+            }
+
+            // Always use chitin normal and roughness maps
+            materialOptions.normalMap = this.chitinTextures.normal;
             materialOptions.normalScale = new THREE.Vector2(normalIntensity, normalIntensity);
+            materialOptions.roughnessMap = this.chitinTextures.roughness;
+            materialOptions.roughness = options.roughness || 1.0; // Roughness map will modulate this
+        } else {
+            // Fallback for parts without texture
+            materialOptions.color = color;
+            materialOptions.roughness = options.roughness || 0.5;
         }
 
         return new THREE.MeshStandardMaterial(materialOptions);
@@ -554,16 +929,14 @@ class BugGenerator3D {
         // Choose material based on defense
         let abdomenMat;
         if (defense === 'toxic') {
-            abdomenMat = new THREE.MeshStandardMaterial({
-                color: this.colors.primary,
+            abdomenMat = this.createMaterial('primary', {
                 roughness: 0.4,
                 metalness: 0.2,
                 emissive: 0x003300,
                 emissiveIntensity: 0.2,
             });
         } else if (defense === 'shell') {
-            abdomenMat = new THREE.MeshStandardMaterial({
-                color: this.colors.primary,
+            abdomenMat = this.createMaterial('primary', {
                 roughness: 0.3,
                 metalness: 0.5,
             });
@@ -588,6 +961,7 @@ class BugGenerator3D {
                 // Round abdomen - spherical
                 const roundGeo = new THREE.SphereGeometry(1, 16, 12);
                 roundGeo.scale(rx, ry, rx); // Equal x and z for round shape
+                this.finalizeBodyGeometry(roundGeo);
                 const roundMesh = new THREE.Mesh(roundGeo, abdomenMat);
                 roundMesh.position.set(0, 0, -4 * scale);
                 roundMesh.castShadow = true;
@@ -598,6 +972,7 @@ class BugGenerator3D {
                 // Oval abdomen - elongated ellipsoid
                 const ovalGeo = new THREE.SphereGeometry(1, 16, 12);
                 ovalGeo.scale(rx * 0.85, ry * 0.9, rz * 1.2); // Longer, narrower
+                this.finalizeBodyGeometry(ovalGeo);
                 const ovalMesh = new THREE.Mesh(ovalGeo, abdomenMat);
                 ovalMesh.position.set(0, 0, -5 * scale);
                 ovalMesh.castShadow = true;
@@ -615,6 +990,7 @@ class BugGenerator3D {
 
                 const frontBulbGeo = new THREE.SphereGeometry(coneRadius * 1.1, 12, 10);
                 frontBulbGeo.scale(1, 0.9, 0.8);
+                this.finalizeBodyGeometry(frontBulbGeo);
                 const frontBulb = new THREE.Mesh(frontBulbGeo, abdomenMat);
                 frontBulb.position.set(0, 0, sphereZ);
                 pointedGroup.add(frontBulb);
@@ -635,6 +1011,7 @@ class BugGenerator3D {
                 // Bulbous abdomen - extra wide and round (beetle-like)
                 const bulbousGeo = new THREE.SphereGeometry(1, 16, 12);
                 bulbousGeo.scale(rx * 1.3, ry * 1.1, rz * 0.9); // Wide and rotund
+                this.finalizeBodyGeometry(bulbousGeo);
                 const bulbousMesh = new THREE.Mesh(bulbousGeo, abdomenMat);
                 bulbousMesh.position.set(0, -0.3 * scale, -4 * scale);
                 bulbousMesh.castShadow = true;
@@ -658,6 +1035,7 @@ class BugGenerator3D {
                     const segSize = 1 - i * 0.12; // Each segment slightly smaller
                     const segGeo = new THREE.SphereGeometry(rx * 0.7 * segSize, 10, 8);
                     segGeo.scale(1, 0.85, 0.9);
+                    this.finalizeBodyGeometry(segGeo);
                     const segment = new THREE.Mesh(segGeo, abdomenMat);
                     segment.position.set(0, -i * 0.15 * scale, -2 * scale - i * segmentSpacing);
                     segment.castShadow = true;
@@ -676,8 +1054,7 @@ class BugGenerator3D {
 
             case 'sac':
                 // Sac abdomen - spider-like translucent sac
-                const sacMat = new THREE.MeshStandardMaterial({
-                    color: this.colors.primary,
+                const sacMat = this.createMaterial('primary', {
                     roughness: 0.3,
                     metalness: 0.1,
                     transparent: true,
@@ -687,6 +1064,7 @@ class BugGenerator3D {
                 // Main sac body
                 const sacGeo = new THREE.SphereGeometry(1, 16, 12);
                 sacGeo.scale(rx * 1.1, ry * 1.2, rz * 1.1);
+                this.finalizeBodyGeometry(sacGeo);
                 const sacMesh = new THREE.Mesh(sacGeo, sacMat);
                 sacMesh.position.set(0, 0.2 * scale, -4.5 * scale);
                 sacMesh.castShadow = true;
@@ -699,6 +1077,7 @@ class BugGenerator3D {
                 });
                 const internalGeo = new THREE.SphereGeometry(1, 10, 8);
                 internalGeo.scale(rx * 0.7, ry * 0.8, rz * 0.7);
+                this.finalizeBodyGeometry(internalGeo);
                 const internal = new THREE.Mesh(internalGeo, internalMat);
                 internal.position.set(0, 0.1 * scale, -4.3 * scale);
                 group.add(internal);
@@ -725,6 +1104,7 @@ class BugGenerator3D {
                     // Each plate is a flattened sphere (squashed to be wide and flat)
                     const plateGeo = new THREE.SphereGeometry(1, 12, 10);
                     plateGeo.scale(rx * plateScale, ry * 0.35 * plateScale, rz * 0.3);
+                    this.finalizeBodyGeometry(plateGeo);
 
                     const plate = new THREE.Mesh(plateGeo, abdomenMat);
                     // Position each plate, overlapping slightly
@@ -741,6 +1121,7 @@ class BugGenerator3D {
                 // Main body
                 const stingerBodyGeo = new THREE.SphereGeometry(1, 14, 10);
                 stingerBodyGeo.scale(rx * 0.9, ry * 0.85, rz * 0.8);
+                this.finalizeBodyGeometry(stingerBodyGeo);
                 const stingerBody = new THREE.Mesh(stingerBodyGeo, abdomenMat);
                 stingerBody.position.set(0, 0, -3.5 * scale);
                 stingerBody.castShadow = true;
@@ -749,12 +1130,14 @@ class BugGenerator3D {
                 // Narrow tail section
                 const tailGeo = new THREE.CylinderGeometry(rx * 0.35, rx * 0.5, rz * 0.8, 10);
                 tailGeo.rotateX(Math.PI / 2);
+                this.finalizeBodyGeometry(tailGeo);
                 const tail = new THREE.Mesh(tailGeo, abdomenMat);
                 tail.position.set(0, -0.3 * scale, -6 * scale);
                 group.add(tail);
 
                 // Tail bulb
                 const bulbGeo = new THREE.SphereGeometry(rx * 0.45, 10, 8);
+                this.finalizeBodyGeometry(bulbGeo);
                 const bulb = new THREE.Mesh(bulbGeo, abdomenMat);
                 bulb.position.set(0, -0.4 * scale, -7.5 * scale);
                 group.add(bulb);
@@ -831,16 +1214,14 @@ class BugGenerator3D {
         // Choose material based on defense
         let thoraxMat;
         if (defense === 'toxic') {
-            thoraxMat = new THREE.MeshStandardMaterial({
-                color: this.colors.primary,
+            thoraxMat = this.createMaterial('primary', {
                 roughness: 0.4,
                 metalness: 0.2,
                 emissive: 0x003300,
                 emissiveIntensity: 0.2,
             });
         } else if (defense === 'shell') {
-            thoraxMat = new THREE.MeshStandardMaterial({
-                color: this.colors.primary,
+            thoraxMat = this.createMaterial('primary', {
                 roughness: 0.3,
                 metalness: 0.5,
             });
@@ -865,6 +1246,7 @@ class BugGenerator3D {
                 // Compact thorax - tight, muscular, slightly boxy
                 const compactGeo = new THREE.SphereGeometry(1, 16, 12);
                 compactGeo.scale(rx * 0.9, ry, rz * 0.85);
+                this.finalizeBodyGeometry(compactGeo);
                 const compactMesh = new THREE.Mesh(compactGeo, thoraxMat);
                 compactMesh.position.set(0, 0.5 * scale, 0);
                 compactMesh.castShadow = true;
@@ -875,6 +1257,7 @@ class BugGenerator3D {
                 // Elongated thorax - stretched lengthwise (ant/wasp-like)
                 const elongThoraxGeo = new THREE.SphereGeometry(1, 16, 12);
                 elongThoraxGeo.scale(rx * 0.75, ry * 0.85, rz * 1.4); // Longer, narrower
+                this.finalizeBodyGeometry(elongThoraxGeo);
                 const elongThoraxMesh = new THREE.Mesh(elongThoraxGeo, thoraxMat);
                 elongThoraxMesh.position.set(0, 0.5 * scale, 0.5 * scale);
                 elongThoraxMesh.castShadow = true;
@@ -895,6 +1278,7 @@ class BugGenerator3D {
                 // Wide thorax - broad and flat (beetle-like)
                 const wideGeo = new THREE.SphereGeometry(1, 16, 12);
                 wideGeo.scale(rx * 1.4, ry * 0.75, rz * 0.9);
+                this.finalizeBodyGeometry(wideGeo);
                 const wideMesh = new THREE.Mesh(wideGeo, thoraxMat);
                 wideMesh.position.set(0, 0.3 * scale, 0);
                 wideMesh.castShadow = true;
@@ -906,6 +1290,7 @@ class BugGenerator3D {
                 // Base thorax
                 const humpBaseGeo = new THREE.SphereGeometry(1, 16, 12);
                 humpBaseGeo.scale(rx * 0.95, ry * 0.8, rz);
+                this.finalizeBodyGeometry(humpBaseGeo);
                 const humpBaseMesh = new THREE.Mesh(humpBaseGeo, thoraxMat);
                 humpBaseMesh.position.set(0, 0.3 * scale, 0);
                 humpBaseMesh.castShadow = true;
@@ -914,6 +1299,7 @@ class BugGenerator3D {
                 // Hump positioned forward to avoid stinger overlap
                 const humpGeo = new THREE.SphereGeometry(rx * 0.6, 12, 10);
                 humpGeo.scale(1, 1.2, 1.0);
+                this.finalizeBodyGeometry(humpGeo);
                 const hump = new THREE.Mesh(humpGeo, thoraxMat);
                 hump.position.set(0, ry * 0.85, 0.4 * scale);
                 hump.castShadow = true;
@@ -937,6 +1323,7 @@ class BugGenerator3D {
                     const segGeo = new THREE.SphereGeometry(1, 12, 10);
                     const segScale = 1 - (i * 0.08); // Slightly smaller toward rear
                     segGeo.scale(segWidth * segScale, ry * 0.7 * segScale, rz * 0.5);
+                    this.finalizeBodyGeometry(segGeo);
                     const segMesh = new THREE.Mesh(segGeo, thoraxMat);
                     segMesh.position.set(0, 0.3 * scale, -segGap * 1.5 + i * segGap);
                     segMesh.castShadow = true;
@@ -977,6 +1364,7 @@ class BugGenerator3D {
                 // Round head - simple globular shape
                 const rndMainGeo = new THREE.SphereGeometry(1, 14, 12);
                 rndMainGeo.scale(2.5 * scale, 2.3 * scale, 2.4 * scale);
+                this.finalizeBodyGeometry(rndMainGeo);
                 const rndMain = new THREE.Mesh(rndMainGeo, headMat);
                 rndMain.position.set(0, 1 * scale, headBaseZ);
                 rndMain.castShadow = true;
@@ -994,6 +1382,7 @@ class BugGenerator3D {
                 // Main cranium - wide upper portion
                 const triCraniumGeo = new THREE.SphereGeometry(1, 14, 10);
                 triCraniumGeo.scale(2.8 * scale, 1.6 * scale, 2.2 * scale);
+                this.finalizeBodyGeometry(triCraniumGeo);
                 const triCranium = new THREE.Mesh(triCraniumGeo, headMat);
                 triCranium.position.set(0, 1.8 * scale, headBaseZ);
                 triCranium.castShadow = true;
@@ -1002,6 +1391,7 @@ class BugGenerator3D {
                 // Tapered lower face/chin - narrower, creates the triangle point
                 const triChinGeo = new THREE.SphereGeometry(1, 10, 8);
                 triChinGeo.scale(1.0 * scale, 1.4 * scale, 1.8 * scale);
+                this.finalizeBodyGeometry(triChinGeo);
                 const triChin = new THREE.Mesh(triChinGeo, headMat);
                 triChin.position.set(0, 0.2 * scale, headBaseZ + 0.8 * scale);
                 group.add(triChin);
@@ -1016,6 +1406,7 @@ class BugGenerator3D {
                 // Main head mass - wide, flattened sphere
                 const sqMainGeo = new THREE.SphereGeometry(1, 14, 10);
                 sqMainGeo.scale(2.6 * scale, 1.8 * scale, 2.2 * scale);
+                this.finalizeBodyGeometry(sqMainGeo);
                 const sqMain = new THREE.Mesh(sqMainGeo, headMat);
                 sqMain.position.set(0, 1 * scale, headBaseZ);
                 sqMain.castShadow = true;
@@ -1025,6 +1416,7 @@ class BugGenerator3D {
                 for (const side of [-1, 1]) {
                     const sideBulgeGeo = new THREE.SphereGeometry(1, 10, 8);
                     sideBulgeGeo.scale(1.2 * scale, 1.4 * scale, 1.8 * scale);
+                    this.finalizeBodyGeometry(sideBulgeGeo);
                     const sideBulge = new THREE.Mesh(sideBulgeGeo, headMat);
                     sideBulge.position.set(side * 1.8 * scale, 0.8 * scale, headBaseZ + 0.3 * scale);
                     group.add(sideBulge);
@@ -1060,6 +1452,7 @@ class BugGenerator3D {
                 // Elongated head - stretched forward (ant-like)
                 const elongHeadGeo = new THREE.SphereGeometry(1, 16, 12);
                 elongHeadGeo.scale(2 * scale, 1.8 * scale, 3.5 * scale);
+                this.finalizeBodyGeometry(elongHeadGeo);
                 const elongHeadMesh = new THREE.Mesh(elongHeadGeo, headMat);
                 elongHeadMesh.position.set(0, 1 * scale, headBaseZ + 1 * scale);
                 elongHeadMesh.castShadow = true;
@@ -1076,6 +1469,7 @@ class BugGenerator3D {
                 // Main carapace - wide, flattened dome
                 const shMainGeo = new THREE.SphereGeometry(1, 16, 12);
                 shMainGeo.scale(3.2 * scale, 1.2 * scale, 2.5 * scale);
+                this.finalizeBodyGeometry(shMainGeo);
                 const shMain = new THREE.Mesh(shMainGeo, headMat);
                 shMain.position.set(0, 1.5 * scale, headBaseZ);
                 shMain.castShadow = true;
@@ -1085,6 +1479,7 @@ class BugGenerator3D {
                 for (const side of [-1, 1]) {
                     const shoulderGeo = new THREE.SphereGeometry(1, 10, 8);
                     shoulderGeo.scale(1.4 * scale, 0.9 * scale, 1.6 * scale);
+                    this.finalizeBodyGeometry(shoulderGeo);
                     const shoulder = new THREE.Mesh(shoulderGeo, headMat);
                     shoulder.position.set(side * 2.4 * scale, 1.3 * scale, headBaseZ - 0.5 * scale);
                     shoulder.rotation.z = side * 0.3;
@@ -1136,7 +1531,7 @@ class BugGenerator3D {
         });
 
         // Eye shine material (no texture)
-        const shineMat = this.createMaterial('white', { skipNormalMap: true });
+        const shineMat = this.createMaterial('white', { skipTexture: true });
 
         // Eye positions adjusted based on head type
         const eyeBaseZ = headBaseZ + eyeOffsetZ;
@@ -1147,8 +1542,8 @@ class BugGenerator3D {
         switch (eyeStyle) {
             case 'compound':
             default:
-                // Large compound eyes - bulging outward
-                const compoundSize = headType === 'triangular' ? 1.0 * scale : 1.2 * scale;
+                // Compound eyes - bulging outward
+                const compoundSize = headType === 'triangular' ? 0.8 * scale : 1.0 * scale;
                 const compoundGeo = new THREE.SphereGeometry(compoundSize, 12, 8);
 
                 const leftCompound = new THREE.Mesh(compoundGeo, eyeMat);
@@ -1188,32 +1583,35 @@ class BugGenerator3D {
                 break;
 
             case 'stalked':
-                // Eyes on stalks - like a crab or snail
+                // Eyes on stalks - angular, insectoid
                 const stalkMat = this.createMaterial('primary');
-                const eyeballSize = 0.8 * scale;
+                const eyeballSize = 0.55 * scale;
                 const eyeballGeo = new THREE.SphereGeometry(eyeballSize, 10, 8);
+                eyeballGeo.scale(1.2, 0.8, 1.0);  // Flattened, less round
 
                 for (const side of [-1, 1]) {
-                    // Eye stalk
-                    const stalkGeo = new THREE.CylinderGeometry(0.2 * scale, 0.3 * scale, 3 * scale, 6);
+                    // Eye stalk - thinner, more segmented look
+                    const stalkGeo = new THREE.CylinderGeometry(0.15 * scale, 0.25 * scale, 2.5 * scale, 6);
                     const stalk = new THREE.Mesh(stalkGeo, stalkMat);
-                    stalk.position.set(side * eyeSpread * 0.6 * scale, eyeBaseY + 2 * scale, headBaseZ);
-                    stalk.rotation.x = 0.3;
-                    stalk.rotation.z = side * -0.4;
+                    stalk.position.set(side * eyeSpread * 0.6 * scale, eyeBaseY + 1.8 * scale, headBaseZ);
+                    stalk.rotation.x = 0.4;
+                    stalk.rotation.z = side * -0.5;
                     group.add(stalk);
 
-                    // Eyeball at end of stalk
+                    // Eyeball at end of stalk - smaller, flattened
                     const eyeball = new THREE.Mesh(eyeballGeo, eyeMat);
-                    eyeball.position.set(side * eyeSpread * 0.9 * scale, eyeBaseY + 3.3 * scale, headBaseZ + 1 * scale);
+                    eyeball.position.set(side * eyeSpread * 0.95 * scale, eyeBaseY + 2.9 * scale, headBaseZ + 1.2 * scale);
                     eyeball.userData.isEye = true;
                     group.add(eyeball);
 
-                    // Pupil (no texture)
-                    const pupilGeo = new THREE.SphereGeometry(0.3 * scale, 6, 4);
-                    const pupilMat = this.createMaterial('black', { skipNormalMap: true });
-                    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-                    pupil.position.set(side * eyeSpread * 0.9 * scale, eyeBaseY + 3.3 * scale, headBaseZ + 1.7 * scale);
-                    group.add(pupil);
+                    // Vertical slit pupil - reptilian/menacing
+                    const slitGeo = new THREE.CylinderGeometry(0.08 * scale, 0.08 * scale, 0.5 * scale, 6);
+                    const slitMat = this.createMaterial('black', { skipTexture: true });
+                    const slit = new THREE.Mesh(slitGeo, slitMat);
+                    slit.position.set(side * eyeSpread * 0.95 * scale, eyeBaseY + 2.9 * scale, headBaseZ + 1.7 * scale);
+                    slit.rotation.x = Math.PI / 2;  // Point forward
+                    slit.rotation.z = Math.PI / 2;  // Vertical slit
+                    group.add(slit);
                 }
                 break;
 
@@ -1636,7 +2034,6 @@ class BugGenerator3D {
     createChitinMaterial(colorKey, options = {}) {
         const color = this.colors[colorKey] || colorKey;
         const textureType = this.genome.textureType || 'smooth';
-        const patternType = this.genome.pattern || 'solid';
 
         // Generate and cache normal map if not already created
         if (!this.normalMap) {
@@ -1644,19 +2041,7 @@ class BugGenerator3D {
             this.normalMap = texGen.generate(textureType);
         }
 
-        // Generate and cache pattern map (only for primary color parts)
-        if (!this.patternMap && colorKey === 'primary' && patternType !== 'solid') {
-            const patGen = new PatternGenerator(256);
-            this.patternMap = patGen.generate(
-                patternType,
-                this.colors.primary,
-                this.colors.dark,
-                this.genome.patternSeed || 0
-            );
-        }
-
         // Roughness and normal intensity vary by texture type
-        // Smooth = glossy polished chitin, Plated = semi-gloss armor, Rough = matte weathered
         let baseRoughness, normalIntensity;
         switch (textureType) {
             case 'smooth':
@@ -1671,6 +2056,14 @@ class BugGenerator3D {
                 baseRoughness = 0.55;
                 normalIntensity = 0.7;
                 break;
+            case 'spotted':
+                baseRoughness = 0.35;
+                normalIntensity = 0.5;
+                break;
+            case 'striped':
+                baseRoughness = 0.3;
+                normalIntensity = 0.3;
+                break;
             default:
                 baseRoughness = 0.35;
                 normalIntensity = 0.5;
@@ -1683,12 +2076,6 @@ class BugGenerator3D {
             normalMap: this.normalMap,
             normalScale: new THREE.Vector2(normalIntensity, normalIntensity),
         };
-
-        // Add pattern map for primary color parts (stripes/spots)
-        if (colorKey === 'primary' && this.patternMap) {
-            materialOptions.map = this.patternMap;
-            materialOptions.color = '#ffffff'; // Let map colors show through
-        }
 
         return new THREE.MeshStandardMaterial({
             ...materialOptions,
@@ -2120,14 +2507,6 @@ class BugGenerator3D {
                 // SCORPION PINCERS - both claws move
                 for (const side of [-1, 1]) {
                     const pincerGroup = new THREE.Group();
-
-                    // THICK ARM - muscular
-                    const armGeo = new THREE.CylinderGeometry(0.5 * scale, 0.6 * scale, 3 * scale, 8);
-                    const arm = new THREE.Mesh(armGeo, darkChitin);
-                    arm.rotation.x = Math.PI / 2;
-                    arm.rotation.z = side * 0.2;
-                    arm.position.set(side * 0.5 * scale, 0, 1.5 * scale);
-                    pincerGroup.add(arm);
 
                     // Arm joint
                     const jointGeo = new THREE.SphereGeometry(0.55 * scale, 8, 6);
@@ -2764,7 +3143,17 @@ class BugAnimator {
         this.isFlying = false;
         this.isDiving = false;
         this.grounded = true;
+        this.onWall = false;
+        this.isJumping = false;
+        this.jumpPhase = 0;  // 0-1 for jump animation progress
+        this.vy = 0;  // Vertical velocity for jump direction
         this.weaponType = bugGroup.userData.weaponType || 'mandibles';
+        // Death animation state
+        this.deathPhase = 'falling';  // 'falling', 'landing', 'flipping', 'done'
+        this.deathFallY = 0;
+        this.deathRotation = 0;
+        this.deathLanded = false;
+        this.groundedDeathTime = 0;
     }
 
     update(deltaTime, state = 'idle', fighter = null) {
@@ -2773,6 +3162,14 @@ class BugAnimator {
         if (state !== this.state) {
             this.state = state;
             this.stateTime = 0;
+            // Reset death animation when entering death state
+            if (state === 'death') {
+                this.deathPhase = 'falling';
+                this.deathFallY = 0;
+                this.deathRotation = 0;
+                this.deathLanded = false;
+                this.groundedDeathTime = 0;
+            }
         }
         this.stateTime += deltaTime;
 
@@ -2785,6 +3182,17 @@ class BugAnimator {
             this.isFlying = fighter.isFlying || false;
             this.isDiving = fighter.isDiving || false;
             this.grounded = fighter.grounded !== false;
+            this.onWall = fighter.onWall || false;
+            this.vy = vy;
+            // Jumping = not grounded, not flying, not on wall
+            this.isJumping = !this.grounded && !this.isFlying && !this.onWall;
+            // Track jump phase based on vertical velocity
+            if (this.isJumping) {
+                // vy < 0 means going up, vy > 0 means falling
+                this.jumpPhase = vy < 0 ? Math.min(1, -vy / 15) : 0.5 + Math.min(0.5, vy / 15);
+            } else {
+                this.jumpPhase = 0;
+            }
         }
 
         switch (this.state) {
@@ -2804,6 +3212,9 @@ class BugAnimator {
             case 'victory':
                 this.animateVictory();
                 break;
+            case 'jump':
+                this.animateJump();
+                break;
         }
     }
 
@@ -2822,44 +3233,117 @@ class BugAnimator {
             this.bug.userData.thorax.scale.y = breathe;
         }
 
-        // Leg movement - realistic walking gait
+        // Leg movement - varies based on state: flying airborne, jumping, or grounded/walking
         if (this.bug.userData.legs) {
-            const legSpeed = 3 + speedFactor * 12;  // Faster when moving
-            const legAmplitude = 0.05 + speedFactor * 0.4;  // Bigger steps when moving
+            // Flying bugs in the air: legs hang down
+            const flyingAirborne = this.isFlying && !this.grounded;
 
-            this.bug.userData.legs.children.forEach((leg) => {
-                if (leg.userData.segments && leg.userData.segments.length > 0) {
-                    const phase = leg.userData.phase || 0;
-                    const side = leg.userData.side === 'left' ? -1 : 1;
-                    const walkCycle = Math.sin(t * legSpeed + phase * Math.PI * 2);
-                    const liftCycle = Math.max(0, walkCycle);  // Only lift, don't push down
-
-                    // Coxa (segment 0) - forward/back swing
-                    const coxa = leg.userData.segments[0];
-                    if (coxa && coxa.baseRotation) {
-                        coxa.pivot.rotation.x = coxa.baseRotation.x + walkCycle * legAmplitude * 0.8;
-                        coxa.pivot.rotation.z = coxa.baseRotation.z + side * liftCycle * legAmplitude * 0.3;
+            if (flyingAirborne) {
+                // Flying in air: legs hang down with slight dangle
+                const dangle = Math.sin(this.time * 3) * 0.05;
+                this.bug.userData.legs.children.forEach((leg) => {
+                    if (leg.userData.segments && leg.userData.segments.length > 0) {
+                        const coxa = leg.userData.segments[0];
+                        if (coxa && coxa.baseRotation) {
+                            coxa.pivot.rotation.x = coxa.baseRotation.x + 0.2 + dangle;
+                            coxa.pivot.rotation.z = coxa.baseRotation.z;
+                        }
+                        const femur = leg.userData.segments[1];
+                        if (femur && femur.baseRotation) {
+                            femur.pivot.rotation.x = femur.baseRotation.x + 0.3;
+                        }
+                        const tibia = leg.userData.segments[2];
+                        if (tibia && tibia.baseRotation) {
+                            tibia.pivot.rotation.x = tibia.baseRotation.x + 0.15;
+                        }
+                        const tarsus = leg.userData.segments[3];
+                        if (tarsus && tarsus.baseRotation) {
+                            tarsus.pivot.rotation.x = tarsus.baseRotation.x;
+                        }
                     }
+                });
+            } else if (this.isJumping) {
+                // JUMPING: Legs extend dramatically when going up, tuck when falling
+                const ascending = this.vy < 0;
+                const jumpIntensity = Math.min(1.5, Math.abs(this.vy) / 8);  // Higher max, more sensitive
 
-                    // Femur (segment 1) - lift during swing phase
-                    const femur = leg.userData.segments[1];
-                    if (femur && femur.baseRotation) {
-                        femur.pivot.rotation.x = femur.baseRotation.x - liftCycle * legAmplitude * 0.6;
-                    }
+                this.bug.userData.legs.children.forEach((leg) => {
+                    if (leg.userData.segments && leg.userData.segments.length > 0) {
+                        const side = leg.userData.side === 'left' ? -1 : 1;
 
-                    // Tibia (segment 2) - extend during stance, flex during swing
-                    const tibia = leg.userData.segments[2];
-                    if (tibia && tibia.baseRotation) {
-                        tibia.pivot.rotation.x = tibia.baseRotation.x + walkCycle * legAmplitude * 0.5;
-                    }
+                        const coxa = leg.userData.segments[0];
+                        const femur = leg.userData.segments[1];
+                        const tibia = leg.userData.segments[2];
+                        const tarsus = leg.userData.segments[3];
 
-                    // Tarsus (segment 3) - ground contact adjustment
-                    const tarsus = leg.userData.segments[3];
-                    if (tarsus && tarsus.baseRotation) {
-                        tarsus.pivot.rotation.x = tarsus.baseRotation.x - liftCycle * legAmplitude * 0.4;
+                        if (ascending) {
+                            // Going UP: legs push back hard and extend fully (explosive push off)
+                            if (coxa && coxa.baseRotation) {
+                                coxa.pivot.rotation.x = coxa.baseRotation.x + 0.8 * jumpIntensity;  // Push back hard
+                                coxa.pivot.rotation.z = coxa.baseRotation.z - side * 0.5 * jumpIntensity;  // Spread wide
+                            }
+                            if (femur && femur.baseRotation) {
+                                femur.pivot.rotation.x = femur.baseRotation.x - 1.0 * jumpIntensity;  // Extend fully
+                            }
+                            if (tibia && tibia.baseRotation) {
+                                tibia.pivot.rotation.x = tibia.baseRotation.x - 1.2 * jumpIntensity;  // Straighten out
+                            }
+                            if (tarsus && tarsus.baseRotation) {
+                                tarsus.pivot.rotation.x = tarsus.baseRotation.x + 0.6 * jumpIntensity;  // Point down
+                            }
+                        } else {
+                            // Falling DOWN: legs tuck in tight, prepare for landing
+                            if (coxa && coxa.baseRotation) {
+                                coxa.pivot.rotation.x = coxa.baseRotation.x - 0.5 * jumpIntensity;  // Forward
+                                coxa.pivot.rotation.z = coxa.baseRotation.z + side * 0.4 * jumpIntensity;  // Tuck in
+                            }
+                            if (femur && femur.baseRotation) {
+                                femur.pivot.rotation.x = femur.baseRotation.x + 0.8 * jumpIntensity;  // Bend tight
+                            }
+                            if (tibia && tibia.baseRotation) {
+                                tibia.pivot.rotation.x = tibia.baseRotation.x + 1.0 * jumpIntensity;  // Bend more
+                            }
+                            if (tarsus && tarsus.baseRotation) {
+                                tarsus.pivot.rotation.x = tarsus.baseRotation.x - 0.5 * jumpIntensity;  // Ready for ground
+                            }
+                        }
                     }
-                }
-            });
+                });
+            } else {
+                // Grounded: walking animation (faster speed, bigger movements)
+                const legSpeed = 6 + speedFactor * 18;  // Much faster (was 3 + 12)
+                const legAmplitude = 0.15 + speedFactor * 0.7;  // Much bigger (was 0.05 + 0.4)
+
+                this.bug.userData.legs.children.forEach((leg) => {
+                    if (leg.userData.segments && leg.userData.segments.length > 0) {
+                        const phase = leg.userData.phase || 0;
+                        const side = leg.userData.side === 'left' ? -1 : 1;
+                        const walkCycle = Math.sin(t * legSpeed + phase * Math.PI * 2);
+                        const liftCycle = Math.max(0, walkCycle);
+
+                        const coxa = leg.userData.segments[0];
+                        if (coxa && coxa.baseRotation) {
+                            coxa.pivot.rotation.x = coxa.baseRotation.x + walkCycle * legAmplitude * 1.0;  // Bigger swing
+                            coxa.pivot.rotation.z = coxa.baseRotation.z + side * liftCycle * legAmplitude * 0.5;  // More lift
+                        }
+
+                        const femur = leg.userData.segments[1];
+                        if (femur && femur.baseRotation) {
+                            femur.pivot.rotation.x = femur.baseRotation.x - liftCycle * legAmplitude * 0.9;  // Higher step
+                        }
+
+                        const tibia = leg.userData.segments[2];
+                        if (tibia && tibia.baseRotation) {
+                            tibia.pivot.rotation.x = tibia.baseRotation.x + walkCycle * legAmplitude * 0.7;  // More bend
+                        }
+
+                        const tarsus = leg.userData.segments[3];
+                        if (tarsus && tarsus.baseRotation) {
+                            tarsus.pivot.rotation.x = tarsus.baseRotation.x - liftCycle * legAmplitude * 0.6;  // More curl
+                        }
+                    }
+                });
+            }
         }
 
         // Antenna - more alert when fast
@@ -2875,36 +3359,47 @@ class BugAnimator {
             }
         }
 
-        // Wing animation - speed-based
+        // Wing animation - only when airborne
         if (this.bug.userData.wings) {
             const wings = this.bug.userData.wings;
 
-            // Wing beat frequency: faster when flying/moving fast
-            let wingSpeed = 8;  // Base idle flutter
-            let wingAmplitude = 0.3;
-
-            if (this.isFlying) {
-                // Flying: much faster wing beat
-                wingSpeed = 20 + speedFactor * 15;  // 20-35 hz
-                wingAmplitude = 0.4 + speedFactor * 0.3;  // Bigger strokes when fast
-
-                // Diving: wings pulled back
-                if (this.isDiving) {
-                    wingAmplitude *= 0.5;
-                    wingSpeed *= 0.7;
+            // Only animate wings when not grounded (flying or jumping)
+            if (this.grounded) {
+                // Grounded: wings folded still (at base position)
+                if (wings.userData.right && wings.userData.baseRotation) {
+                    wings.userData.right.rotation.z = wings.userData.baseRotation.right.z;
                 }
-            } else if (!this.grounded) {
-                // Jumping/falling: emergency flapping
-                wingSpeed = 15;
-                wingAmplitude = 0.5;
-            }
+                if (wings.userData.left && wings.userData.baseRotation) {
+                    wings.userData.left.rotation.z = wings.userData.baseRotation.left.z;
+                }
+            } else {
+                // Airborne: wings flapping
+                let wingSpeed = 8;
+                let wingAmplitude = 0.3;
 
-            const flutter = Math.sin(t * wingSpeed) * wingAmplitude;
-            if (wings.userData.right && wings.userData.baseRotation) {
-                wings.userData.right.rotation.z = wings.userData.baseRotation.right.z + flutter;
-            }
-            if (wings.userData.left && wings.userData.baseRotation) {
-                wings.userData.left.rotation.z = wings.userData.baseRotation.left.z - flutter;
+                if (this.isFlying) {
+                    // Flying: much faster wing beat
+                    wingSpeed = 20 + speedFactor * 15;  // 20-35 hz
+                    wingAmplitude = 0.4 + speedFactor * 0.3;  // Bigger strokes when fast
+
+                    // Diving: wings pulled back
+                    if (this.isDiving) {
+                        wingAmplitude *= 0.5;
+                        wingSpeed *= 0.7;
+                    }
+                } else {
+                    // Jumping/falling: emergency flapping
+                    wingSpeed = 15;
+                    wingAmplitude = 0.5;
+                }
+
+                const flutter = Math.sin(t * wingSpeed) * wingAmplitude;
+                if (wings.userData.right && wings.userData.baseRotation) {
+                    wings.userData.right.rotation.z = wings.userData.baseRotation.right.z + flutter;
+                }
+                if (wings.userData.left && wings.userData.baseRotation) {
+                    wings.userData.left.rotation.z = wings.userData.baseRotation.left.z - flutter;
+                }
             }
         }
     }
@@ -3216,61 +3711,275 @@ class BugAnimator {
         }
     }
 
-    animateDeath() {
-        const t = Math.min(this.stateTime * 1.5, 1);
+    animateJump() {
+        // For bug builder preview - simulate a jump cycle
+        const cycleTime = 2.0;  // seconds for full jump cycle
+        const phase = (this.stateTime % cycleTime) / cycleTime;
 
-        // Slow fall over with twitch
-        const twitch = Math.sin(this.stateTime * 15) * (1 - t) * 0.1;
-        this.bug.rotation.z = t * Math.PI / 2 + twitch;
+        // Simulate vertical velocity based on phase
+        // 0-0.15: crouch (preparation)
+        // 0.15-0.5: ascending
+        // 0.5-0.85: descending
+        // 0.85-1.0: landing recovery
 
-        // Sink into ground
-        this.bug.position.y = -t * 3;
+        let simulatedVy = 0;
+        let bodySquash = 1;
+        let bodyY = 0;
 
-        // Legs curl up dramatically
-        if (this.bug.userData.legs) {
-            this.bug.userData.legs.children.forEach(leg => {
-                if (leg.userData.segments && leg.userData.segments.length > 0) {
-                    const side = leg.userData.side === 'left' ? -1 : 1;
-                    // All segments curl inward
-                    leg.userData.segments.forEach((seg, i) => {
-                        if (seg && seg.baseRotation) {
-                            seg.pivot.rotation.x = seg.baseRotation.x + t * (0.3 + i * 0.1);
-                            seg.pivot.rotation.z = seg.baseRotation.z + side * t * 0.2;
-                        }
-                    });
-                }
-            });
+        if (phase < 0.15) {
+            // Crouch preparation - legs bend, body squashes
+            const crouchT = phase / 0.15;
+            bodySquash = 1 - crouchT * 0.2;
+            simulatedVy = 0;  // No vertical movement yet
+            // Legs coil for jump
+            this.animateJumpLegs(crouchT, 'crouch');
+        } else if (phase < 0.5) {
+            // Ascending - legs extend, body stretches, moves up
+            const ascendT = (phase - 0.15) / 0.35;
+            bodySquash = 0.8 + ascendT * 0.3;
+            bodyY = Math.sin(ascendT * Math.PI / 2) * 20;
+            simulatedVy = -12 * (1 - ascendT);  // Negative = going up
+            this.animateJumpLegs(ascendT, 'ascend');
+        } else if (phase < 0.85) {
+            // Descending - legs tuck, body normal, moves down
+            const descendT = (phase - 0.5) / 0.35;
+            bodySquash = 1.1 - descendT * 0.1;
+            bodyY = 20 * Math.cos(descendT * Math.PI / 2);
+            simulatedVy = 12 * descendT;  // Positive = falling
+            this.animateJumpLegs(descendT, 'descend');
+        } else {
+            // Landing recovery - slight squash, back to normal
+            const landT = (phase - 0.85) / 0.15;
+            bodySquash = 1 - (1 - landT) * 0.15;
+            bodyY = 0;
+            simulatedVy = 0;
+            this.animateJumpLegs(landT, 'land');
         }
 
-        // Wings droop
+        // Apply body position and scale
+        this.bug.position.y = bodyY;
+        if (this.bug.userData.thorax) {
+            this.bug.userData.thorax.scale.y = bodySquash;
+        }
+        if (this.bug.userData.abdomen) {
+            this.bug.userData.abdomen.scale.y = bodySquash;
+        }
+    }
+
+    animateJumpLegs(t, phase) {
+        if (!this.bug.userData.legs) return;
+
+        this.bug.userData.legs.children.forEach((leg) => {
+            if (leg.userData.segments && leg.userData.segments.length > 0) {
+                const side = leg.userData.side === 'left' ? -1 : 1;
+                const coxa = leg.userData.segments[0];
+                const femur = leg.userData.segments[1];
+                const tibia = leg.userData.segments[2];
+                const tarsus = leg.userData.segments[3];
+
+                switch (phase) {
+                    case 'crouch':
+                        // Coil up - bend all joints
+                        if (coxa && coxa.baseRotation) {
+                            coxa.pivot.rotation.x = coxa.baseRotation.x - t * 0.3;
+                            coxa.pivot.rotation.z = coxa.baseRotation.z + side * t * 0.2;
+                        }
+                        if (femur && femur.baseRotation) {
+                            femur.pivot.rotation.x = femur.baseRotation.x + t * 0.6;
+                        }
+                        if (tibia && tibia.baseRotation) {
+                            tibia.pivot.rotation.x = tibia.baseRotation.x + t * 0.7;
+                        }
+                        if (tarsus && tarsus.baseRotation) {
+                            tarsus.pivot.rotation.x = tarsus.baseRotation.x - t * 0.3;
+                        }
+                        break;
+
+                    case 'ascend':
+                        // Extend - push off and straighten
+                        if (coxa && coxa.baseRotation) {
+                            coxa.pivot.rotation.x = coxa.baseRotation.x - 0.3 + t * 0.7;  // Swing back
+                            coxa.pivot.rotation.z = coxa.baseRotation.z + side * (0.2 - t * 0.4);  // Spread out
+                        }
+                        if (femur && femur.baseRotation) {
+                            femur.pivot.rotation.x = femur.baseRotation.x + 0.6 - t * 1.0;  // Extend
+                        }
+                        if (tibia && tibia.baseRotation) {
+                            tibia.pivot.rotation.x = tibia.baseRotation.x + 0.7 - t * 1.2;  // Extend
+                        }
+                        if (tarsus && tarsus.baseRotation) {
+                            tarsus.pivot.rotation.x = tarsus.baseRotation.x - 0.3 + t * 0.5;  // Point down
+                        }
+                        break;
+
+                    case 'descend':
+                        // Tuck - prepare for landing
+                        if (coxa && coxa.baseRotation) {
+                            coxa.pivot.rotation.x = coxa.baseRotation.x + 0.4 - t * 0.5;
+                            coxa.pivot.rotation.z = coxa.baseRotation.z - side * 0.2 + side * t * 0.3;
+                        }
+                        if (femur && femur.baseRotation) {
+                            femur.pivot.rotation.x = femur.baseRotation.x - 0.4 + t * 0.5;
+                        }
+                        if (tibia && tibia.baseRotation) {
+                            tibia.pivot.rotation.x = tibia.baseRotation.x - 0.5 + t * 0.6;
+                        }
+                        if (tarsus && tarsus.baseRotation) {
+                            tarsus.pivot.rotation.x = tarsus.baseRotation.x + 0.2 - t * 0.4;
+                        }
+                        break;
+
+                    case 'land':
+                        // Return to base position
+                        if (coxa && coxa.baseRotation) {
+                            coxa.pivot.rotation.x = coxa.baseRotation.x - 0.1 * (1 - t);
+                            coxa.pivot.rotation.z = coxa.baseRotation.z + side * 0.1 * (1 - t);
+                        }
+                        if (femur && femur.baseRotation) {
+                            femur.pivot.rotation.x = femur.baseRotation.x + 0.1 * (1 - t);
+                        }
+                        if (tibia && tibia.baseRotation) {
+                            tibia.pivot.rotation.x = tibia.baseRotation.x + 0.1 * (1 - t);
+                        }
+                        if (tarsus && tarsus.baseRotation) {
+                            tarsus.pivot.rotation.x = tarsus.baseRotation.x - 0.2 * (1 - t);
+                        }
+                        break;
+                }
+            }
+        });
+    }
+
+    animateDeath() {
+        // Death animation phases:
+        // Phase 0: FALLING - bug falls through air (if was airborne/on wall)
+        // Phase 1: Stagger/wobble on ground
+        // Phase 2: Fall to side
+        // Phase 3: Roll onto back (upside down)
+        // Phase 4: Settle with leg twitches
+
+        // If bug is still falling (not grounded), just do falling animation
+        // Don't override position - let simulation handle the fall
+        if (!this.grounded) {
+            // Reset to normal orientation (not wall-climbing) using quaternion
+            // Smoothly transition from wall orientation to falling orientation
+            const targetQuat = new THREE.Quaternion();  // Identity = normal orientation
+            this.bug.quaternion.slerp(targetQuat, 0.1);
+
+            // Legs tuck in while falling
+            this.animateDeathLegs(0.2);
+
+            // Slight tumble while falling
+            const tumble = Math.sin(this.stateTime * 8) * 0.1;
+            this.bug.rotation.x = tumble;
+            this.bug.rotation.z = tumble * 0.5;
+
+            // Track that we haven't landed yet - reset stateTime when we land
+            this.deathLanded = false;
+            return;
+        }
+
+        // Just landed - reset state time to start ground animation
+        if (!this.deathLanded) {
+            this.deathLanded = true;
+            this.groundedDeathTime = 0;
+        }
+        this.groundedDeathTime += 0.016;  // Approximate deltaTime
+        const time = this.groundedDeathTime;
+
+        // Reset quaternion to use Euler rotations for ground animation
+        this.bug.quaternion.set(0, 0, 0, 1);
+
+        // Single smooth motion from upright to upside down over 0.6 seconds
+        const deathDuration = 0.6;
+
+        if (time < deathDuration) {
+            // Smooth ease-out curve for the full rotation
+            const t = time / deathDuration;
+            const easeOut = 1 - Math.pow(1 - t, 3);  // Cubic ease-out for smooth deceleration
+
+            // Rotate from 0 to PI (upside down) in one smooth motion
+            this.bug.rotation.z = easeOut * Math.PI;
+
+            // Slight wobble that fades out during the fall
+            const wobble = Math.sin(time * 30) * (1 - t) * 0.08;
+            this.bug.rotation.x = wobble;
+
+            // Legs curl progressively
+            this.animateDeathLegs(easeOut * 0.9);
+
+        } else {
+            // Settled upside down with occasional twitches
+            this.bug.rotation.z = Math.PI;
+
+            const twitch = Math.sin(time * 8) * Math.exp(-(time - deathDuration) * 3) * 0.08;
+            this.animateDeathLegs(0.9, twitch);
+        }
+
+        // Wings droop throughout
         if (this.bug.userData.wings) {
+            const wingDroop = Math.min(1, this.stateTime * 2);
             const wings = this.bug.userData.wings;
             if (wings.userData.right && wings.userData.baseRotation) {
-                wings.userData.right.rotation.z = wings.userData.baseRotation.right.z - t * 0.5;
+                wings.userData.right.rotation.z = wings.userData.baseRotation.right.z - wingDroop * 0.6;
             }
             if (wings.userData.left && wings.userData.baseRotation) {
-                wings.userData.left.rotation.z = wings.userData.baseRotation.left.z + t * 0.5;
+                wings.userData.left.rotation.z = wings.userData.baseRotation.left.z + wingDroop * 0.6;
             }
         }
 
         // Antenna droop
         if (this.bug.userData.antennae) {
+            const droopT = Math.min(1, this.stateTime * 1.5);
             const antennae = this.bug.userData.antennae;
             if (antennae.userData.right) {
-                antennae.userData.right.rotation.x = t * 0.5;
+                antennae.userData.right.rotation.x = droopT * 0.6;
+                antennae.userData.right.rotation.z = 0.3 - droopT * 0.5;
             }
             if (antennae.userData.left) {
-                antennae.userData.left.rotation.x = t * 0.5;
+                antennae.userData.left.rotation.x = droopT * 0.6;
+                antennae.userData.left.rotation.z = -0.3 + droopT * 0.5;
             }
         }
+    }
+
+    animateDeathLegs(progress, twitch = 0) {
+        if (!this.bug.userData.legs) return;
+
+        this.bug.userData.legs.children.forEach(leg => {
+            if (leg.userData.segments && leg.userData.segments.length > 0) {
+                const side = leg.userData.side === 'left' ? -1 : 1;
+                const legIndex = leg.userData.index || 0;
+
+                // Stagger the curling per leg
+                const legDelay = legIndex * 0.1;
+                const legProgress = Math.max(0, Math.min(1, (progress - legDelay) / (1 - legDelay)));
+
+                leg.userData.segments.forEach((seg, i) => {
+                    if (seg && seg.baseRotation) {
+                        // Curl inward and up (since bug will be upside down)
+                        const curlAmount = legProgress * (0.4 + i * 0.15);
+                        const spreadAmount = legProgress * 0.25;
+
+                        seg.pivot.rotation.x = seg.baseRotation.x + curlAmount + twitch;
+                        seg.pivot.rotation.z = seg.baseRotation.z + side * spreadAmount;
+                    }
+                });
+            }
+        });
     }
 
     animateVictory() {
         const t = this.time * 4;
 
-        // Bounce with energy
+        // Store base Y position on first frame of victory
+        if (this.bug.userData.victoryBaseY === undefined) {
+            this.bug.userData.victoryBaseY = this.bug.position.y;
+        }
+
+        // Bounce with energy - ADD to base position, don't replace it
         const bounce = Math.abs(Math.sin(t)) * 5;
-        this.bug.position.y = bounce;
+        this.bug.position.y = this.bug.userData.victoryBaseY + bounce;
 
         // Body puff up with pride
         if (this.bug.userData.thorax) {
