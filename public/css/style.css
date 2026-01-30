@@ -80,20 +80,6 @@ h1 {
     50%, 100% { opacity: 1; background: linear-gradient(180deg, #f66 0%, #f00 100%); }
 }
 
-/* Arena Canvas - CRT monitor effect */
-#arena {
-    display: block;
-    margin: 0 auto 20px;
-    border: 4px solid;
-    border-color: #666 #222 #222 #666;
-    background: #0a0a0a;
-    image-rendering: pixelated;
-    box-shadow:
-        inset 0 0 50px rgba(0, 255, 0, 0.1),
-        0 0 20px rgba(0, 255, 0, 0.3),
-        0 4px 0 #000;
-}
-
 /* Fighter Cards - Beveled 90s panels */
 .selection-panel {
     display: flex;
@@ -674,10 +660,6 @@ h1 {
         align-items: stretch;
     }
 
-    #arena {
-        width: 100%;
-        height: auto;
-    }
 
     .bet-btn {
         font-size: 8px;

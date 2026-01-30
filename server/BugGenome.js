@@ -106,12 +106,29 @@ class BugGenome {
         child.fury = this.inheritStat(this.fury, other.fury);
         child.instinct = this.inheritStat(this.instinct, other.instinct);
 
+        // Scale stats to target total, clamped to [10, 100]
+        const STAT_CAP = 350, MIN = 10, MAX = 100;
         const total = child.bulk + child.speed + child.fury + child.instinct;
-        const scale = 350 / total;
-        child.bulk = Math.round(child.bulk * scale);
-        child.speed = Math.round(child.speed * scale);
-        child.fury = Math.round(child.fury * scale);
-        child.instinct = 350 - child.bulk - child.speed - child.fury;
+        const scale = STAT_CAP / total;
+        let stats = [
+            Math.max(MIN, Math.min(MAX, Math.round(child.bulk * scale))),
+            Math.max(MIN, Math.min(MAX, Math.round(child.speed * scale))),
+            Math.max(MIN, Math.min(MAX, Math.round(child.fury * scale))),
+            Math.max(MIN, Math.min(MAX, Math.round(child.instinct * scale))),
+        ];
+        // Adjust for rounding errors - trim from highest stats
+        let newTotal = stats.reduce((a, b) => a + b, 0);
+        while (newTotal > STAT_CAP) {
+            const maxIdx = stats.indexOf(Math.max(...stats));
+            stats[maxIdx]--;
+            newTotal--;
+        }
+        while (newTotal < STAT_CAP) {
+            const minIdx = stats.indexOf(Math.min(...stats));
+            stats[minIdx]++;
+            newTotal++;
+        }
+        [child.bulk, child.speed, child.fury, child.instinct] = stats;
 
         child.abdomenType = Math.random() < 0.5 ? this.abdomenType : other.abdomenType;
         child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;

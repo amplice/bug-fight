@@ -368,6 +368,7 @@ class Fighter {
         this.onWall = false;
         this.wallSide = null;
         this.wallExhausted = false; // Can't climb when exhausted
+        this.isDiving = false;
 
         // Drive system
         const furyNorm = genome.fury / 100;
@@ -404,13 +405,16 @@ class Fighter {
         const legStyle = this.genome.legStyle;
         const baseJump = 8 + (this.genome.speed / 20);
         switch (legStyle) {
-            case 'curved-back':
-            case 'curved-forward':
-                return baseJump * 1.5;
-            case 'short':
-                return baseJump * 0.5;
+            case 'grasshopper':
+                return baseJump * 1.5;  // Powerful jumping legs
+            case 'mantis':
+                return baseJump * 1.2;  // Strong forelegs help launch
+            case 'centipede':
+                return baseJump * 0.7;  // Many short legs, poor jumpers
+            case 'beetle':
+                return baseJump * 0.85; // Heavy-set legs
             default:
-                return baseJump;
+                return baseJump;         // insect, spider, stick
         }
     }
 
@@ -541,7 +545,7 @@ class Fighter {
 
         // Flying costs stamina - flyers can't stay airborne forever
         if (this.isFlying && !this.grounded) {
-            const flightCost = 0.15; // Stamina drain per tick while airborne
+            const flightCost = 0.25; // Stamina drain per tick while airborne
             this.stamina = Math.max(0, this.stamina - flightCost);
 
             // Force landing when exhausted
@@ -551,8 +555,9 @@ class Fighter {
             }
         }
 
-        // Flyers recover grounded state when stamina recovers
-        if (this.isFlying && this.grounded && this.stamina > this.maxStamina * 0.3) {
+        // Flyers recover grounded state when stamina recovers to 50%
+        // Must rest on the ground long enough to be vulnerable
+        if (this.isFlying && this.grounded && this.stamina > this.maxStamina * 0.5) {
             this.grounded = false;
             this.gravity = 0.05; // Back to normal flight gravity
         }
@@ -580,9 +585,9 @@ class Fighter {
         if (this.isFlying && this.grounded) {
             regenMultiplier = 2.0;
         }
-        // No regen while actively flying (unless landed)
+        // No regen while actively flying - must land to recover
         if (this.isFlying && !this.grounded) {
-            regenMultiplier = 0.3; // Minimal regen while airborne
+            regenMultiplier = 0;
         }
         // Wallcrawlers on wall have NO regen - must drop to recover
         if (this.isWallcrawler && this.onWall) {
@@ -660,13 +665,16 @@ class Fighter {
 
         // Dead bugs detach from walls and fall
         if (isDead && this.onWall) {
+            const side = this.wallSide;
             this.onWall = false;
             this.wallSide = null;
             this.grounded = false;  // Force falling
             this.gravity = 0.6;  // Ensure normal gravity
             // Give slight push away from wall
-            if (this.x < 0) this.vx = 2;
-            else this.vx = -2;
+            if (side === 'left') this.vx = 2;
+            else if (side === 'right') this.vx = -2;
+            else if (side === 'front') this.vz = -2;
+            else if (side === 'back') this.vz = 2;
         }
 
         // Dead flying bugs fall with normal gravity
@@ -794,7 +802,7 @@ class Fighter {
         this.vz *= frictionFactor;  // 3D: z friction
         if (this.isFlying) {
             this.vy *= this.airFriction;
-            this.vz *= this.airFriction;  // Flying bugs have air friction in z too
+            // Note: vz friction already applied above via frictionFactor
         }
 
         if (this.jumpCooldown > 0) this.jumpCooldown--;
@@ -829,7 +837,11 @@ class Fighter {
 
         if (this.onWall) {
             this.vy = -jumpForce * 0.8;
-            this.vx = this.wallSide === 'left' ? 6 : -6;
+            // Push perpendicular away from wall
+            if (this.wallSide === 'left') this.vx = 6;
+            else if (this.wallSide === 'right') this.vx = -6;
+            else if (this.wallSide === 'front') this.vz = -6;
+            else if (this.wallSide === 'back') this.vz = 6;
             this.onWall = false;
             this.grounded = false;
         } else {
@@ -1209,11 +1221,15 @@ class Fighter {
             this.vy = Math.sign(dy) * speed * 2;
 
             if (horizDist < 150 && Math.abs(dy) < 60 && Math.random() < 0.02 + this.drives.aggression * 0.03) {
-                // Wall pounce in full 3D
+                // Wall pounce in full 3D - push perpendicular to wall
                 this.jump(1.0);
-                const pounceDir = this.wallSide === 'left' ? 1 : -1;
-                this.vx = pounceDir * 6;
-                this.vz = Math.sign(dz) * 4;  // Reduced z-component
+                if (this.wallSide === 'left' || this.wallSide === 'right') {
+                    this.vx = (this.wallSide === 'left' ? 1 : -1) * 6;
+                    this.vz = Math.sign(dz) * 4;
+                } else {
+                    this.vz = (this.wallSide === 'back' ? 1 : -1) * 6;
+                    this.vx = Math.sign(dx) * 4;
+                }
             }
 
         } else {
@@ -1508,18 +1524,25 @@ class Fighter {
         const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
 
         if (this.onWall) {
-            // Snap to wall position
+            // Snap to wall position based on which wall we're on
             if (this.wallSide === 'left') {
                 this.x = ARENA.leftWall + halfSize;
-            } else {
+                this.vx = 0;
+            } else if (this.wallSide === 'right') {
                 this.x = ARENA.rightWall - halfSize;
+                this.vx = 0;
+            } else if (this.wallSide === 'front') {
+                this.z = ARENA.frontWall - halfSize;
+                this.vz = 0;
+            } else if (this.wallSide === 'back') {
+                this.z = ARENA.backWall + halfSize;
+                this.vz = 0;
             }
 
             const minY = ARENA.ceilingY + halfSize + 10;
             const maxY = ARENA.floorY - halfSize - 10;
             this.y = Math.max(minY, Math.min(maxY, this.y));
 
-            this.vx = 0;
             this.grounded = true;
 
             // Wall climbing movement - always try to match or gain height advantage
@@ -1574,15 +1597,20 @@ class Fighter {
                     this.onWall = false;
                     this.grounded = false;
 
-                    const pounceDir = this.wallSide === 'left' ? 1 : -1;
                     const jumpPower = 12 + (this.genome.speed / 8);
-
-                    // Calculate trajectory towards opponent
-                    const dx = opponent.x - this.x;
                     const dy = opponent.y - this.y;
-                    const angle = Math.atan2(dy, Math.abs(dx));
+                    const angle = Math.atan2(dy, Math.abs(this.wallSide === 'front' || this.wallSide === 'back' ? (opponent.z - this.z) : (opponent.x - this.x)));
 
-                    this.vx = pounceDir * jumpPower * Math.cos(angle);
+                    // Push perpendicular to wall toward opponent
+                    if (this.wallSide === 'left' || this.wallSide === 'right') {
+                        const pounceDir = this.wallSide === 'left' ? 1 : -1;
+                        this.vx = pounceDir * jumpPower * Math.cos(angle);
+                        this.vz = Math.sign(opponent.z - this.z) * 4;
+                    } else {
+                        const pounceDir = this.wallSide === 'back' ? 1 : -1;
+                        this.vz = pounceDir * jumpPower * Math.cos(angle);
+                        this.vx = Math.sign(opponent.x - this.x) * 4;
+                    }
                     this.vy = -6 + Math.min(4, dy / 40); // Upward arc, adjusted for height diff
 
                     // Use some stamina for the jump
@@ -1595,12 +1623,18 @@ class Fighter {
                 this.onWall = false;
                 this.grounded = false;
                 // Drop down with slight push toward center
-                this.vx = this.wallSide === 'left' ? 3 : -3;
+                if (this.wallSide === 'left') this.vx = 3;
+                else if (this.wallSide === 'right') this.vx = -3;
+                else if (this.wallSide === 'front') this.vz = -3;
+                else if (this.wallSide === 'back') this.vz = 3;
             }
         } else {
             // NOT ON WALL - decide whether to seek wall
             const nearLeftWall = this.x < ARENA.leftWall + 80;
             const nearRightWall = this.x > ARENA.rightWall - 80;
+            const nearFrontWall = this.z > ARENA.frontWall - 80;
+            const nearBackWall = this.z < ARENA.backWall + 80;
+            const nearAnyWall = nearLeftWall || nearRightWall || nearFrontWall || nearBackWall;
 
             // DON'T climb walls if stamina is too low - need to recover on ground first
             // wallExhausted is set when we drop from wall due to low stamina
@@ -1608,7 +1642,7 @@ class Fighter {
             const canClimb = !this.wallExhausted && staminaPercent > 0.5;
 
             // Climb if near wall and conditions are right
-            if ((nearLeftWall || nearRightWall) && this.grounded && canClimb) {
+            if (nearAnyWall && this.grounded && canClimb) {
                 const wantToClimb =
                     opponent.isFlying ||      // Opponent flying - match vertical mobility
                     opponent.y < this.y - 40 || // Opponent above - gain height
@@ -1618,7 +1652,11 @@ class Fighter {
 
                 if (wantToClimb) {
                     this.onWall = true;
-                    this.wallSide = nearLeftWall ? 'left' : 'right';
+                    // Pick the closest wall
+                    if (nearLeftWall) this.wallSide = 'left';
+                    else if (nearRightWall) this.wallSide = 'right';
+                    else if (nearFrontWall) this.wallSide = 'front';
+                    else this.wallSide = 'back';
                     this.vy = -3; // Initial upward boost
                 }
             }
@@ -1818,8 +1856,9 @@ class Simulation {
         } else if (this.phase === 'fighting') {
             this.updateFight();
         } else if (this.phase === 'victory') {
-            // Wait a bit then start next fight
-            if (this.tick % (TICK_RATE * 5) === 0) { // 5 seconds
+            // Wait then start next fight
+            this.victoryTimer--;
+            if (this.victoryTimer <= 0) {
                 this.setupNextFight();
             }
         }
@@ -1977,9 +2016,10 @@ class Simulation {
             const attackerMomentum = Math.min(attackerSpeed / 8, 1);  // Normalize to 0-1
 
             // Weapon behavior affects lunge - stronger lunge with momentum
-            const dirX = dx / dist;
-            const dirY = dy / dist;
-            const dirZ = dist > 0 ? dz / dist : 0;
+            const safeDist = dist || 1;
+            const dirX = dx / safeDist;
+            const dirY = dy / safeDist;
+            const dirZ = dz / safeDist;
             const lungeMult = 1 + attackerMomentum * 0.5;
             attacker.lungeX = dirX * 25 * lungeMult;
             attacker.lungeY = dirY * 15 * lungeMult;
@@ -1997,7 +2037,8 @@ class Simulation {
                 // Dodge chance based on instinct, reduced if attacker is fast
                 const baseDodgeChance = targetInstinct * 0.6;  // Up to 60% base
                 const speedPenalty = attackerMomentum * 0.3;   // Fast attacks are harder to dodge
-                const dodgeChance = Math.max(0.05, baseDodgeChance - speedPenalty + (target.isFlying ? 0.15 : 0));
+                const camoBonus = target.genome.defense === 'camouflage' ? 0.12 : 0;
+                const dodgeChance = Math.max(0.05, baseDodgeChance - speedPenalty + (target.isFlying ? 0.15 : 0) + camoBonus);
 
                 if (Math.random() < dodgeChance) {
                     dodged = true;
@@ -2165,7 +2206,7 @@ class Simulation {
                 if (target.genome.defense === 'shell') {
                     defenseResist = 0.7; // Heavy shell resists knockback
                 } else if (target.genome.defense === 'camouflage') {
-                    defenseResist = 1.1; // Standard, slight knockback vulnerability
+                    defenseResist = 1.0; // Camouflage benefit is dodge bonus, not knockback
                 }
 
                 // MOMENTUM VULNERABILITY - target moving fast when hit = extra knockback
@@ -2275,6 +2316,7 @@ class Simulation {
 
     endFight() {
         this.phase = 'victory';
+        this.victoryTimer = TICK_RATE * 5; // 5 second victory display
 
         const [f1, f2] = this.fighters;
         if (f1.isAlive && !f2.isAlive) {

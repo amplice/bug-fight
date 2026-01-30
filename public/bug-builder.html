@@ -840,10 +840,9 @@
                     saturation: BUG_COLORS[currentConfig.colorName].sat / 100,
                     lightness: BUG_COLORS[currentConfig.colorName].light / 100,
                 },
+                accentHue: (BUG_COLORS[currentConfig.colorName].hue + 30 + Math.random() * 60) % 360,
                 getSizeMultiplier: function() {
-                    const bulkFactor = this.bulk / 50;
-                    const speedFactor = this.speed / 50;
-                    return 0.8 + (bulkFactor * 0.3) - (speedFactor * 0.1);
+                    return 0.6 + (this.bulk / 100) * 0.9;
                 }
             };
 
@@ -980,7 +979,7 @@
         }
 
         function updateStatsDisplay(genome) {
-            const hp = 30 + Math.floor(genome.bulk * 1.2);
+            const hp = 150 + Math.floor(genome.bulk * 5);
             const stamina = 50 + genome.bulk;
             const power = genome.bulk + genome.speed + genome.fury + genome.instinct +
                 (genome.weapon === 'horn' ? 10 : genome.weapon === 'stinger' ? 8 : 0) +
@@ -1002,13 +1001,16 @@
                 defense: genome.defense,
                 textureType: genome.textureType,
                 mobility: genome.mobility,
+                wingType: genome.wingType,
                 legStyle: genome.legStyle,
+                legCount: genome.legCount,
                 headType: genome.headType,
                 thoraxType: genome.thoraxType,
                 abdomenType: genome.abdomenType,
                 eyeStyle: genome.eyeStyle,
                 antennaStyle: genome.antennaStyle,
                 color: genome.color,
+                accentHue: genome.accentHue,
             };
 
             document.getElementById('genome-display').textContent = JSON.stringify(display, null, 2);

@@ -86,7 +86,7 @@ class RosterManager {
     }
 
     generateId() {
-        return Math.random().toString(36).substr(2, 9);
+        return Math.random().toString(36).substring(2, 11);
     }
 
     addNewBug() {
@@ -135,19 +135,17 @@ class RosterManager {
         }
 
         // Select second fighter (different from first)
-        let fighter2Index;
-        do {
-            r = Math.random() * (totalWeight - weights[fighter1Index]);
-            fighter2Index = 0;
-            for (let i = 0; i < weights.length; i++) {
-                if (i === fighter1Index) continue;
-                r -= weights[i];
-                if (r <= 0) {
-                    fighter2Index = i;
-                    break;
-                }
+        const remainingWeight = totalWeight - weights[fighter1Index];
+        r = Math.random() * remainingWeight;
+        let fighter2Index = fighter1Index === 0 ? 1 : 0; // Default to first non-fighter1 index
+        for (let i = 0; i < weights.length; i++) {
+            if (i === fighter1Index) continue;
+            r -= weights[i];
+            if (r <= 0) {
+                fighter2Index = i;
+                break;
             }
-        } while (fighter2Index === fighter1Index);
+        }
 
         return [this.bugs[fighter1Index], this.bugs[fighter2Index]];
     }

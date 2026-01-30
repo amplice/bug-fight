@@ -72,6 +72,25 @@ const TRAIL_SPAWN_SPEED = 5;  // Minimum speed to spawn trail
 // Fighter UI
 let fighterUI = [null, null];
 
+// Recursively dispose Three.js object and all children
+function disposeObject(obj) {
+    if (!obj) return;
+    if (obj.children) {
+        while (obj.children.length > 0) {
+            disposeObject(obj.children[0]);
+            obj.remove(obj.children[0]);
+        }
+    }
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+        if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => m.dispose());
+        } else {
+            obj.material.dispose();
+        }
+    }
+}
+
 // ============================================
 // INITIALIZATION
 // ============================================
@@ -424,20 +443,45 @@ function updateBugs(state, deltaTime) {
 
     // Check for new fight
     if (state.fightNumber !== currentFightNumber) {
-        // Clear old bugs
-        bugMeshes.forEach(mesh => { if (mesh) scene.remove(mesh); });
+        // Clear old bugs - dispose GPU resources
+        bugMeshes.forEach(mesh => {
+            if (mesh) {
+                scene.remove(mesh);
+                disposeObject(mesh);
+            }
+        });
         bugMeshes = [null, null];
         bugAnimators = [null, null];
 
-        // Clear UI
-        fighterUI.forEach(ui => { if (ui) scene.remove(ui); });
+        // Clear UI - dispose GPU resources
+        fighterUI.forEach(ui => {
+            if (ui) {
+                scene.remove(ui);
+                disposeObject(ui);
+            }
+        });
         fighterUI = [null, null];
 
-        // Clear motion trails
+        // Clear motion trails - dispose GPU resources
         motionTrails.forEach((trail, index) => {
-            trail.forEach(t => scene.remove(t.mesh));
+            trail.forEach(t => {
+                scene.remove(t.mesh);
+                disposeObject(t.mesh);
+            });
             motionTrails[index] = [];
         });
+
+        // Clear lingering particles and damage numbers
+        hitParticles.forEach(p => {
+            scene.remove(p.mesh);
+            disposeObject(p.mesh);
+        });
+        hitParticles = [];
+        damageNumbers.forEach(d => {
+            scene.remove(d.mesh);
+            disposeObject(d.mesh);
+        });
+        damageNumbers = [];
 
         currentFightNumber = state.fightNumber;
     }
@@ -724,6 +768,7 @@ function createHitParticles(x, y, z, color = 0xffff00, count = 8, isCrit = false
         if (hitParticles.length >= 150) {
             const old = hitParticles.shift();
             scene.remove(old.mesh);
+            disposeObject(old.mesh);
         }
 
         // Vary particle size - crits get bigger particles
@@ -776,6 +821,7 @@ function createDamageNumber(x, y, z, damage, isCrit = false, isPoison = false) {
     if (damageNumbers.length >= 20) {
         const old = damageNumbers.shift();
         scene.remove(old.sprite);
+        disposeObject(old.sprite);
     }
 
     const canvas = document.createElement('canvas');
@@ -836,6 +882,7 @@ function createMotionTrail(x, y, z, color, index) {
     if (motionTrails[index].length > MAX_TRAIL_POINTS) {
         const old = motionTrails[index].shift();
         scene.remove(old.mesh);
+        disposeObject(old.mesh);
     }
 }
 
@@ -885,6 +932,7 @@ function updateMotionTrails(state) {
 
             if (trail.life <= 0) {
                 scene.remove(trail.mesh);
+                disposeObject(trail.mesh);
                 motionTrails[index].splice(i, 1);
             }
         }
@@ -922,6 +970,7 @@ function updateEffects() {
 
         if (p.life <= 0) {
             scene.remove(p.mesh);
+            disposeObject(p.mesh);
             hitParticles.splice(i, 1);
         }
     }
@@ -936,6 +985,7 @@ function updateEffects() {
 
         if (d.life <= 0) {
             scene.remove(d.sprite);
+            disposeObject(d.sprite);
             damageNumbers.splice(i, 1);
         }
     }
@@ -976,6 +1026,9 @@ function processEvents(events) {
             screenShake.intensity = Math.min(12, screenShake.intensity + event.data.stunApplied / 3);
         }
     });
+
+    // Clear events after processing to prevent re-processing on next frame
+    events.length = 0;
 }
 
 // ============================================

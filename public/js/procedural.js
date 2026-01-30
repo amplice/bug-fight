@@ -617,15 +617,15 @@ class BugSpriteGenerator {
 
             // Map leg styles to 2D rendering
             const style = g.legStyle || 'insect';
-            if (style === 'insect' || style === 'beetle' || style === 'straight') {
+            if (style === 'insect' || style === 'beetle') {
                 this.drawStraightLeg(grid, startX, startY, legLen, anim, scale, isWallcrawler);
-            } else if (style === 'spider' || style === 'curved-back') {
+            } else if (style === 'spider') {
                 this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, -1, isWallcrawler);
-            } else if (style === 'mantis' || style === 'grasshopper' || style === 'curved-forward') {
+            } else if (style === 'mantis' || style === 'grasshopper') {
                 this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, 1, isWallcrawler);
             } else if (style === 'stick') {
                 this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 1.3), anim, scale, isWallcrawler);
-            } else if (style === 'centipede' || style === 'short') {
+            } else if (style === 'centipede') {
                 this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 0.7), anim, scale, isWallcrawler);
             } else {
                 this.drawStraightLeg(grid, startX, startY, legLen, anim, scale, isWallcrawler);
@@ -795,44 +795,6 @@ class BugSpriteGenerator {
             const dripY = cy + Math.floor(fangLen + 3);
             if (this.inBounds(dripX, dripY)) grid[dripY][dripX] = 6;
             if (this.inBounds(dripX, dripY + 1)) grid[dripY + 1][dripX] = 6;
-        }
-    }
-
-    drawClaws(grid, hx, cy, scale, size, attacking) {
-        const armLen = size + Math.floor(scale);
-        const clawLen = Math.floor(size * 1.2);
-
-        // During attack: claws extend forward and scissor inward
-        const attackExtend = attacking ? Math.floor(2 * scale) : 0;
-        const clawClose = attacking ? Math.floor(3 * scale) : 0; // How much claws close together
-
-        for (const side of [-1, 1]) {
-            // Arm segment going out from head - during attack, arms extend forward more
-            for (let i = 0; i < armLen; i++) {
-                const armProgress = i / armLen;
-                const ax = hx + Math.floor(1.5 * scale) + Math.floor(i * 0.3) + Math.floor(attackExtend * armProgress);
-                const ay = cy + side * (Math.floor(1.5 * scale) + i - Math.floor(clawClose * armProgress));
-                if (this.inBounds(ax, ay)) grid[ay][ax] = 1;
-                if (this.inBounds(ax + 1, ay)) grid[ay][ax + 1] = 1;
-            }
-
-            // Elbow position adjusts during attack
-            const elbowX = hx + Math.floor(1.5 * scale) + Math.floor(armLen * 0.3) + attackExtend;
-            const elbowY = cy + side * (Math.floor(1.5 * scale) + armLen - clawClose);
-
-            // Claw segment - during attack, claws angle inward to "grab"
-            const clawInward = attacking ? 0.6 : 0.2; // How much claw curves toward center
-            for (let i = 0; i < clawLen + attackExtend; i++) {
-                const clawX = elbowX + i;
-                const clawY = elbowY - side * Math.floor(i * clawInward);
-                if (this.inBounds(clawX, clawY)) grid[clawY][clawX] = 1;
-                if (this.inBounds(clawX, clawY + side)) grid[clawY + side][clawX] = 1;
-            }
-
-            // Sharp claw tip
-            const tipX = elbowX + clawLen + attackExtend;
-            const tipY = elbowY - side * Math.floor((clawLen + attackExtend) * clawInward);
-            if (this.inBounds(tipX, tipY)) grid[tipY][tipX] = 1;
         }
     }
 

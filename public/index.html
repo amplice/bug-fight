@@ -322,7 +322,7 @@
                 <div id="fighter2-stats" class="fighter-stats"></div>
                 <div id="fighter2-attrs" class="fighter-attrs"></div>
                 <div class="odds">Odds: <span id="odds2">-</span></div>
-                <div id="bet-buttons">
+                <div id="bet-buttons-2">
                     <button id="bet-fighter2" class="bet-btn">BET ON FIGHTER 2</button>
                 </div>
             </div>
@@ -508,9 +508,6 @@
         const originalUpdateUI = window.BugFightsClient?.updateUI;
         function hookDebugOverlay() {
             if (window.BugFightsClient) {
-                const origGetState = window.BugFightsClient.getState;
-                let lastState = null;
-
                 // Poll for state changes to update debug
                 setInterval(() => {
                     if (debugEnabled && window.BugFightsClient) {

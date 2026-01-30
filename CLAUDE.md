@@ -184,8 +184,8 @@ const rng = createSeededRNG(seed);
 ### Key Stats
 - **Bulk** - HP, stamina pool
 - **Speed** - Movement, stamina regen
-- **Fury** - Damage, aggression response curve
-- **Instinct** - Dodge, crit, adaptation rate
+- **Fury** - Damage, crit chance, aggression response curve
+- **Instinct** - Dodge, tactical positioning, adaptation rate
 
 ### Weapons/Defense/Mobility
 Keep these simple. They affect range and damage type, not complex behaviors.
@@ -199,7 +199,7 @@ Keep these simple. They affect range and damage type, not complex behaviors.
 When adding, removing, or renaming any trait option (weapon, defense, mobility, wing type, leg style, leg count, head/thorax/abdomen type, eye style, antenna style, texture), **update all three files**. The genome is the source of truth — the builder and renderer must match it exactly. No trait should exist in one system but not the others.
 
 ## Implemented Features
-- Persistent roster of 10 bugs with fight records (W-L)
+- Persistent roster of 20 bugs with fight records (W-L)
 - Pre-fight stats screen with pentagon charts
 - Accurate odds calculation with 5% house edge
 - American/European odds toggle

@@ -97,11 +97,6 @@ function updateGameState(state) {
 
     gameState = state;
 
-    // New fight started - resolve previous bet and reset
-    if (state.fightNumber !== previousFightNumber && previousFightNumber > 0) {
-        // This is handled by the fightEnd event
-    }
-
     // Process events
     if (state.events && state.events.length > 0) {
         state.events.forEach(event => {
@@ -282,7 +277,6 @@ function updateUI() {
     }
 
     // Bet buttons state
-    const betButtons = document.getElementById('bet-buttons');
     if (gameState.phase === 'countdown') {
         document.querySelectorAll('.fighter-card').forEach(card => card.classList.remove('disabled'));
     } else {

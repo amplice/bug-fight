@@ -913,6 +913,7 @@ class BugGenerator3D {
         bugGroup.userData.weaponType = g.weapon || 'mandibles';
 
         // Store base positions for attack animations
+        if (head) head.userData.baseY = head.position.y;
         if (head) head.userData.baseZ = head.position.z;
         if (head) head.userData.baseRotX = head.rotation.x;
         if (thorax) thorax.userData.baseZ = thorax.position.z;
@@ -1352,9 +1353,28 @@ class BugGenerator3D {
         const headType = this.genome.headType || 'round';
 
         const defense = this.genome.defense || 'none';
-        const headMat = defense === 'camouflage'
-            ? this.createMaterial('primary', { transparent: true, opacity: 0.45, roughness: 0.7 })
-            : this.createMaterial('primary');
+        let headMat;
+        if (defense === 'toxic') {
+            headMat = this.createMaterial('primary', {
+                roughness: 0.4,
+                metalness: 0.2,
+                emissive: 0x003300,
+                emissiveIntensity: 0.2,
+            });
+        } else if (defense === 'shell') {
+            headMat = this.createMaterial('primary', {
+                roughness: 0.3,
+                metalness: 0.5,
+            });
+        } else if (defense === 'camouflage') {
+            headMat = this.createMaterial('primary', {
+                transparent: true,
+                opacity: 0.20,
+                roughness: 0.7,
+            });
+        } else {
+            headMat = this.createMaterial('primary');
+        }
 
         // Create head based on type
         let headBaseZ = 4 * scale;
@@ -1925,10 +1945,6 @@ class BugGenerator3D {
             segment.castShadow = true;
             jointPivot.add(segment);
 
-            // Add spikes for bladed style
-            if (config.bladed && i === 2) {
-                this.addLegBlades(jointPivot, length, rTop, scale, side);
-            }
 
             // Add armor plates for armored style
             if (config.armored && i < 3) {
@@ -1965,18 +1981,6 @@ class BugGenerator3D {
         legRoot.userData.style = style;
 
         return legRoot;
-    }
-
-    addLegBlades(pivot, length, radius, scale, side) {
-        const bladeMat = this.createChitinMaterial('dark');
-
-        for (let i = 0; i < 3; i++) {
-            const bladeGeo = new THREE.ConeGeometry(radius * 0.3, length * 0.25, 4);
-            const blade = new THREE.Mesh(bladeGeo, bladeMat);
-            blade.position.set(side * radius * 0.8, -length * 0.25 - i * length * 0.25, 0);
-            blade.rotation.z = side * Math.PI / 2;
-            pivot.add(blade);
-        }
     }
 
     addLegArmor(pivot, length, radius, scale) {
@@ -2021,16 +2025,7 @@ class BugGenerator3D {
                 }
                 break;
 
-            case 'crab':
-                // Pointed tip
-                const tipGeo = new THREE.ConeGeometry(radius * 1.2, radius * 3, 6);
-                const tip = new THREE.Mesh(tipGeo, footMat);
-                tip.position.y = -radius * 1.5;
-                parent.add(tip);
-                break;
-
             case 'beetle':
-            case 'armored':
                 // Pad with small hooks
                 const padGeo = new THREE.SphereGeometry(radius * 1.5, 8, 6);
                 padGeo.scale(1, 0.5, 1);
@@ -2832,348 +2827,6 @@ class BugGenerator3D {
         wingGroup.rotation.y = side * 0.2;
     }
 
-    createMothWing(wingGroup, scale, side, mothMat) {
-        // Broad, rounded moth forewing
-        const foreShape = new THREE.Shape();
-        foreShape.moveTo(0, 0);
-        foreShape.quadraticCurveTo(2 * scale, 4 * scale, 6 * scale, 4 * scale);
-        foreShape.quadraticCurveTo(9 * scale, 3 * scale, 9 * scale, 0);
-        foreShape.quadraticCurveTo(7 * scale, -2 * scale, 3 * scale, -1.5 * scale);
-        foreShape.quadraticCurveTo(0, -0.5 * scale, 0, 0);
-
-        const foreGeo = new THREE.ShapeGeometry(foreShape);
-        const fore = new THREE.Mesh(foreGeo, mothMat);
-        wingGroup.add(fore);
-
-        // Pattern spots
-        const spotMat = new THREE.MeshStandardMaterial({
-            color: this.colors.accent,
-            roughness: 0.7,
-        });
-        const spotGeo = new THREE.CircleGeometry(0.8 * scale, 12);
-        const spot = new THREE.Mesh(spotGeo, spotMat);
-        spot.position.set(5 * scale, 1.5 * scale, 0.05);
-        wingGroup.add(spot);
-
-        // Hindwing
-        const hindShape = new THREE.Shape();
-        hindShape.moveTo(0, -0.5 * scale);
-        hindShape.quadraticCurveTo(3 * scale, 1 * scale, 5 * scale, 0);
-        hindShape.quadraticCurveTo(5 * scale, -3 * scale, 2 * scale, -3 * scale);
-        hindShape.quadraticCurveTo(0, -2 * scale, 0, -0.5 * scale);
-
-        const hindGeo = new THREE.ShapeGeometry(hindShape);
-        const hind = new THREE.Mesh(hindGeo, mothMat);
-        hind.position.z = -0.1 * scale;
-        wingGroup.add(hind);
-
-        wingGroup.rotation.x = -0.2;
-        wingGroup.rotation.y = side * 0.4;
-    }
-
-    createDragonflyWing(wingGroup, scale, side, clearMat, veinMat) {
-        // Long, narrow forewing
-        const foreShape = new THREE.Shape();
-        foreShape.moveTo(0, 0);
-        foreShape.lineTo(2 * scale, 1 * scale);
-        foreShape.lineTo(10 * scale, 0.8 * scale);
-        foreShape.lineTo(11 * scale, 0);
-        foreShape.lineTo(10 * scale, -0.6 * scale);
-        foreShape.lineTo(2 * scale, -0.8 * scale);
-        foreShape.lineTo(0, 0);
-
-        const foreGeo = new THREE.ShapeGeometry(foreShape);
-        const fore = new THREE.Mesh(foreGeo, clearMat);
-        wingGroup.add(fore);
-
-        // Hindwing (slightly wider at base)
-        const hindShape = new THREE.Shape();
-        hindShape.moveTo(0, -0.5 * scale);
-        hindShape.lineTo(2 * scale, 0.8 * scale);
-        hindShape.lineTo(9 * scale, 0.5 * scale);
-        hindShape.lineTo(10 * scale, -0.2 * scale);
-        hindShape.lineTo(9 * scale, -1.2 * scale);
-        hindShape.lineTo(2 * scale, -1.5 * scale);
-        hindShape.lineTo(0, -0.5 * scale);
-
-        const hindGeo = new THREE.ShapeGeometry(hindShape);
-        const hind = new THREE.Mesh(hindGeo, clearMat);
-        hind.position.set(0, -0.3 * scale, -0.1 * scale);
-        wingGroup.add(hind);
-
-        // Dense vein network
-        for (let i = 0; i < 8; i++) {
-            const vGeo = new THREE.CylinderGeometry(0.02 * scale, 0.02 * scale, 1.2 * scale, 4);
-            const v = new THREE.Mesh(vGeo, veinMat);
-            v.position.set(1.2 * scale + i * 1.1 * scale, 0.1 * scale, 0.02);
-            v.rotation.z = Math.PI / 2 + 0.1;
-            wingGroup.add(v);
-        }
-
-        // Pterostigma (dark spot near tip)
-        const pGeo = new THREE.PlaneGeometry(0.5 * scale, 0.3 * scale);
-        const pMat = new THREE.MeshStandardMaterial({ color: this.colors.dark, side: THREE.DoubleSide });
-        const p = new THREE.Mesh(pGeo, pMat);
-        p.position.set(9 * scale, 0.3 * scale, 0.03);
-        wingGroup.add(p);
-
-        wingGroup.rotation.x = -0.1;
-        wingGroup.rotation.y = side * 0.25;
-    }
-
-    createWaspWing(wingGroup, scale, side, clearMat, veinMat) {
-        // Narrow, elongated wasp forewing
-        const foreShape = new THREE.Shape();
-        foreShape.moveTo(0, 0);
-        foreShape.quadraticCurveTo(1 * scale, 1.2 * scale, 3 * scale, 1.5 * scale);
-        foreShape.lineTo(8 * scale, 0.8 * scale);
-        foreShape.quadraticCurveTo(9 * scale, 0, 8 * scale, -0.6 * scale);
-        foreShape.lineTo(3 * scale, -0.8 * scale);
-        foreShape.quadraticCurveTo(1 * scale, -0.5 * scale, 0, 0);
-
-        const foreGeo = new THREE.ShapeGeometry(foreShape);
-        const fore = new THREE.Mesh(foreGeo, clearMat);
-        wingGroup.add(fore);
-
-        // Smaller hindwing
-        const hindShape = new THREE.Shape();
-        hindShape.moveTo(0.5 * scale, 0);
-        hindShape.lineTo(5 * scale, 0.5 * scale);
-        hindShape.lineTo(5.5 * scale, 0);
-        hindShape.lineTo(5 * scale, -0.5 * scale);
-        hindShape.lineTo(0.5 * scale, 0);
-
-        const hindGeo = new THREE.ShapeGeometry(hindShape);
-        const hind = new THREE.Mesh(hindGeo, clearMat);
-        hind.position.set(0, -0.3 * scale, -0.05 * scale);
-        wingGroup.add(hind);
-
-        // Simple veins
-        const mainGeo = new THREE.CylinderGeometry(0.04 * scale, 0.04 * scale, 7 * scale, 4);
-        const main = new THREE.Mesh(mainGeo, veinMat);
-        main.position.set(4 * scale, 0.4 * scale, 0.02);
-        main.rotation.z = 0.1;
-        wingGroup.add(main);
-
-        wingGroup.rotation.x = -0.15;
-        wingGroup.rotation.y = side * 0.35;
-    }
-
-    createButterflyWing(wingGroup, scale, side, mothMat) {
-        // Large, ornate forewing
-        const foreShape = new THREE.Shape();
-        foreShape.moveTo(0, 0);
-        foreShape.bezierCurveTo(1 * scale, 5 * scale, 5 * scale, 6 * scale, 8 * scale, 4 * scale);
-        foreShape.bezierCurveTo(10 * scale, 2 * scale, 9 * scale, -1 * scale, 6 * scale, -2 * scale);
-        foreShape.bezierCurveTo(3 * scale, -2 * scale, 0, -1 * scale, 0, 0);
-
-        const foreGeo = new THREE.ShapeGeometry(foreShape);
-        const fore = new THREE.Mesh(foreGeo, mothMat);
-        wingGroup.add(fore);
-
-        // Wing patterns - circles
-        const patternMat = new THREE.MeshStandardMaterial({
-            color: this.colors.accent,
-            roughness: 0.6,
-        });
-        const darkMat = new THREE.MeshStandardMaterial({
-            color: this.colors.dark,
-            roughness: 0.6,
-        });
-
-        // Eye spot
-        const eyeOuter = new THREE.CircleGeometry(1 * scale, 16);
-        const eyeO = new THREE.Mesh(eyeOuter, darkMat);
-        eyeO.position.set(5 * scale, 2 * scale, 0.03);
-        wingGroup.add(eyeO);
-
-        const eyeInner = new THREE.CircleGeometry(0.5 * scale, 12);
-        const eyeI = new THREE.Mesh(eyeInner, patternMat);
-        eyeI.position.set(5 * scale, 2 * scale, 0.06);
-        wingGroup.add(eyeI);
-
-        // Hindwing with tail
-        const hindShape = new THREE.Shape();
-        hindShape.moveTo(0, -1 * scale);
-        hindShape.bezierCurveTo(2 * scale, 1 * scale, 5 * scale, 1 * scale, 6 * scale, -1 * scale);
-        hindShape.bezierCurveTo(6 * scale, -3 * scale, 4 * scale, -5 * scale, 3 * scale, -5 * scale);
-        hindShape.bezierCurveTo(1 * scale, -4 * scale, 0, -2 * scale, 0, -1 * scale);
-
-        const hindGeo = new THREE.ShapeGeometry(hindShape);
-        const hind = new THREE.Mesh(hindGeo, mothMat);
-        hind.position.z = -0.1 * scale;
-        wingGroup.add(hind);
-
-        wingGroup.rotation.x = -0.25;
-        wingGroup.rotation.y = side * 0.4;
-    }
-
-    createTatteredWing(wingGroup, scale, side, clearMat, veinMat) {
-        // Damaged wing with holes and tears
-        const shape = new THREE.Shape();
-        shape.moveTo(0, 0);
-        shape.lineTo(1.5 * scale, 2 * scale);
-        shape.lineTo(3 * scale, 2.2 * scale);
-        // Tear
-        shape.lineTo(3.5 * scale, 1.5 * scale);
-        shape.lineTo(4 * scale, 2 * scale);
-        shape.lineTo(6 * scale, 1.8 * scale);
-        // Another tear
-        shape.lineTo(6.5 * scale, 0.8 * scale);
-        shape.lineTo(7 * scale, 1.2 * scale);
-        shape.lineTo(7.5 * scale, 0.5 * scale);
-        shape.lineTo(6 * scale, -0.5 * scale);
-        // Jagged bottom
-        shape.lineTo(5 * scale, 0);
-        shape.lineTo(4 * scale, -0.8 * scale);
-        shape.lineTo(3 * scale, -0.3 * scale);
-        shape.lineTo(2 * scale, -0.6 * scale);
-        shape.lineTo(0, 0);
-
-        const geo = new THREE.ShapeGeometry(shape);
-        const wing = new THREE.Mesh(geo, clearMat);
-        wingGroup.add(wing);
-
-        // Broken veins
-        for (let i = 0; i < 3; i++) {
-            const vGeo = new THREE.CylinderGeometry(0.04 * scale, 0.02 * scale, (2 + i) * scale, 4);
-            const v = new THREE.Mesh(vGeo, veinMat);
-            v.position.set(1 * scale + i * 2 * scale, 0.8 * scale, 0.02);
-            v.rotation.z = 0.4 + i * 0.2;
-            wingGroup.add(v);
-        }
-
-        wingGroup.rotation.x = -0.2;
-        wingGroup.rotation.y = side * 0.3;
-    }
-
-    createMembraneWing(wingGroup, scale, side, clearMat, veinMat) {
-        // Bat-like membrane wing with finger bones
-        const membraneShape = new THREE.Shape();
-        membraneShape.moveTo(0, 0);
-        membraneShape.lineTo(1 * scale, 2 * scale);
-        membraneShape.lineTo(4 * scale, 3.5 * scale);
-        membraneShape.lineTo(7 * scale, 3 * scale);
-        membraneShape.lineTo(9 * scale, 1.5 * scale);
-        membraneShape.lineTo(8 * scale, -0.5 * scale);
-        membraneShape.lineTo(5 * scale, -1.5 * scale);
-        membraneShape.lineTo(2 * scale, -1 * scale);
-        membraneShape.lineTo(0, 0);
-
-        const geo = new THREE.ShapeGeometry(membraneShape);
-        const membrane = new THREE.Mesh(geo, clearMat);
-        wingGroup.add(membrane);
-
-        // Finger bones
-        const bonePositions = [
-            [[0, 0], [1, 2], [4, 3.5]],
-            [[0, 0], [3, 1.5], [7, 3]],
-            [[0, 0], [4, 0.5], [9, 1.5]],
-            [[0, 0], [3, -0.5], [8, -0.5]],
-            [[0, 0], [2, -1], [5, -1.5]],
-        ];
-
-        bonePositions.forEach(positions => {
-            const points = positions.map(p => new THREE.Vector3(p[0] * scale, p[1] * scale, 0.1));
-            const curve = new THREE.CatmullRomCurve3(points);
-            const boneGeo = new THREE.TubeGeometry(curve, 8, 0.08 * scale, 4, false);
-            wingGroup.add(new THREE.Mesh(boneGeo, veinMat));
-        });
-
-        wingGroup.rotation.x = -0.15;
-        wingGroup.rotation.y = side * 0.35;
-    }
-
-    createArmoredWing(wingGroup, scale, side, elytraMat) {
-        // Heavy armored wing covers (like a heavily armored beetle)
-        const armorMat = new THREE.MeshStandardMaterial({
-            color: this.darken(this.colors.primary, 0.2),
-            roughness: 0.25,
-            metalness: 0.5,
-        });
-
-        // Main armor plate
-        const plateShape = new THREE.Shape();
-        plateShape.moveTo(0, 0);
-        plateShape.lineTo(0.5 * scale, 2 * scale);
-        plateShape.lineTo(2 * scale, 3 * scale);
-        plateShape.lineTo(4 * scale, 2.5 * scale);
-        plateShape.lineTo(4 * scale, -1.5 * scale);
-        plateShape.lineTo(2 * scale, -2 * scale);
-        plateShape.lineTo(0, -0.5 * scale);
-        plateShape.lineTo(0, 0);
-
-        const plateGeo = new THREE.ExtrudeGeometry(plateShape, {
-            depth: 0.5 * scale,
-            bevelEnabled: true,
-            bevelThickness: 0.15 * scale,
-            bevelSize: 0.1 * scale,
-        });
-        const plate = new THREE.Mesh(plateGeo, armorMat);
-        wingGroup.add(plate);
-
-        // Ridge details
-        for (let i = 0; i < 3; i++) {
-            const ridgeGeo = new THREE.BoxGeometry(0.15 * scale, 3 * scale, 0.2 * scale);
-            const ridge = new THREE.Mesh(ridgeGeo, elytraMat);
-            ridge.position.set(1 * scale + i * 1 * scale, 0.5 * scale, 0.4 * scale);
-            ridge.rotation.z = 0.1;
-            wingGroup.add(ridge);
-        }
-
-        // Spikes on edge
-        for (let i = 0; i < 2; i++) {
-            const spikeGeo = new THREE.ConeGeometry(0.2 * scale, 0.8 * scale, 5);
-            const spike = new THREE.Mesh(spikeGeo, armorMat);
-            spike.position.set(3.5 * scale, 1 * scale - i * 2 * scale, 0.3 * scale);
-            spike.rotation.z = -Math.PI / 2;
-            wingGroup.add(spike);
-        }
-
-        wingGroup.rotation.x = -0.1;
-        wingGroup.rotation.y = side * 0.15;
-    }
-
-    createLocustWing(wingGroup, scale, side, clearMat, veinMat, elytraMat) {
-        // Leathery forewing (tegmen)
-        const tegShape = new THREE.Shape();
-        tegShape.moveTo(0, 0);
-        tegShape.lineTo(1 * scale, 1 * scale);
-        tegShape.lineTo(8 * scale, 0.8 * scale);
-        tegShape.lineTo(9 * scale, 0);
-        tegShape.lineTo(8 * scale, -0.5 * scale);
-        tegShape.lineTo(1 * scale, -0.5 * scale);
-        tegShape.lineTo(0, 0);
-
-        const tegGeo = new THREE.ShapeGeometry(tegShape);
-        const teg = new THREE.Mesh(tegGeo, elytraMat);
-        wingGroup.add(teg);
-
-        // Large fan-like hindwing
-        const hindShape = new THREE.Shape();
-        hindShape.moveTo(0.5 * scale, 0);
-        hindShape.bezierCurveTo(2 * scale, 3 * scale, 6 * scale, 4 * scale, 10 * scale, 2 * scale);
-        hindShape.bezierCurveTo(11 * scale, 0, 10 * scale, -2 * scale, 8 * scale, -3 * scale);
-        hindShape.bezierCurveTo(5 * scale, -3 * scale, 2 * scale, -2 * scale, 0.5 * scale, 0);
-
-        const hindGeo = new THREE.ShapeGeometry(hindShape);
-        const hind = new THREE.Mesh(hindGeo, clearMat);
-        hind.position.set(0, -0.2 * scale, -0.15 * scale);
-        wingGroup.add(hind);
-
-        // Radial veins on hindwing
-        for (let i = 0; i < 6; i++) {
-            const angle = -0.5 + i * 0.25;
-            const vGeo = new THREE.CylinderGeometry(0.03 * scale, 0.02 * scale, 8 * scale, 4);
-            const v = new THREE.Mesh(vGeo, veinMat);
-            v.position.set(5 * scale, -0.5 * scale, -0.12 * scale);
-            v.rotation.z = angle;
-            wingGroup.add(v);
-        }
-
-        wingGroup.rotation.x = -0.15;
-        wingGroup.rotation.y = side * 0.3;
-    }
 }
 
 // ============================================
