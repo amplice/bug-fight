@@ -630,8 +630,8 @@ class Fighter {
         this.animTick++;
 
         // Animation frame cycling
-        const frameCount = { idle: 4, attack: 4, hit: 2, death: 4, victory: 4 };
-        const frameDelay = this.state === 'idle' ? 8 : 5;
+        const frameCount = { idle: 4, attack: 4, feint: 2, hit: 2, death: 4, victory: 4 };
+        const frameDelay = this.state === 'feint' ? 4 : this.state === 'idle' ? 8 : 5;
 
         if (this.animTick >= frameDelay) {
             this.animTick = 0;
@@ -640,7 +640,7 @@ class Fighter {
             if (this.animFrame >= maxFrames) {
                 if (this.state === 'death') {
                     this.animFrame = maxFrames - 1; // Stay on last frame
-                } else if (this.state === 'attack') {
+                } else if (this.state === 'attack' || this.state === 'feint') {
                     this.setState('idle');
                 } else if (this.state === 'hit') {
                     this.isAlive ? this.setState('idle') : this.setState('death');
@@ -955,7 +955,7 @@ class Fighter {
     // AI
     updateAI(opponent) {
         if (!this.isAlive || this.state === 'death') return;
-        if (this.state === 'windup' || this.state === 'attack') return;
+        if (this.state === 'windup' || this.state === 'attack' || this.state === 'feint') return;
 
         this.moveTimer++;
         this.aiStateTimer++;
@@ -2019,8 +2019,8 @@ class Simulation {
         attacker.feintCooldown = 90 + Math.floor(Math.random() * 60); // 3-5s between feints
         attacker.onAttackAttempted(); // Reset stalemate timer
 
-        // Visual: brief lunge (shorter than real attack)
-        attacker.setState('attack');
+        // Visual: quick feint animation (distinct from real attack)
+        attacker.setState('feint');
         const safeDist = dist || 1;
         const dirX = dx / safeDist;
         const dirY = dy / safeDist;

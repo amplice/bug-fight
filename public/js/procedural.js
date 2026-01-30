@@ -255,6 +255,7 @@ class BugSpriteGenerator {
         // Animation offsets
         const breathe = Math.sin(frameNum * Math.PI / 2) * scale * 0.5;
         const isAttacking = state === 'attack' && frameNum >= 2;
+        const isFeinting = state === 'feint'; // Feint: partial lunge on both frames
 
         // Draw legs first (behind body)
         this.drawLegs(grid, thoraxX, centerY, scale, state, frameNum);
@@ -475,7 +476,9 @@ class BugSpriteGenerator {
     // ==================== HEAD TYPES ====================
     drawHead(grid, cx, cy, scale, state, frameNum) {
         const g = this.genome;
-        const extend = (state === 'attack' && frameNum >= 2) ? Math.floor(2 * scale) : 0;
+        const attackExtend = (state === 'attack' && frameNum >= 2) ? Math.floor(2 * scale) : 0;
+        const feintExtend = (state === 'feint') ? Math.floor(1 * scale) : 0; // Half extension
+        const extend = attackExtend || feintExtend;
         const headX = cx + extend;
 
         switch (g.headType) {
@@ -715,11 +718,12 @@ class BugSpriteGenerator {
         if (g.weapon === 'stinger') return;
 
         const attacking = (state === 'attack' && frameNum >= 2);
+        const feinting = (state === 'feint');
         const weaponSize = Math.floor((2 + g.fury / 40) * scale);
 
         switch (g.weapon) {
             case 'mandibles':
-                const extend = attacking ? Math.floor(3 * scale) : 0;
+                const extend = attacking ? Math.floor(3 * scale) : feinting ? Math.floor(1 * scale) : 0;
                 this.drawMandibles(grid, headX, cy, scale, weaponSize, extend);
                 break;
             case 'fangs':
@@ -805,6 +809,7 @@ class BugSpriteGenerator {
 
         // Attack state - tail strikes forward and down
         const attacking = (state === 'attack' && frameNum >= 2);
+        const feinting = (state === 'feint'); // Partial coil, no strike
 
         // Start position - higher up and further back on abdomen
         const startX = abdX - Math.floor(6 * scale);
@@ -839,6 +844,13 @@ class BugSpriteGenerator {
                     const peakHeight = tailHeight * 0.5;
                     yCurve = peakHeight * (1 - descendProgress * 1.5); // Goes below center
                 }
+            } else if (feinting) {
+                // Feint pose: coil up higher than idle but don't strike forward
+                xCurve = t < 0.3
+                    ? -t * 2 * Math.floor(2 * scale)
+                    : -Math.floor(2 * scale) + (t - 0.3) * 0.8 * Math.floor(10 * scale); // Less forward
+                // Raise higher than idle to telegraph, but don't descend
+                yCurve = Math.sin(t * Math.PI * 0.7) * tailHeight * 1.3;
             } else {
                 // Normal pose: curved scorpion tail
                 xCurve = t < 0.3
@@ -1043,10 +1055,11 @@ class BugSpriteGenerator {
     }
 
     generateAllFrames() {
-        const frames = { idle: [], attack: [], hit: [], death: [] };
+        const frames = { idle: [], attack: [], feint: [], hit: [], death: [] };
 
         for (let i = 0; i < 4; i++) frames.idle.push(this.frameToStrings(this.generateFrame('idle', i)));
         for (let i = 0; i < 4; i++) frames.attack.push(this.frameToStrings(this.generateFrame('attack', i)));
+        for (let i = 0; i < 2; i++) frames.feint.push(this.frameToStrings(this.generateFrame('feint', i)));
         for (let i = 0; i < 2; i++) frames.hit.push(this.frameToStrings(this.generateFrame('hit', i)));
         for (let i = 0; i < 4; i++) frames.death.push(this.frameToStrings(this.generateFrame('death', i)));
 

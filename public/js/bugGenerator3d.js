@@ -2903,6 +2903,9 @@ class BugAnimator {
             case 'attacking':
                 this.animateAttack();
                 break;
+            case 'feint':
+                this.animateFeint();
+                break;
             case 'hit':
                 this.animateHit();
                 break;
@@ -3354,6 +3357,127 @@ class BugAnimator {
             }
             if (wings.userData.left && wings.userData.baseRotation) {
                 wings.userData.left.rotation.z = wings.userData.baseRotation.left.z - flare - 0.3;
+            }
+        }
+    }
+
+    animateFeint() {
+        // Feint: quick telegraph that pulls back - shorter, less committed than real attack
+        // Shows the WINDUP of an attack but snaps back before follow-through
+        const t = this.stateTime * 12;  // Faster than attack (8)
+        const phase = Math.min(t, Math.PI);
+        const weapon = this.bug.userData.weapon;
+
+        // Normalized time 0-1
+        const nt = phase / Math.PI;
+
+        // Feint pattern: quick wind-up (0-50%), snap back (50-100%)
+        // Amplitude is ~50% of real attack
+        const windUp = nt < 0.5 ? Math.sin(nt / 0.5 * Math.PI / 2) : 1 - (nt - 0.5) / 0.5;
+
+        switch (this.weaponType) {
+            case 'mandibles': {
+                // Quick jaw spread then snap back - doesn't lunge
+                const spread = windUp * 0.4; // Half the 0.8 of real attack
+                const headZ = nt < 0.5 ? -spread * 0.3 : 0; // Slight rear, no lunge
+
+                if (this.bug.userData.head) {
+                    this.bug.userData.head.position.z = (this.bug.userData.head.userData.baseZ || 0) + headZ;
+                }
+                if (weapon && weapon.userData.right && weapon.userData.left) {
+                    weapon.userData.right.rotation.y = spread;
+                    weapon.userData.left.rotation.y = -spread;
+                }
+                break;
+            }
+
+            case 'fangs': {
+                // Quick head tilt up then snap back - no strike down
+                const tilt = windUp * 0.5; // Half the 1.0 of real attack
+                const rotX = -tilt * 0.5;
+
+                if (this.bug.userData.head) {
+                    this.bug.userData.head.rotation.x = (this.bug.userData.head.userData.baseRotX || 0) + rotX;
+                }
+                if (this.bug.userData.thorax) {
+                    this.bug.userData.thorax.rotation.x = (this.bug.userData.thorax.userData.baseRotX || 0) + rotX * 0.2;
+                }
+                break;
+            }
+
+            case 'stinger': {
+                // Quick coil up then relax - no strike forward
+                const coil = windUp * 0.25; // Less than 0.4 of real attack
+
+                if (weapon && weapon.userData.stinger) {
+                    weapon.userData.stinger.rotation.x = -coil;
+                    weapon.userData.stinger.position.y = (weapon.userData.stinger.userData.baseY || 0) - coil * 1.5;
+                }
+                if (this.bug.userData.abdomen) {
+                    this.bug.userData.abdomen.rotation.x = coil * 0.15;
+                }
+                break;
+            }
+
+            case 'pincers': {
+                // Quick small opening then snap shut - no lunge
+                const open = windUp * 0.3; // Half the 0.6 of real attack
+
+                if (weapon && weapon.userData.right && weapon.userData.left) {
+                    for (const pincer of [weapon.userData.right, weapon.userData.left]) {
+                        if (!pincer) continue;
+                        const upperClaw = pincer.userData.upperClaw;
+                        if (upperClaw) {
+                            upperClaw.rotation.x = (upperClaw.userData.baseRotX || 0) - open;
+                        }
+                        const lowerClaw = pincer.userData.lowerClaw;
+                        if (lowerClaw) {
+                            lowerClaw.rotation.x = (lowerClaw.userData.baseRotX || 0) + open;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case 'horn': {
+                // Quick slight rear-up then relax - no thrust
+                const headMove = windUp * 0.4; // Less than 1.0 of real attack
+                const headRotX = -headMove * 0.3;
+                const headPosY = headMove * 0.8;
+
+                if (this.bug.userData.head) {
+                    this.bug.userData.head.rotation.x = (this.bug.userData.head.userData.baseRotX || 0) + headRotX;
+                    this.bug.userData.head.position.y = (this.bug.userData.head.userData.baseY || 0) + headPosY;
+                }
+                if (weapon && weapon.userData.horn) {
+                    const horn = weapon.userData.horn;
+                    horn.rotation.x = (horn.userData.baseRotX || 0) + headRotX;
+                    horn.position.y = (horn.userData.baseY || 0) + headPosY;
+                }
+                if (this.bug.userData.thorax) {
+                    this.bug.userData.thorax.rotation.x = (this.bug.userData.thorax.userData.baseRotX || 0) + headRotX * 0.2;
+                }
+                break;
+            }
+
+            default: {
+                // Generic feint - small forward jab
+                const jab = windUp * 1.5;
+                if (this.bug.userData.head) {
+                    this.bug.userData.head.position.z = (this.bug.userData.head.userData.baseZ || 0) + jab * 0.3;
+                }
+            }
+        }
+
+        // Slight wing twitch on feint (not full flare)
+        if (this.bug.userData.wings && this.isFlying) {
+            const wings = this.bug.userData.wings;
+            const twitch = windUp * 0.15;
+            if (wings.userData.right && wings.userData.baseRotation) {
+                wings.userData.right.rotation.z = wings.userData.baseRotation.right.z + twitch;
+            }
+            if (wings.userData.left && wings.userData.baseRotation) {
+                wings.userData.left.rotation.z = wings.userData.baseRotation.left.z - twitch;
             }
         }
     }
