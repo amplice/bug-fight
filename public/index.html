@@ -294,8 +294,9 @@
             <button class="camera-btn" onclick="setCamera('top')" id="cam-top">3: Top</button>
             <button class="camera-btn" onclick="setCamera('isometric')" id="cam-iso">4: Isometric</button>
             <button class="admin-debug-btn" onclick="toggleDebugOverlay()" id="debug-toggle">DEBUG</button>
+            <button class="camera-btn" onclick="toggleSound()" id="sound-toggle">SOUND: ON</button>
         </div>
-        <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-4 for presets, R to reset</div>
+        <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-4 for presets, R to reset, M to mute</div>
 
         <div class="selection-panel">
             <div class="fighter-card left">
@@ -416,6 +417,7 @@
     <!-- Game Scripts -->
     <script src="js/procedural.js"></script>
     <script src="js/bugGenerator3d.js"></script>
+    <script src="js/soundEngine.js"></script>
     <script src="js/client.js"></script>
     <script src="js/renderer3d.js"></script>
 
@@ -427,6 +429,17 @@
             // Update button states
             document.querySelectorAll('.camera-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('cam-' + (preset === 'isometric' ? 'iso' : preset)).classList.add('active');
+        }
+
+        // Sound toggle
+        function toggleSound() {
+            if (window.BugFightsSound) {
+                window.BugFightsSound.init(); // Ensure initialized
+                const muted = window.BugFightsSound.toggleMute();
+                const btn = document.getElementById('sound-toggle');
+                btn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+                btn.classList.toggle('active', !muted);
+            }
         }
 
         // Debug overlay

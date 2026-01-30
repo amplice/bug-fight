@@ -42,6 +42,15 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 - High aggression = faster approach, quicker engagement
 - High caution = wider circling, longer retreat
 
+**Feint System:**
+- Bugs sometimes telegraph a fake attack instead of committing
+- High instinct + cautious = more feints; high fury = fewer feints
+- Target reactions: dodge (wasted - creates opening), flinch (brief stun), or read (no reaction)
+- High instinct targets read feints better (15-70% read chance based on instinct)
+- Successful feints give the attacker a fast follow-up window
+- Feint cooldown: 3-5 seconds between feints
+- Creates emergent mind-games: feint → bait dodge → punish
+
 **True 3D Combat:**
 - Bugs fight in full 3D space with height (Y), width (X), and depth (Z)
 - AI uses all three dimensions for tactical positioning
@@ -85,6 +94,18 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
   - ← = retreating (blue)
   - ✕ = stunned (red)
 - **Color tint**: Subtle aggression (red) / caution (blue) emissive tint
+
+**Procedural Sound (Web Audio API):**
+- All sounds generated procedurally - no audio files
+- Hit impacts scale with damage (heavier hits = lower pitch, louder)
+- Critical hits add sub-bass thump
+- Dodge whooshes (bandpass sweep)
+- Feint snap + descending tone on successful bait
+- Wall impact thuds scale with velocity
+- Fight start bell, victory chord, countdown beeps
+- Continuous wing buzz for flying bugs (frequency tracks speed)
+- Ambient low drone for atmosphere
+- Mute toggle: M key or SOUND button
 
 ### Removed (Scripted/Forced Drama)
 - Finishing moves system
@@ -179,6 +200,7 @@ const rng = createSeededRNG(seed);
 - `public/js/client.js` - WebSocket client, betting logic, UI updates
 - `public/js/renderer3d.js` - Three.js 3D rendering, camera controls, effects
 - `public/js/bugGenerator3d.js` - 3D bug mesh generation, BugAnimator class
+- `public/js/soundEngine.js` - Procedural Web Audio API sound engine
 - `public/js/procedural.js` - Client-side BugGenome for stats display
 
 ### Key Stats
@@ -207,13 +229,11 @@ When adding, removing, or renaming any trait option (weapon, defense, mobility, 
 - Roster viewer modal
 
 ## Next Steps
-1. Tune drive/stamina/positioning values for optimal fight pacing
-2. Add breeding system (winners pass on genomes)
-3. Revisit variants as genetic traits, not cosmetic rarity
-4. Add feints/baits (fake attacks to draw reactions)
-5. Migrate to Bun + Vite + SQLite/Prisma + TypeScript stack
-6. Integrate drand for provable randomness (replace Math.random with seeded RNG)
-7. User accounts with persistent balances and leaderboards
+1. Add breeding system (winners pass on genomes)
+2. Revisit variants as genetic traits, not cosmetic rarity
+3. Migrate to Bun + Vite + SQLite/Prisma + TypeScript stack
+4. Integrate drand for provable randomness (replace Math.random with seeded RNG)
+5. User accounts with persistent balances and leaderboards
 
 ## Running
 

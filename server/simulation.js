@@ -53,6 +53,9 @@ class FightLogger {
             hits: [0, 0],
             dodges: [0, 0],
             damage: [0, 0],
+            feints: [0, 0],
+            feintsRead: [0, 0],
+            feintBaits: [0, 0],
             timeInState: [{}, {}],
             stateTransitions: [],
             engagementHistory: [],  // Track distance over time
@@ -75,6 +78,9 @@ class FightLogger {
             hits: [0, 0],
             dodges: [0, 0],
             damage: [0, 0],
+            feints: [0, 0],
+            feintsRead: [0, 0],
+            feintBaits: [0, 0],
             timeInState: [{}, {}],
             stateTransitions: [],
             engagementHistory: [],
@@ -102,6 +108,20 @@ class FightLogger {
             console.log(`  💨 ${targetName} DODGES ${attackerName}'s attack${details.dodgeType ? ` (${details.dodgeType})` : ''}`);
         } else {
             console.log(`  ❌ ${attackerName} MISSES ${targetName}`);
+        }
+    }
+
+    logFeint(attackerIdx, attackerName, targetName, result) {
+        this.stats.feints[attackerIdx]++;
+        if (result === 'read') {
+            this.stats.feintsRead[attackerIdx]++;
+            console.log(`  🎭 ${attackerName} FEINTS at ${targetName} — read!`);
+        } else if (result === 'dodge-bait') {
+            this.stats.feintBaits[attackerIdx]++;
+            console.log(`  🎭 ${attackerName} FEINTS → ${targetName} baited into dodge!`);
+        } else if (result === 'flinch') {
+            this.stats.feintBaits[attackerIdx]++;
+            console.log(`  🎭 ${attackerName} FEINTS → ${targetName} flinches!`);
         }
     }
 
@@ -293,8 +313,8 @@ class FightLogger {
         }
 
         console.log(`\nFinal Stats:`);
-        console.log(`  ${f1.name}: ${this.stats.attacks[0]} attacks, ${this.stats.hits[0]} hits (${this.stats.attacks[0] > 0 ? (this.stats.hits[0]/this.stats.attacks[0]*100).toFixed(0) : 0}%), ${this.stats.damage[0]} total damage`);
-        console.log(`  ${f2.name}: ${this.stats.attacks[1]} attacks, ${this.stats.hits[1]} hits (${this.stats.attacks[1] > 0 ? (this.stats.hits[1]/this.stats.attacks[1]*100).toFixed(0) : 0}%), ${this.stats.damage[1]} total damage`);
+        console.log(`  ${f1.name}: ${this.stats.attacks[0]} attacks, ${this.stats.hits[0]} hits (${this.stats.attacks[0] > 0 ? (this.stats.hits[0]/this.stats.attacks[0]*100).toFixed(0) : 0}%), ${this.stats.damage[0]} total damage, ${this.stats.feints[0]} feints (${this.stats.feintBaits[0]} baited)`);
+        console.log(`  ${f2.name}: ${this.stats.attacks[1]} attacks, ${this.stats.hits[1]} hits (${this.stats.attacks[1] > 0 ? (this.stats.hits[1]/this.stats.attacks[1]*100).toFixed(0) : 0}%), ${this.stats.damage[1]} total damage, ${this.stats.feints[1]} feints (${this.stats.feintBaits[1]} baited)`);
         console.log(`${'='.repeat(60)}\n`);
     }
 }
@@ -328,7 +348,7 @@ class Fighter {
         this.maxHp = 150 + Math.floor(genome.bulk * 5);
         this.hp = this.maxHp;
         this.poisoned = 0;
-        this.attackCooldown = 40 + Math.random() * 35;
+        this.attackCooldown = 35 + Math.random() * 25;
 
         // Animation state
         this.state = 'idle';
@@ -369,6 +389,10 @@ class Fighter {
         this.wallSide = null;
         this.wallExhausted = false; // Can't climb when exhausted
         this.isDiving = false;
+
+        // Feint system
+        this.feintCooldown = 0;
+        this.feintSuccess = false;
 
         // Drive system
         const furyNorm = genome.fury / 100;
@@ -530,14 +554,14 @@ class Fighter {
 
         // STALEMATE BREAKER - after extended non-engagement, force aggression
         this.noEngagementTimer++;
-        // After 10 seconds (300 ticks) of no combat, start ramping up aggression
-        if (this.noEngagementTimer > 300) {
-            const stalematePressure = (this.noEngagementTimer - 300) / 300;  // 0 to 1 over next 10s
-            this.drives.aggression = Math.min(1, this.drives.aggression + stalematePressure * 0.01);
-            this.drives.caution = Math.max(0, this.drives.caution - stalematePressure * 0.01);
+        // After 8 seconds (240 ticks) of no combat, start ramping up aggression
+        if (this.noEngagementTimer > 240) {
+            const stalematePressure = (this.noEngagementTimer - 240) / 240;  // 0 to 1 over next 8s
+            this.drives.aggression = Math.min(1, this.drives.aggression + stalematePressure * 0.012);
+            this.drives.caution = Math.max(0, this.drives.caution - stalematePressure * 0.012);
 
-            // After 20 seconds, force aggressive state
-            if (this.noEngagementTimer > 600 && this.aiState !== 'aggressive' && this.aiState !== 'stunned') {
+            // After 15 seconds, force aggressive state
+            if (this.noEngagementTimer > 450 && this.aiState !== 'aggressive' && this.aiState !== 'stunned') {
                 this.aiState = 'aggressive';
                 this.aiStateTimer = 0;
             }
@@ -808,6 +832,7 @@ class Fighter {
         if (this.jumpCooldown > 0) this.jumpCooldown--;
         if (this.stunTimer > 0) this.stunTimer--;
         if (this.wallStunTimer > 0) this.wallStunTimer--;
+        if (this.feintCooldown > 0) this.feintCooldown--;
 
         // Knockback decay - clear knockback state when velocity drops or grounded
         if (this.isKnockedBack) {
@@ -1087,7 +1112,7 @@ class Fighter {
 
         // Normal state transitions
         // Minimum time in current state before allowing transition (prevents rapid oscillation)
-        const minStateTime = 15;  // ~0.5 seconds
+        const minStateTime = 12;  // ~0.4 seconds - snappier transitions
         const canTransition = this.aiStateTimer > minStateTime;
 
         if (hpPercent < 0.4 && caution > 0.5 && (this.isFlying || this.isWallcrawler) && Math.random() < caution * 0.08) {
@@ -1111,7 +1136,7 @@ class Fighter {
     }
 
     executeAggressiveAI(opponent, dx, dy, dz, dist, attackRange) {
-        const baseSpeed = 0.25 + (this.genome.speed / 180);  // Further increased base speed
+        const baseSpeed = 0.30 + (this.genome.speed / 160);  // Faster approach for tighter pacing
         const staminaPercent = this.stamina / this.maxStamina;
         const staminaFactor = 0.7 + staminaPercent * 0.3;  // Less penalty for low stamina
         const speed = baseSpeed * (0.7 + this.drives.aggression * 0.5) * staminaFactor;
@@ -1258,7 +1283,7 @@ class Fighter {
     }
 
     executeCirclingAI(opponent, dx, dy, dz, dist, attackRange) {
-        const speed = 0.20 + (this.genome.speed / 200);  // Increased circling speed
+        const speed = 0.22 + (this.genome.speed / 180);  // Snappier circling
         const circleRadius = 80 + this.drives.caution * 80;  // Increased for better 3D space
         const instinctFactor = this.genome.instinct / 100;
 
@@ -1364,9 +1389,9 @@ class Fighter {
 
         // Break out of circling when aggressive enough - faster engagement
         // Require minimum time in circling state to prevent oscillation
-        const breakoutTime = Math.floor(60 - this.drives.aggression * 50);
-        const minCircleTime = 20;  // Minimum ticks before breaking out
-        const veryClose = dist < attackRange * 0.9 && this.drives.aggression > 0.6;  // Only break for proximity if very aggressive
+        const breakoutTime = Math.floor(45 - this.drives.aggression * 35);
+        const minCircleTime = 15;  // Minimum ticks before breaking out
+        const veryClose = dist < attackRange * 0.9 && this.drives.aggression > 0.5;  // Break for proximity when moderately aggressive
         if (this.aiStateTimer > minCircleTime && (this.aiStateTimer > breakoutTime || veryClose)) {
             this.aiState = 'aggressive';
             this.aiStateTimer = 0;
@@ -1374,7 +1399,7 @@ class Fighter {
     }
 
     executeRetreatingAI(opponent, dx, dy, dz, dist) {
-        const speed = 0.22 + (this.genome.speed / 200);  // Increased retreating speed
+        const speed = 0.24 + (this.genome.speed / 180);  // Snappier retreat
         const instinctFactor = this.genome.instinct / 100;
 
         // Calculate escape vectors
@@ -1510,9 +1535,9 @@ class Fighter {
             }
         }
 
-        // Exit retreat when safe
-        const retreatDuration = Math.floor(50 + this.drives.caution * 50 - this.drives.aggression * 25);
-        if (this.aiStateTimer > retreatDuration || dist > 280) {
+        // Exit retreat when safe - shorter retreats for tighter pacing
+        const retreatDuration = Math.floor(40 + this.drives.caution * 40 - this.drives.aggression * 25);
+        if (this.aiStateTimer > retreatDuration || dist > 260) {
             this.aiState = 'circling';
             this.aiStateTimer = 0;
         }
@@ -1782,7 +1807,7 @@ class Simulation {
             new Fighter(genome2, 'right', bug2.name),
         ];
 
-        this.attackCooldowns = [30 + Math.random() * 25, 30 + Math.random() * 25];
+        this.attackCooldowns = [25 + Math.random() * 20, 25 + Math.random() * 20];
 
         // Initialize fight logger
         fightLogger.reset(bug1.name, bug2.name);
@@ -1987,6 +2012,96 @@ class Simulation {
         }
     }
 
+    executeFeint(attacker, target, attackerIndex, dx, dy, dz, dist) {
+        // Feint: telegraph an attack without committing
+        // Costs less stamina, but creates openings if target reacts
+        attacker.spendStamina(3);
+        attacker.feintCooldown = 90 + Math.floor(Math.random() * 60); // 3-5s between feints
+        attacker.onAttackAttempted(); // Reset stalemate timer
+
+        // Visual: brief lunge (shorter than real attack)
+        attacker.setState('attack');
+        const safeDist = dist || 1;
+        const dirX = dx / safeDist;
+        const dirY = dy / safeDist;
+        attacker.lungeX = dirX * 15; // Shorter lunge than real attack (25)
+        attacker.lungeY = dirY * 8;
+        attacker.squash = 0.85;
+        attacker.stretch = 1.15;
+
+        const baseCD = 48 - attacker.genome.speed / 5;
+
+        // Target reaction - can they read the feint?
+        if (target.stunTimer > 0 || target.state === 'hit' || target.state === 'death') {
+            // Target can't react - wasted feint
+            this.attackCooldowns[attackerIndex] = baseCD * 0.7;
+            fightLogger.logFeint(attackerIndex, attacker.name, target.name, 'wasted');
+            return;
+        }
+
+        const targetInstinct = target.genome.instinct / 100;
+        const readChance = 0.15 + targetInstinct * 0.55; // 15-70% based on instinct
+
+        if (Math.random() < readChance) {
+            // Target reads the feint! No reaction - feint wasted
+            this.attackCooldowns[attackerIndex] = baseCD + Math.random() * 15;
+            attacker.feintSuccess = false;
+
+            this.addEvent('commentary', `${target.name} reads the feint!`, '#0ff');
+            this.addEvent('feint', {
+                x: attacker.x, y: attacker.y,
+                attacker: attacker.name, target: target.name,
+                result: 'read',
+            });
+            fightLogger.logFeint(attackerIndex, attacker.name, target.name, 'read');
+
+        } else {
+            // Target reacts! Either dodges (wasted) or flinches
+            const dodgeReaction = Math.random() < 0.4 + targetInstinct * 0.2;
+
+            if (dodgeReaction) {
+                // Target dodges the fake - creates an opening!
+                const dodgeStrength = 3 + targetInstinct * 3;
+                const dirZ = dz / safeDist;
+                const perpX = -dirZ;
+                const perpZ = dirX;
+                const side = Math.random() > 0.5 ? 1 : -1;
+                target.vx += perpX * dodgeStrength * side;
+                target.vz += perpZ * dodgeStrength * side;
+
+                // Fast follow-up for attacker
+                this.attackCooldowns[attackerIndex] = Math.floor(baseCD * 0.3);
+                attacker.feintSuccess = true;
+
+                this.addEvent('commentary', `${target.name} baited into dodging!`, '#ff0');
+                this.addEvent('feint', {
+                    x: attacker.x, y: attacker.y,
+                    attacker: attacker.name, target: target.name,
+                    result: 'dodge-bait',
+                });
+                fightLogger.logFeint(attackerIndex, attacker.name, target.name, 'dodge-bait');
+
+            } else {
+                // Target flinches - brief hesitation
+                target.stunTimer = Math.max(target.stunTimer, 8);
+                target.squash = 1.1;
+                target.stretch = 0.9;
+
+                // Moderate follow-up window
+                this.attackCooldowns[attackerIndex] = Math.floor(baseCD * 0.4);
+                attacker.feintSuccess = true;
+
+                this.addEvent('commentary', `${target.name} flinches!`, '#fa0');
+                this.addEvent('feint', {
+                    x: attacker.x, y: attacker.y,
+                    attacker: attacker.name, target: target.name,
+                    result: 'flinch',
+                });
+                fightLogger.logFeint(attackerIndex, attacker.name, target.name, 'flinch');
+            }
+        }
+    }
+
     processCombat(attacker, target, attackerIndex) {
         if (!attacker.isAlive || attacker.state !== 'idle') return;
         if (attacker.stunTimer > 0) return;
@@ -2001,6 +2116,21 @@ class Simulation {
         const attackRange = (attacker.spriteSize + target.spriteSize) / 2 + 35;
 
         if (this.attackCooldowns[attackerIndex] <= 0 && dist < attackRange) {
+            // FEINT CHECK - sometimes telegraph a fake attack instead of committing
+            // High instinct = more feints, high fury = fewer feints, cautious = more feints
+            if (attacker.feintCooldown <= 0 && attacker.stamina > 5) {
+                const instinct = attacker.genome.instinct / 100;
+                const fury = attacker.genome.fury / 100;
+                const caution = attacker.drives.caution;
+                const feintChance = (instinct * 0.12 + caution * 0.06) * (1 - fury * 0.5) + 0.04;
+                // Range: ~4% (berserker) to ~16% (tactical cautious)
+
+                if (Math.random() < feintChance) {
+                    this.executeFeint(attacker, target, attackerIndex, dx, dy, dz, dist);
+                    return;
+                }
+            }
+
             // Attempt attack
             const attackCost = attacker.getAttackStaminaCost();
             if (!attacker.spendStamina(attackCost)) {
@@ -2108,9 +2238,9 @@ class Simulation {
                 });
 
                 // Reset cooldown with penalty for missing
-                const baseCD = 55 - attacker.genome.speed / 4;
-                const missPenalty = 10 + attackerMomentum * 15;
-                this.attackCooldowns[attackerIndex] = baseCD + missPenalty + Math.random() * 15;
+                const baseCD = 48 - attacker.genome.speed / 5;
+                const missPenalty = 8 + attackerMomentum * 12;
+                this.attackCooldowns[attackerIndex] = baseCD + missPenalty + Math.random() * 10;
                 return;
             }
 
@@ -2289,8 +2419,8 @@ class Simulation {
             }
 
             // Reset cooldown
-            const baseCD = 55 - attacker.genome.speed / 4;
-            this.attackCooldowns[attackerIndex] = baseCD + Math.random() * 20;
+            const baseCD = 48 - attacker.genome.speed / 5;
+            this.attackCooldowns[attackerIndex] = baseCD + Math.random() * 15;
         }
     }
 

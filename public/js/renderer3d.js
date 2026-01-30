@@ -393,6 +393,14 @@ function onKeyDown(event) {
         case '4': setCameraPreset('isometric'); break;
         case '5': setCameraPreset('action'); break;
         case 'r': case 'R': setCameraPreset(currentPreset); break;
+        case 'm': case 'M':
+            if (window.BugFightsSound) {
+                window.BugFightsSound.init();
+                const muted = window.BugFightsSound.toggleMute();
+                const btn = document.getElementById('sound-toggle');
+                if (btn) btn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+            }
+            break;
     }
 }
 
@@ -1001,6 +1009,11 @@ function processEvents(events) {
     if (!events || events.length === 0) return;
 
     events.forEach(event => {
+        // Sound engine handles all event types
+        if (window.BugFightsSound) {
+            window.BugFightsSound.handleEvent(event);
+        }
+
         if (event.type === 'hit') {
             const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
             const isCrit = event.data.isCrit;
@@ -1125,6 +1138,11 @@ function render3D(state) {
     processEvents(state.events);
     updateEffects();
 
+    // Update sound engine (wing buzzes, ambient, phase changes)
+    if (window.BugFightsSound) {
+        window.BugFightsSound.update(state);
+    }
+
     // Screen shake
     if (screenShake.intensity > 0) {
         camera.position.x += (Math.random() - 0.5) * screenShake.intensity;
@@ -1147,6 +1165,18 @@ function gameLoop3D() {
 function initRenderer3D() {
     initThreeJS();
     gameLoop3D();
+
+    // Initialize sound engine on first user interaction (browser requirement)
+    const initSound = () => {
+        if (window.BugFightsSound) {
+            window.BugFightsSound.init();
+        }
+        document.removeEventListener('click', initSound);
+        document.removeEventListener('keydown', initSound);
+    };
+    document.addEventListener('click', initSound);
+    document.addEventListener('keydown', initSound);
+
     console.log('3D Renderer initialized');
     console.log('Camera: 1=Front, 2=Side, 3=Top, 4=Isometric, 5=Action (default), R=Reset, Mouse=Orbit');
 }
