@@ -362,14 +362,15 @@
                 <span class="weapon">mandibles</span>
                 <span class="weapon">stinger</span>
                 <span class="weapon">fangs</span>
-                <span class="weapon">claws</span>
+                <span class="weapon">pincers</span>
+                <span class="weapon">horn</span>
             </div>
             <div class="attr-group">
                 <strong>Defense:</strong>
                 <span class="defense">shell</span>
-                <span class="defense">agility</span>
                 <span class="defense">toxic</span>
                 <span class="defense">camouflage</span>
+                <span class="defense">none</span>
             </div>
             <div class="attr-group">
                 <strong>Mobility:</strong>
@@ -386,6 +387,7 @@
             </div>
             <div class="footer-badges">
                 <button id="roster-btn" class="badge roster-btn">VIEW ROSTER</button>
+                <a href="/bug-builder.html" class="badge roster-btn" style="text-decoration:none;">BUG BUILDER</a>
                 <span class="badge netscape">Best viewed at 800x600</span>
                 <span class="badge construction">Always under construction!</span>
             </div>
@@ -528,8 +530,24 @@
                 this.closeBtn = document.getElementById('close-roster');
                 this.bugScenes = [];
                 this.animationId = null;
+                this.sharedRenderer = null;
+                this.sharedCanvas = null;
 
                 this.setupEventListeners();
+            }
+
+            initSharedRenderer() {
+                if (this.sharedRenderer) return;
+                this.sharedCanvas = document.createElement('canvas');
+                this.sharedCanvas.width = 400;
+                this.sharedCanvas.height = 300;
+                this.sharedRenderer = new THREE.WebGLRenderer({
+                    canvas: this.sharedCanvas,
+                    antialias: true,
+                    preserveDrawingBuffer: true
+                });
+                this.sharedRenderer.setSize(400, 300);
+                this.sharedRenderer.setPixelRatio(1);
             }
 
             setupEventListeners() {
@@ -541,8 +559,12 @@
             }
 
             async open() {
-                this.rosterModal.classList.remove('hidden');
+                // Clear stale content and load data BEFORE showing modal
+                this.cleanup();
+                this.rosterGrid.innerHTML = '';
+                this.initSharedRenderer();
                 await this.loadRoster();
+                this.rosterModal.classList.remove('hidden');
                 this.startAnimation();
             }
 
@@ -564,7 +586,7 @@
             }
 
             populateRoster(roster) {
-                this.cleanup();
+                this.cleanupScenes();
                 this.rosterGrid.innerHTML = '';
 
                 roster.forEach((bug, index) => {
@@ -584,10 +606,10 @@
                 const item = document.createElement('div');
                 item.className = 'roster-item-3d';
 
-                // Create canvas for 3D preview
+                // Display canvas (2D) - receives copies from shared renderer
                 const canvas = document.createElement('canvas');
                 canvas.className = 'roster-bug-canvas';
-                canvas.width = 400;  // Higher res for quality
+                canvas.width = 400;
                 canvas.height = 300;
                 item.appendChild(canvas);
 
@@ -615,7 +637,7 @@
                 `;
                 item.appendChild(stats);
 
-                // Setup 3D scene for this bug - pass the genome data
+                // Setup 3D scene for this bug
                 this.setup3DScene(canvas, bug.genome || bug, index);
 
                 return item;
@@ -623,7 +645,7 @@
 
             setup3DScene(canvas, bugData, index) {
                 try {
-                    // Create scene
+                    // Create scene (shared renderer will render this)
                     const scene = new THREE.Scene();
                     scene.background = new THREE.Color(0x1a2a1a);
 
@@ -631,11 +653,6 @@
                     const camera = new THREE.PerspectiveCamera(50, canvas.width / canvas.height, 0.1, 100);
                     camera.position.set(0, 1, 5);
                     camera.lookAt(0, 0, 0);
-
-                    // Create renderer
-                    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-                    renderer.setSize(canvas.width, canvas.height);
-                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
                     // Lighting
                     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -654,60 +671,64 @@
                     bugGroup.rotation.y = -Math.PI / 4;
                     scene.add(bugGroup);
 
-                    // Initial render
-                    renderer.render(scene, camera);
+                    // 2D context for copying rendered frames to display canvas
+                    const ctx = canvas.getContext('2d');
 
-                // Create animator
-                const animator = new BugAnimator(bugGroup);
+                    // Initial render using shared renderer
+                    this.sharedRenderer.render(scene, camera);
+                    ctx.drawImage(this.sharedCanvas, 0, 0);
 
-                // Simple orbit controls via drag
-                let isDragging = false;
-                let prevX = 0;
-                let rotationY = 0;
+                    // Create animator
+                    const animator = new BugAnimator(bugGroup);
 
-                canvas.addEventListener('mousedown', (e) => {
-                    isDragging = true;
-                    prevX = e.clientX;
-                });
+                    // Simple orbit controls via drag
+                    let isDragging = false;
+                    let prevX = 0;
+                    let rotationY = -Math.PI / 4;
 
-                canvas.addEventListener('mousemove', (e) => {
-                    if (isDragging) {
-                        const deltaX = e.clientX - prevX;
-                        rotationY += deltaX * 0.01;
-                        bugGroup.rotation.y = rotationY;
+                    canvas.addEventListener('mousedown', (e) => {
+                        isDragging = true;
                         prevX = e.clientX;
-                    }
-                });
+                    });
 
-                canvas.addEventListener('mouseup', () => isDragging = false);
-                canvas.addEventListener('mouseleave', () => isDragging = false);
+                    canvas.addEventListener('mousemove', (e) => {
+                        if (isDragging) {
+                            const deltaX = e.clientX - prevX;
+                            rotationY += deltaX * 0.01;
+                            bugGroup.rotation.y = rotationY;
+                            prevX = e.clientX;
+                        }
+                    });
 
-                // Touch support
-                canvas.addEventListener('touchstart', (e) => {
-                    isDragging = true;
-                    prevX = e.touches[0].clientX;
-                });
+                    canvas.addEventListener('mouseup', () => isDragging = false);
+                    canvas.addEventListener('mouseleave', () => isDragging = false);
 
-                canvas.addEventListener('touchmove', (e) => {
-                    if (isDragging) {
-                        const deltaX = e.touches[0].clientX - prevX;
-                        rotationY += deltaX * 0.01;
-                        bugGroup.rotation.y = rotationY;
+                    // Touch support
+                    canvas.addEventListener('touchstart', (e) => {
+                        isDragging = true;
                         prevX = e.touches[0].clientX;
-                    }
-                });
+                    });
 
-                canvas.addEventListener('touchend', () => isDragging = false);
+                    canvas.addEventListener('touchmove', (e) => {
+                        if (isDragging) {
+                            const deltaX = e.touches[0].clientX - prevX;
+                            rotationY += deltaX * 0.01;
+                            bugGroup.rotation.y = rotationY;
+                            prevX = e.touches[0].clientX;
+                        }
+                    });
 
-                // Store scene data for animation loop
-                this.bugScenes.push({
-                    scene,
-                    camera,
-                    renderer,
-                    bugGroup,
-                    animator,
-                    rotationY
-                });
+                    canvas.addEventListener('touchend', () => isDragging = false);
+
+                    // Store scene data for animation loop
+                    this.bugScenes.push({
+                        scene,
+                        camera,
+                        bugGroup,
+                        animator,
+                        ctx,
+                        rotationY
+                    });
                 } catch (err) {
                     console.error('Error creating 3D bug:', err, bugData);
                 }
@@ -720,15 +741,11 @@
                     this.animationId = requestAnimationFrame(animate);
                     const delta = clock.getDelta();
 
+                    // Render each bug using the single shared renderer
                     this.bugScenes.forEach(sceneData => {
-                        // Animate the bug (idle animation)
                         sceneData.animator.update(delta, 'idle');
-
-                        // Gentle auto-rotation when not dragging
-                        // (already handled by drag)
-
-                        // Render
-                        sceneData.renderer.render(sceneData.scene, sceneData.camera);
+                        this.sharedRenderer.render(sceneData.scene, sceneData.camera);
+                        sceneData.ctx.drawImage(this.sharedCanvas, 0, 0);
                     });
                 };
 
@@ -742,11 +759,10 @@
                 }
             }
 
-            cleanup() {
+            cleanupScenes() {
                 this.stopAnimation();
 
                 this.bugScenes.forEach(sceneData => {
-                    // Dispose of geometries and materials
                     sceneData.scene.traverse(obj => {
                         if (obj.geometry) obj.geometry.dispose();
                         if (obj.material) {
@@ -757,10 +773,18 @@
                             }
                         }
                     });
-                    sceneData.renderer.dispose();
                 });
 
                 this.bugScenes = [];
+            }
+
+            cleanup() {
+                this.cleanupScenes();
+                if (this.sharedRenderer) {
+                    this.sharedRenderer.dispose();
+                    this.sharedRenderer = null;
+                    this.sharedCanvas = null;
+                }
             }
         }
 

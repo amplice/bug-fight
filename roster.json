@@ -9,9 +9,9 @@
         "instinct": 60,
         "abdomenType": "oval",
         "thoraxType": "wide",
-        "headType": "pincer",
+        "headType": "shield",
         "legCount": 8,
-        "legStyle": "curved-back",
+        "legStyle": "spider",
         "weapon": "pincers",
         "defense": "none",
         "mobility": "winged",
@@ -27,8 +27,8 @@
         "accentHue": 66.15652961381831
       },
       "name": "Clamper Swift",
-      "wins": 0,
-      "losses": 0,
+      "wins": 3,
+      "losses": 4,
       "createdAt": "2026-01-29T15:04:14.263Z"
     },
     {
@@ -40,16 +40,16 @@
         "instinct": 56,
         "abdomenType": "oval",
         "thoraxType": "humped",
-        "headType": "pincer",
+        "headType": "shield",
         "legCount": 4,
-        "legStyle": "short",
-        "weapon": "claws",
+        "legStyle": "centipede",
+        "weapon": "pincers",
         "defense": "shell",
         "mobility": "ground",
         "textureType": "rough",
         "eyeStyle": "multiple",
         "antennaStyle": "segmented",
-        "wingType": "fly",
+        "wingType": "none",
         "color": {
           "hue": 0,
           "saturation": 0,
@@ -58,7 +58,7 @@
         "accentHue": 79.91793285294821
       },
       "name": "Shredder Dash",
-      "wins": 0,
+      "wins": 4,
       "losses": 0,
       "createdAt": "2026-01-29T15:04:14.263Z"
     },
@@ -73,14 +73,14 @@
         "thoraxType": "elongated",
         "headType": "square",
         "legCount": 8,
-        "legStyle": "short",
+        "legStyle": "centipede",
         "weapon": "mandibles",
         "defense": "none",
         "mobility": "wallcrawler",
         "textureType": "rough",
         "eyeStyle": "stalked",
         "antennaStyle": "whip",
-        "wingType": "dragonfly",
+        "wingType": "none",
         "color": {
           "hue": 28,
           "saturation": 0.35,
@@ -90,7 +90,7 @@
       },
       "name": "Gnasher Mass",
       "wins": 0,
-      "losses": 0,
+      "losses": 4,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -104,14 +104,14 @@
         "thoraxType": "wide",
         "headType": "round",
         "legCount": 8,
-        "legStyle": "short",
+        "legStyle": "centipede",
         "weapon": "stinger",
         "defense": "none",
         "mobility": "winged",
         "textureType": "striped",
         "eyeStyle": "multiple",
         "antennaStyle": "clubbed",
-        "wingType": "none",
+        "wingType": "dragonfly",
         "color": {
           "hue": 180,
           "saturation": 0.25,
@@ -120,8 +120,8 @@
         "accentHue": 255.31681420184404
       },
       "name": "Stabber Blob",
-      "wins": 0,
-      "losses": 0,
+      "wins": 4,
+      "losses": 3,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -135,14 +135,14 @@
         "thoraxType": "wide",
         "headType": "elongated",
         "legCount": 8,
-        "legStyle": "curved-back",
+        "legStyle": "spider",
         "weapon": "pincers",
         "defense": "shell",
         "mobility": "winged",
         "textureType": "smooth",
         "eyeStyle": "simple",
         "antennaStyle": "horned",
-        "wingType": "none",
+        "wingType": "beetle",
         "color": {
           "hue": 60,
           "saturation": 0.08,
@@ -152,7 +152,7 @@
       },
       "name": "Clamper Dart",
       "wins": 0,
-      "losses": 0,
+      "losses": 4,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -164,16 +164,16 @@
         "instinct": 80,
         "abdomenType": "bulbous",
         "thoraxType": "elongated",
-        "headType": "pincer",
+        "headType": "shield",
         "legCount": 8,
-        "legStyle": "curved-forward",
+        "legStyle": "mantis",
         "weapon": "pincers",
         "defense": "camouflage",
         "mobility": "ground",
         "textureType": "spotted",
         "eyeStyle": "multiple",
         "antennaStyle": "whip",
-        "wingType": "beetle",
+        "wingType": "none",
         "color": {
           "hue": 45,
           "saturation": 0.85,
@@ -182,8 +182,8 @@
         "accentHue": 132.79848620067793
       },
       "name": "Clamper Mass",
-      "wins": 0,
-      "losses": 0,
+      "wins": 4,
+      "losses": 3,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -197,14 +197,14 @@
         "thoraxType": "elongated",
         "headType": "elongated",
         "legCount": 8,
-        "legStyle": "curved-back",
+        "legStyle": "spider",
         "weapon": "mandibles",
         "defense": "shell",
         "mobility": "wallcrawler",
         "textureType": "striped",
         "eyeStyle": "stalked",
         "antennaStyle": "none",
-        "wingType": "beetle",
+        "wingType": "none",
         "color": {
           "hue": 28,
           "saturation": 0.35,
@@ -213,7 +213,7 @@
         "accentHue": 96.69717050212247
       },
       "name": "Chomper Blob",
-      "wins": 0,
+      "wins": 4,
       "losses": 0,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
@@ -228,14 +228,14 @@
         "thoraxType": "compact",
         "headType": "triangular",
         "legCount": 6,
-        "legStyle": "curved-forward",
+        "legStyle": "mantis",
         "weapon": "mandibles",
         "defense": "toxic",
         "mobility": "wallcrawler",
         "textureType": "rough",
         "eyeStyle": "stalked",
         "antennaStyle": "clubbed",
-        "wingType": "dragonfly",
+        "wingType": "none",
         "color": {
           "hue": 0,
           "saturation": 0.6,
@@ -244,8 +244,8 @@
         "accentHue": 39.816764433946304
       },
       "name": "Crusher Bulk",
-      "wins": 0,
-      "losses": 0,
+      "wins": 3,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -259,14 +259,14 @@
         "thoraxType": "elongated",
         "headType": "elongated",
         "legCount": 6,
-        "legStyle": "short",
+        "legStyle": "centipede",
         "weapon": "mandibles",
         "defense": "none",
         "mobility": "wallcrawler",
         "textureType": "plated",
         "eyeStyle": "multiple",
         "antennaStyle": "horned",
-        "wingType": "beetle",
+        "wingType": "none",
         "color": {
           "hue": 35,
           "saturation": 0.75,
@@ -275,8 +275,8 @@
         "accentHue": 94.25560161944748
       },
       "name": "Chomper Ball",
-      "wins": 0,
-      "losses": 0,
+      "wins": 3,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -290,8 +290,8 @@
         "thoraxType": "elongated",
         "headType": "square",
         "legCount": 8,
-        "legStyle": "curved-back",
-        "weapon": "claws",
+        "legStyle": "spider",
+        "weapon": "pincers",
         "defense": "toxic",
         "mobility": "winged",
         "textureType": "rough",
@@ -306,8 +306,8 @@
         "accentHue": 135.5242864797284
       },
       "name": "Shredder Crawler",
-      "wins": 0,
-      "losses": 0,
+      "wins": 1,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -321,8 +321,8 @@
         "thoraxType": "compact",
         "headType": "square",
         "legCount": 8,
-        "legStyle": "curved-back",
-        "weapon": "claws",
+        "legStyle": "spider",
+        "weapon": "pincers",
         "defense": "camouflage",
         "mobility": "ground",
         "textureType": "smooth",
@@ -337,8 +337,8 @@
         "accentHue": 77.51406773619314
       },
       "name": "Slasher Chain",
-      "wins": 0,
-      "losses": 0,
+      "wins": 4,
+      "losses": 3,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -352,14 +352,14 @@
         "thoraxType": "elongated",
         "headType": "triangular",
         "legCount": 6,
-        "legStyle": "straight",
+        "legStyle": "insect",
         "weapon": "fangs",
         "defense": "none",
         "mobility": "ground",
         "textureType": "rough",
         "eyeStyle": "simple",
         "antennaStyle": "whip",
-        "wingType": "beetle",
+        "wingType": "none",
         "color": {
           "hue": 215,
           "saturation": 0.55,
@@ -368,7 +368,7 @@
         "accentHue": 260.5946196169305
       },
       "name": "Toxic Scout",
-      "wins": 0,
+      "wins": 3,
       "losses": 0,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
@@ -383,7 +383,7 @@
         "thoraxType": "wide",
         "headType": "elongated",
         "legCount": 6,
-        "legStyle": "short",
+        "legStyle": "centipede",
         "weapon": "stinger",
         "defense": "none",
         "mobility": "wallcrawler",
@@ -399,8 +399,8 @@
         "accentHue": 285.15501915515443
       },
       "name": "Lancer Swift",
-      "wins": 0,
-      "losses": 0,
+      "wins": 1,
+      "losses": 3,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -414,14 +414,14 @@
         "thoraxType": "humped",
         "headType": "elongated",
         "legCount": 8,
-        "legStyle": "short",
+        "legStyle": "centipede",
         "weapon": "stinger",
         "defense": "shell",
         "mobility": "ground",
         "textureType": "rough",
         "eyeStyle": "simple",
         "antennaStyle": "horned",
-        "wingType": "dragonfly",
+        "wingType": "none",
         "color": {
           "hue": 28,
           "saturation": 0.35,
@@ -430,8 +430,8 @@
         "accentHue": 68.63818359039817
       },
       "name": "Spike Dart",
-      "wins": 0,
-      "losses": 0,
+      "wins": 3,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -443,16 +443,16 @@
         "instinct": 61,
         "abdomenType": "oval",
         "thoraxType": "humped",
-        "headType": "pincer",
+        "headType": "shield",
         "legCount": 6,
-        "legStyle": "straight",
+        "legStyle": "insect",
         "weapon": "horn",
         "defense": "shell",
         "mobility": "wallcrawler",
         "textureType": "plated",
         "eyeStyle": "simple",
         "antennaStyle": "none",
-        "wingType": "fly",
+        "wingType": "none",
         "color": {
           "hue": 40,
           "saturation": 0.3,
@@ -461,8 +461,8 @@
         "accentHue": 85.58587412161864
       },
       "name": "Gorer Scout",
-      "wins": 0,
-      "losses": 0,
+      "wins": 1,
+      "losses": 4,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -476,14 +476,14 @@
         "thoraxType": "elongated",
         "headType": "square",
         "legCount": 4,
-        "legStyle": "curved-back",
+        "legStyle": "spider",
         "weapon": "horn",
         "defense": "toxic",
         "mobility": "winged",
         "textureType": "striped",
         "eyeStyle": "simple",
         "antennaStyle": "segmented",
-        "wingType": "none",
+        "wingType": "fly",
         "color": {
           "hue": 40,
           "saturation": 0.3,
@@ -492,8 +492,8 @@
         "accentHue": 126.1608825444317
       },
       "name": "Gorer Lance",
-      "wins": 0,
-      "losses": 0,
+      "wins": 4,
+      "losses": 1,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -507,8 +507,8 @@
         "thoraxType": "elongated",
         "headType": "triangular",
         "legCount": 8,
-        "legStyle": "curved-back",
-        "weapon": "claws",
+        "legStyle": "spider",
+        "weapon": "pincers",
         "defense": "camouflage",
         "mobility": "wallcrawler",
         "textureType": "plated",
@@ -523,8 +523,8 @@
         "accentHue": 125.07050391612887
       },
       "name": "Slasher Heavy",
-      "wins": 0,
-      "losses": 0,
+      "wins": 1,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -538,7 +538,7 @@
         "thoraxType": "compact",
         "headType": "square",
         "legCount": 8,
-        "legStyle": "curved-back",
+        "legStyle": "spider",
         "weapon": "stinger",
         "defense": "toxic",
         "mobility": "ground",
@@ -554,8 +554,8 @@
         "accentHue": 70.66334917405065
       },
       "name": "Stabber Swift",
-      "wins": 0,
-      "losses": 0,
+      "wins": 1,
+      "losses": 4,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -569,14 +569,14 @@
         "thoraxType": "wide",
         "headType": "round",
         "legCount": 4,
-        "legStyle": "short",
+        "legStyle": "centipede",
         "weapon": "stinger",
         "defense": "shell",
         "mobility": "ground",
         "textureType": "striped",
         "eyeStyle": "simple",
         "antennaStyle": "segmented",
-        "wingType": "fly",
+        "wingType": "none",
         "color": {
           "hue": 0,
           "saturation": 0,
@@ -586,7 +586,7 @@
       },
       "name": "Lancer Chain",
       "wins": 0,
-      "losses": 0,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -600,14 +600,14 @@
         "thoraxType": "compact",
         "headType": "triangular",
         "legCount": 6,
-        "legStyle": "straight",
+        "legStyle": "insect",
         "weapon": "horn",
         "defense": "shell",
         "mobility": "winged",
         "textureType": "plated",
         "eyeStyle": "multiple",
         "antennaStyle": "whip",
-        "wingType": "none",
+        "wingType": "beetle",
         "color": {
           "hue": 0,
           "saturation": 0,
@@ -616,10 +616,10 @@
         "accentHue": 35.935269813830736
       },
       "name": "Ramhorn Dash",
-      "wins": 0,
-      "losses": 0,
+      "wins": 3,
+      "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     }
   ],
-  "savedAt": "2026-01-29T15:04:14.264Z"
+  "savedAt": "2026-01-30T00:20:50.067Z"
 }

@@ -870,7 +870,7 @@ class BugGenerator3D {
         const abdomen = this.createAbdomen(bulkFactor, scale);
         const thorax = this.createThorax(bulkFactor, speedFactor, scale);
         const head = this.createHead(speedFactor, scale);
-        const legs = this.createLegs(g.legStyle, scale);
+        const legs = this.createLegs(g.legStyle, scale, g.legCount);
         const antennae = this.createAntennae(scale);
         const weapon = this.createWeapon(g.weapon, scale);
 
@@ -940,6 +940,12 @@ class BugGenerator3D {
                 roughness: 0.3,
                 metalness: 0.5,
             });
+        } else if (defense === 'camouflage') {
+            abdomenMat = this.createMaterial('primary', {
+                transparent: true,
+                opacity: 0.20,
+                roughness: 0.7,
+            });
         } else {
             abdomenMat = this.createMaterial('primary');
         }
@@ -948,12 +954,6 @@ class BugGenerator3D {
         let rx = 4 * bulkFactor * scale;
         let ry = 3 * bulkFactor * scale;
         let rz = 5 * bulkFactor * scale;
-
-        // Agility defense = slimmer body
-        if (defense === 'agility') {
-            rx *= 0.8;
-            ry *= 0.85;
-        }
 
         switch (abdomenType) {
             case 'round':
@@ -1225,6 +1225,12 @@ class BugGenerator3D {
                 roughness: 0.3,
                 metalness: 0.5,
             });
+        } else if (defense === 'camouflage') {
+            thoraxMat = this.createMaterial('primary', {
+                transparent: true,
+                opacity: 0.20,
+                roughness: 0.7,
+            });
         } else {
             thoraxMat = this.createMaterial('primary');
         }
@@ -1233,12 +1239,6 @@ class BugGenerator3D {
         let rx = 3 * bulkFactor * scale;
         let ry = 2.5 * bulkFactor * scale;
         let rz = 2.5 * scale;
-
-        // Agility defense = slimmer body
-        if (defense === 'agility') {
-            rx *= 0.85;
-            ry *= 0.9;
-        }
 
         switch (thoraxType) {
             case 'compact':
@@ -1351,7 +1351,10 @@ class BugGenerator3D {
         const eyeStyle = this.genome.eyeStyle || 'compound';
         const headType = this.genome.headType || 'round';
 
-        const headMat = this.createMaterial('primary');
+        const defense = this.genome.defense || 'none';
+        const headMat = defense === 'camouflage'
+            ? this.createMaterial('primary', { transparent: true, opacity: 0.45, roughness: 0.7 })
+            : this.createMaterial('primary');
 
         // Create head based on type
         let headBaseZ = 4 * scale;
@@ -1685,7 +1688,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createLegs(legStyle, scale) {
+    createLegs(legStyle, scale, legCount) {
         const group = new THREE.Group();
         group.name = 'legs';
         const style = legStyle || 'insect';
@@ -1693,7 +1696,51 @@ class BugGenerator3D {
         // Leg configurations per style
         const legConfigs = this.getLegConfig(style, scale);
 
-        legConfigs.attachments.forEach((attach, i) => {
+        // Adjust attachments to match desired leg count (pairs = legCount / 2)
+        let attachments = legConfigs.attachments;
+        const desiredPairs = legCount ? Math.floor(legCount / 2) : attachments.length;
+
+        if (desiredPairs < attachments.length) {
+            // Fewer legs: take evenly spaced subset
+            const step = (attachments.length - 1) / (desiredPairs - 1);
+            const subset = [];
+            for (let i = 0; i < desiredPairs; i++) {
+                const idx = Math.round(i * step);
+                const a = { ...attachments[idx] };
+                a.phase = i / desiredPairs;
+                subset.push(a);
+            }
+            attachments = subset;
+        } else if (desiredPairs > attachments.length) {
+            // More legs: interpolate extra pairs between existing ones
+            const extra = [];
+            for (let i = 0; i < attachments.length; i++) {
+                extra.push({ ...attachments[i] });
+            }
+            while (extra.length < desiredPairs) {
+                // Find the largest gap and insert a midpoint
+                let maxGap = -1, gapIdx = 0;
+                for (let i = 0; i < extra.length - 1; i++) {
+                    const gap = Math.abs(extra[i].z - extra[i + 1].z);
+                    if (gap > maxGap) { maxGap = gap; gapIdx = i; }
+                }
+                const a = extra[gapIdx], b = extra[gapIdx + 1];
+                const mid = {
+                    x: (a.x + b.x) / 2,
+                    y: (a.y + b.y) / 2,
+                    z: (a.z + b.z) / 2,
+                    phase: (a.phase + b.phase) / 2,
+                };
+                extra.splice(gapIdx + 1, 0, mid);
+            }
+            // Recalculate phases evenly
+            for (let i = 0; i < extra.length; i++) {
+                extra[i].phase = i / extra.length;
+            }
+            attachments = extra;
+        }
+
+        attachments.forEach((attach, i) => {
             // Create right leg (positive X side)
             const rightLeg = this.createArticulatedLeg(style, attach, scale, 1, i, legConfigs);
             rightLeg.userData.phase = attach.phase;

@@ -190,6 +190,14 @@ const rng = createSeededRNG(seed);
 ### Weapons/Defense/Mobility
 Keep these simple. They affect range and damage type, not complex behaviors.
 
+### System Sync Rule
+**The three bug systems MUST stay in sync at all times:**
+1. `server/BugGenome.js` — defines what traits exist and can be generated/bred
+2. `public/bug-builder.html` — UI dropdowns for manually building bugs
+3. `public/js/bugGenerator3d.js` — 3D renderer that visually represents traits
+
+When adding, removing, or renaming any trait option (weapon, defense, mobility, wing type, leg style, leg count, head/thorax/abdomen type, eye style, antenna style, texture), **update all three files**. The genome is the source of truth — the builder and renderer must match it exactly. No trait should exist in one system but not the others.
+
 ## Implemented Features
 - Persistent roster of 10 bugs with fight records (W-L)
 - Pre-fight stats screen with pentagon charts

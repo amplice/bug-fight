@@ -439,7 +439,7 @@ class Fighter {
     getPowerRating() {
         const g = this.genome;
         let rating = g.bulk + g.speed + g.fury + g.instinct;
-        if (g.weapon === 'claws') rating += 10;
+        if (g.weapon === 'horn') rating += 10;
         if (g.weapon === 'stinger') rating += 8;
         if (g.defense === 'shell') rating += 10;
         if (g.mobility === 'winged') rating += 15;
@@ -459,8 +459,9 @@ class Fighter {
         switch (this.genome.weapon) {
             case 'mandibles': return 15;
             case 'stinger': return 10;
-            case 'claws': return 8;
             case 'fangs': return 10;
+            case 'pincers': return 12;
+            case 'horn': return 8;
             default: return 10;
         }
     }
@@ -2154,16 +2155,17 @@ class Simulation {
                 switch (attacker.genome.weapon) {
                     case 'mandibles': weaponKnockback = 0.8; break;  // Grip, less knockback
                     case 'stinger': weaponKnockback = 1.4; break;    // Pierce, more knockback
-                    case 'claws': weaponKnockback = 1.2; break;      // Slash, good knockback
                     case 'fangs': weaponKnockback = 1.0; break;      // Bite, standard
+                    case 'pincers': weaponKnockback = 0.7; break;    // Clamp, least knockback
+                    case 'horn': weaponKnockback = 1.5; break;       // Charge, most knockback
                 }
 
                 // Defense knockback resistance
                 let defenseResist = 1.0;
                 if (target.genome.defense === 'shell') {
                     defenseResist = 0.7; // Heavy shell resists knockback
-                } else if (target.genome.defense === 'agility') {
-                    defenseResist = 1.3; // Light, more knockback
+                } else if (target.genome.defense === 'camouflage') {
+                    defenseResist = 1.1; // Standard, slight knockback vulnerability
                 }
 
                 // MOMENTUM VULNERABILITY - target moving fast when hit = extra knockback

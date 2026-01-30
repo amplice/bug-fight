@@ -362,6 +362,15 @@
             </div>
 
             <div class="part-category">
+                <h3>Leg Count</h3>
+                <div class="part-options" id="legcount-options">
+                    <div class="part-option" data-value="4">4</div>
+                    <div class="part-option selected" data-value="6">6</div>
+                    <div class="part-option" data-value="8">8</div>
+                </div>
+            </div>
+
+            <div class="part-category">
                 <h3>Mobility</h3>
                 <div class="part-options" id="mobility-options">
                     <div class="part-option" data-value="ground">Ground</div>
@@ -384,7 +393,7 @@
                 <div class="part-options" id="defense-options">
                     <div class="part-option selected" data-value="none">None</div>
                     <div class="part-option" data-value="shell">Shell</div>
-                    <div class="part-option" data-value="agility">Agility</div>
+                    <div class="part-option" data-value="camouflage">Camouflage</div>
                     <div class="part-option" data-value="toxic">Toxic</div>
                 </div>
             </div>
@@ -613,6 +622,7 @@
         let currentConfig = {
             weapon: 'mandibles',
             legStyle: 'insect',
+            legCount: 6,
             mobility: 'winged',
             wingType: 'fly',
             defense: 'none',
@@ -755,6 +765,7 @@
                     switch (category) {
                         case 'weapon': currentConfig.weapon = value; break;
                         case 'leg': currentConfig.legStyle = value; break;
+                        case 'legcount': currentConfig.legCount = parseInt(value); break;
                         case 'mobility': currentConfig.mobility = value; break;
                         case 'wing': currentConfig.wingType = value; break;
                         case 'defense': currentConfig.defense = value; break;
@@ -818,6 +829,7 @@
                 mobility: currentConfig.mobility,
                 wingType: currentConfig.wingType,
                 legStyle: currentConfig.legStyle,
+                legCount: currentConfig.legCount,
                 headType: currentConfig.headType,
                 thoraxType: currentConfig.thoraxType,
                 abdomenType: currentConfig.abdomenType,
@@ -971,7 +983,7 @@
             const hp = 30 + Math.floor(genome.bulk * 1.2);
             const stamina = 50 + genome.bulk;
             const power = genome.bulk + genome.speed + genome.fury + genome.instinct +
-                (genome.weapon === 'claws' ? 10 : genome.weapon === 'stinger' ? 8 : 0) +
+                (genome.weapon === 'horn' ? 10 : genome.weapon === 'stinger' ? 8 : 0) +
                 (genome.defense === 'shell' ? 10 : 0) +
                 (genome.mobility === 'winged' ? 15 : genome.mobility === 'wallcrawler' ? 10 : 0);
 
@@ -1059,7 +1071,8 @@
             const legs = ['insect', 'spider', 'mantis', 'grasshopper', 'beetle', 'stick', 'centipede'];
             const mobility = ['ground', 'winged', 'wallcrawler'];
             const wingTypes = ['fly', 'beetle', 'dragonfly'];
-            const defense = ['none', 'shell', 'agility', 'toxic'];
+            const legCounts = [4, 6, 8];
+            const defense = ['none', 'shell', 'camouflage', 'toxic'];
             const textureTypes = ['smooth', 'plated', 'rough', 'spotted', 'striped'];
             const headTypes = ['round', 'triangular', 'square', 'elongated', 'shield'];
             const thoraxTypes = ['compact', 'elongated', 'wide', 'humped', 'segmented'];
@@ -1069,6 +1082,7 @@
 
             currentConfig.weapon = weapons[Math.floor(Math.random() * weapons.length)];
             currentConfig.legStyle = legs[Math.floor(Math.random() * legs.length)];
+            currentConfig.legCount = legCounts[Math.floor(Math.random() * legCounts.length)];
             currentConfig.mobility = mobility[Math.floor(Math.random() * mobility.length)];
             currentConfig.wingType = wingTypes[Math.floor(Math.random() * wingTypes.length)];
             currentConfig.defense = defense[Math.floor(Math.random() * defense.length)];
@@ -1095,6 +1109,7 @@
             const optionMaps = {
                 'weapon-options': currentConfig.weapon,
                 'leg-options': currentConfig.legStyle,
+                'legcount-options': String(currentConfig.legCount),
                 'mobility-options': currentConfig.mobility,
                 'wing-options': currentConfig.wingType,
                 'defense-options': currentConfig.defense,

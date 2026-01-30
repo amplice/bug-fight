@@ -68,20 +68,25 @@ class BugGenome {
 
         [this.bulk, this.speed, this.fury, this.instinct] = stats;
 
-        this.abdomenType = ['round', 'oval', 'pointed', 'bulbous', 'segmented'][Math.floor(Math.random() * 5)];
-        this.thoraxType = ['compact', 'elongated', 'wide', 'humped'][Math.floor(Math.random() * 4)];
-        this.headType = ['round', 'triangular', 'square', 'elongated', 'pincer'][Math.floor(Math.random() * 5)];
+        this.abdomenType = ['round', 'oval', 'pointed', 'bulbous', 'segmented', 'sac', 'plated', 'tailed'][Math.floor(Math.random() * 8)];
+        this.thoraxType = ['compact', 'elongated', 'wide', 'humped', 'segmented'][Math.floor(Math.random() * 5)];
+        this.headType = ['round', 'triangular', 'square', 'elongated', 'shield'][Math.floor(Math.random() * 5)];
 
         this.legCount = [4, 6, 8][Math.floor(Math.random() * 3)];
-        this.legStyle = ['straight', 'curved-back', 'curved-forward', 'short'][Math.floor(Math.random() * 4)];
+        this.legStyle = ['insect', 'spider', 'mantis', 'grasshopper', 'beetle', 'stick', 'centipede'][Math.floor(Math.random() * 7)];
 
-        this.weapon = ['mandibles', 'stinger', 'fangs', 'claws', 'pincers', 'horn'][Math.floor(Math.random() * 6)];
+        this.weapon = ['mandibles', 'stinger', 'fangs', 'pincers', 'horn'][Math.floor(Math.random() * 5)];
         this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
         this.textureType = ['smooth', 'plated', 'rough', 'spotted', 'striped'][Math.floor(Math.random() * 5)];
-        this.eyeStyle = ['compound', 'simple', 'stalked', 'multiple'][Math.floor(Math.random() * 4)];
-        this.antennaStyle = ['segmented', 'clubbed', 'whip', 'horned', 'none'][Math.floor(Math.random() * 5)];
-        this.wingType = ['fly', 'beetle', 'dragonfly', 'none'][Math.floor(Math.random() * 4)];
+        this.eyeStyle = ['compound', 'simple', 'stalked', 'multiple', 'sunken'][Math.floor(Math.random() * 5)];
+        this.antennaStyle = ['segmented', 'clubbed', 'whip', 'horned', 'none', 'nubs'][Math.floor(Math.random() * 6)];
+        // Winged bugs always get a wing type; non-winged bugs are always 'none'
+        if (this.mobility === 'winged') {
+            this.wingType = ['fly', 'beetle', 'dragonfly'][Math.floor(Math.random() * 3)];
+        } else {
+            this.wingType = 'none';
+        }
 
         // Pick from realistic color palette
         const colorChoice = BUG_COLORS[Math.floor(Math.random() * BUG_COLORS.length)];
@@ -111,6 +116,7 @@ class BugGenome {
         child.abdomenType = Math.random() < 0.5 ? this.abdomenType : other.abdomenType;
         child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
         child.headType = Math.random() < 0.5 ? this.headType : other.headType;
+        child.legCount = Math.random() < 0.5 ? this.legCount : other.legCount;
         child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
         child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
         child.defense = Math.random() < 0.5 ? this.defense : other.defense;
@@ -118,7 +124,18 @@ class BugGenome {
         child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
         child.eyeStyle = Math.random() < 0.5 ? this.eyeStyle : other.eyeStyle;
         child.antennaStyle = Math.random() < 0.5 ? this.antennaStyle : other.antennaStyle;
-        child.wingType = Math.random() < 0.5 ? this.wingType : other.wingType;
+        // Winged bugs always get a wing type; non-winged are always 'none'
+        if (child.mobility === 'winged') {
+            // Inherit wing type from a parent that has wings, or random
+            const parentWings = [this.wingType, other.wingType].filter(w => w !== 'none');
+            if (parentWings.length > 0) {
+                child.wingType = parentWings[Math.floor(Math.random() * parentWings.length)];
+            } else {
+                child.wingType = ['fly', 'beetle', 'dragonfly'][Math.floor(Math.random() * 3)];
+            }
+        } else {
+            child.wingType = 'none';
+        }
 
         child.color = {
             hue: this.blendHue(this.color.hue, other.color.hue),
@@ -149,7 +166,6 @@ class BugGenome {
             mandibles: ['Crusher', 'Gnasher', 'Chomper', 'Breaker'],
             stinger: ['Piercer', 'Stabber', 'Lancer', 'Spike'],
             fangs: ['Venom', 'Toxic', 'Biter', 'Fang'],
-            claws: ['Slasher', 'Ripper', 'Shredder', 'Razor'],
             pincers: ['Gripper', 'Clamper', 'Pincher', 'Snapper'],
             horn: ['Charger', 'Ramhorn', 'Gorer', 'Impaler']
         };
@@ -158,7 +174,10 @@ class BugGenome {
             oval: ['Runner', 'Swift', 'Dash', 'Scout'],
             pointed: ['Spike', 'Lance', 'Arrow', 'Dart'],
             bulbous: ['Bulk', 'Mass', 'Tank', 'Heavy'],
-            segmented: ['Crawler', 'Creep', 'Chain', 'Link']
+            segmented: ['Crawler', 'Creep', 'Chain', 'Link'],
+            sac: ['Sack', 'Brood', 'Pouch', 'Vessel'],
+            plated: ['Shell', 'Armor', 'Plank', 'Guard'],
+            tailed: ['Tail', 'Whip', 'Sting', 'Lash']
         };
 
         return prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +

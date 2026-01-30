@@ -55,19 +55,27 @@ class BugGenome {
         [this.bulk, this.speed, this.fury, this.instinct] = stats;
 
         // Three body segments
-        this.abdomenType = ['round', 'oval', 'pointed', 'bulbous', 'segmented'][Math.floor(Math.random() * 5)];
-        this.thoraxType = ['compact', 'elongated', 'wide', 'humped'][Math.floor(Math.random() * 4)];
-        this.headType = ['round', 'triangular', 'square', 'elongated', 'pincer'][Math.floor(Math.random() * 5)];
+        this.abdomenType = ['round', 'oval', 'pointed', 'bulbous', 'segmented', 'sac', 'plated', 'tailed'][Math.floor(Math.random() * 8)];
+        this.thoraxType = ['compact', 'elongated', 'wide', 'humped', 'segmented'][Math.floor(Math.random() * 5)];
+        this.headType = ['round', 'triangular', 'square', 'elongated', 'shield'][Math.floor(Math.random() * 5)];
 
         // Leg count and style
         this.legCount = [4, 6, 8][Math.floor(Math.random() * 3)];
-        this.legStyle = ['straight', 'curved-back', 'curved-forward', 'short'][Math.floor(Math.random() * 4)];
+        this.legStyle = ['insect', 'spider', 'mantis', 'grasshopper', 'beetle', 'stick', 'centipede'][Math.floor(Math.random() * 7)];
 
         // Combat types
-        this.weapon = ['mandibles', 'stinger', 'fangs', 'claws'][Math.floor(Math.random() * 4)];
+        this.weapon = ['mandibles', 'stinger', 'fangs', 'pincers', 'horn'][Math.floor(Math.random() * 5)];
         this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
         this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
         this.textureType = ['smooth', 'plated', 'rough', 'spotted', 'striped'][Math.floor(Math.random() * 5)];
+        this.eyeStyle = ['compound', 'simple', 'stalked', 'multiple', 'sunken'][Math.floor(Math.random() * 5)];
+        this.antennaStyle = ['segmented', 'clubbed', 'whip', 'horned', 'none', 'nubs'][Math.floor(Math.random() * 6)];
+        // Winged bugs always get a wing type; non-winged bugs are always 'none'
+        if (this.mobility === 'winged') {
+            this.wingType = ['fly', 'beetle', 'dragonfly'][Math.floor(Math.random() * 3)];
+        } else {
+            this.wingType = 'none';
+        }
 
         // Color
         this.color = {
@@ -96,11 +104,22 @@ class BugGenome {
         child.abdomenType = Math.random() < 0.5 ? this.abdomenType : other.abdomenType;
         child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
         child.headType = Math.random() < 0.5 ? this.headType : other.headType;
+        child.legCount = Math.random() < 0.5 ? this.legCount : other.legCount;
         child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
         child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
         child.defense = Math.random() < 0.5 ? this.defense : other.defense;
         child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
         child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
+        child.eyeStyle = Math.random() < 0.5 ? this.eyeStyle : other.eyeStyle;
+        child.antennaStyle = Math.random() < 0.5 ? this.antennaStyle : other.antennaStyle;
+        if (child.mobility === 'winged') {
+            const parentWings = [this.wingType, other.wingType].filter(w => w !== 'none');
+            child.wingType = parentWings.length > 0
+                ? parentWings[Math.floor(Math.random() * parentWings.length)]
+                : ['fly', 'beetle', 'dragonfly'][Math.floor(Math.random() * 3)];
+        } else {
+            child.wingType = 'none';
+        }
 
         child.color = {
             hue: this.blendHue(this.color.hue, other.color.hue),
@@ -131,14 +150,18 @@ class BugGenome {
             mandibles: ['Crusher', 'Gnasher', 'Chomper', 'Breaker'],
             stinger: ['Piercer', 'Stabber', 'Lancer', 'Spike'],
             fangs: ['Venom', 'Toxic', 'Biter', 'Fang'],
-            claws: ['Slasher', 'Ripper', 'Shredder', 'Razor']
+            pincers: ['Gripper', 'Clamper', 'Pincher', 'Snapper'],
+            horn: ['Charger', 'Ramhorn', 'Gorer', 'Impaler']
         };
         const suffixes = {
             round: ['Blob', 'Orb', 'Ball', 'Dome'],
             oval: ['Runner', 'Swift', 'Dash', 'Scout'],
             pointed: ['Spike', 'Lance', 'Arrow', 'Dart'],
             bulbous: ['Bulk', 'Mass', 'Tank', 'Heavy'],
-            segmented: ['Crawler', 'Creep', 'Chain', 'Link']
+            segmented: ['Crawler', 'Creep', 'Chain', 'Link'],
+            sac: ['Sack', 'Brood', 'Pouch', 'Vessel'],
+            plated: ['Shell', 'Armor', 'Plank', 'Guard'],
+            tailed: ['Tail', 'Whip', 'Sting', 'Lash']
         };
 
         return prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +
@@ -290,6 +313,18 @@ class BugSpriteGenerator {
             case 'segmented':
                 this.drawSegmentedAbdomen(grid, cx, cy, scale, squash);
                 break;
+            case 'sac':
+                // Spider-like translucent sac - render as bigger round
+                this.drawRoundAbdomen(grid, cx, cy, scale * 1.2, squash);
+                break;
+            case 'plated':
+                // Pillbug-style overlapping plates - render as round with lines
+                this.drawRoundAbdomen(grid, cx, cy, scale, squash);
+                break;
+            case 'tailed':
+                // Wasp-style with tail - render as pointed
+                this.drawPointedAbdomen(grid, cx, cy, scale, squash);
+                break;
         }
     }
 
@@ -367,6 +402,10 @@ class BugSpriteGenerator {
                 break;
             case 'humped':
                 this.drawHumpedThorax(grid, cx, cy, scale);
+                break;
+            case 'segmented':
+                // Segmented thorax - like elongated with bands
+                this.drawElongatedThorax(grid, cx, cy, scale);
                 break;
         }
 
@@ -452,8 +491,8 @@ class BugSpriteGenerator {
             case 'elongated':
                 this.drawElongatedHead(grid, headX, cy, scale);
                 break;
-            case 'pincer':
-                this.drawPincerHead(grid, headX, cy, scale);
+            case 'shield':
+                this.drawShieldHead(grid, headX, cy, scale);
                 break;
         }
 
@@ -520,15 +559,16 @@ class BugSpriteGenerator {
         this.fillOval(grid, cx + Math.floor(scale), cy, rx, ry, 3, 2, 1);
     }
 
-    drawPincerHead(grid, cx, cy, scale) {
-        const r = Math.floor(2.5 * scale);
-        // Main head - slightly extended toward thorax
-        this.fillOval(grid, cx - Math.floor(scale), cy, Math.floor(3.5 * scale), r, 3, 2, 1);
-        // Pincers on top and bottom
-        this.fillOval(grid, cx - Math.floor(scale), cy - Math.floor(2.5 * scale),
-                      Math.floor(2 * scale), Math.floor(1.5 * scale), 2, 2, 1);
-        this.fillOval(grid, cx - Math.floor(scale), cy + Math.floor(2.5 * scale),
-                      Math.floor(2 * scale), Math.floor(1.5 * scale), 2, 2, 1);
+    drawShieldHead(grid, cx, cy, scale) {
+        // Broad, flat, protective shield-bug head
+        const rx = Math.floor(4 * scale);
+        const ry = Math.floor(4 * scale);
+        this.fillOval(grid, cx, cy, rx, ry, 3, 2, 1);
+        // Flat front edge
+        for (let y = -ry + 1; y < ry; y++) {
+            const px = cx + Math.floor(2.5 * scale);
+            if (this.inBounds(px, cy + y)) grid[cy + y][px] = 1;
+        }
     }
 
     drawEyes(grid, cx, cy, scale) {
@@ -575,16 +615,19 @@ class BugSpriteGenerator {
 
             const isWallcrawler = g.mobility === 'wallcrawler';
 
-            if (g.legStyle === 'straight') {
+            // Map leg styles to 2D rendering
+            const style = g.legStyle || 'insect';
+            if (style === 'insect' || style === 'beetle' || style === 'straight') {
                 this.drawStraightLeg(grid, startX, startY, legLen, anim, scale, isWallcrawler);
-            } else if (g.legStyle === 'curved-back') {
+            } else if (style === 'spider' || style === 'curved-back') {
                 this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, -1, isWallcrawler);
-            } else if (g.legStyle === 'curved-forward') {
+            } else if (style === 'mantis' || style === 'grasshopper' || style === 'curved-forward') {
                 this.drawCurvedLeg(grid, startX, startY, legLen, anim, scale, 1, isWallcrawler);
-            } else if (g.legStyle === 'short') {
+            } else if (style === 'stick') {
+                this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 1.3), anim, scale, isWallcrawler);
+            } else if (style === 'centipede' || style === 'short') {
                 this.drawStraightLeg(grid, startX, startY, Math.floor(legLen * 0.7), anim, scale, isWallcrawler);
             } else {
-                // Default fallback
                 this.drawStraightLeg(grid, startX, startY, legLen, anim, scale, isWallcrawler);
             }
         }
@@ -682,8 +725,20 @@ class BugSpriteGenerator {
             case 'fangs':
                 this.drawFangs(grid, headX, cy, scale, weaponSize, attacking);
                 break;
-            case 'claws':
-                this.drawClaws(grid, headX, cy, scale, weaponSize, attacking);
+            case 'pincers':
+                // Pincers render as wider mandibles
+                const pExtend = attacking ? Math.floor(3 * scale) : 0;
+                this.drawMandibles(grid, headX, cy, scale, Math.floor(weaponSize * 1.3), pExtend);
+                break;
+            case 'horn':
+                // Horn renders as a forward spike
+                const hornLen = weaponSize + Math.floor(3 * scale);
+                const hornExtend = attacking ? Math.floor(2 * scale) : 0;
+                for (let i = 0; i <= hornLen + hornExtend; i++) {
+                    const hx = headX + Math.floor(2 * scale) + i;
+                    if (this.inBounds(hx, cy)) grid[cy][hx] = 1;
+                    if (i < hornLen * 0.6 && this.inBounds(hx, cy - 1)) grid[cy - 1][hx] = 1;
+                }
                 break;
         }
     }
