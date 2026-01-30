@@ -17,14 +17,6 @@ const ARENA_3D = {
     maxZ: 300,
 };
 
-// Map from 2D coordinates to 3D
-function map2Dto3D(x2d, y2d, z2d = 0) {
-    const x3d = (x2d - 450);
-    const y3d = 550 - y2d;
-    const z3d = z2d;
-    return { x: x3d, y: y3d, z: z3d };
-}
-
 // ============================================
 // STATE
 // ============================================
@@ -319,8 +311,8 @@ function updateActionCamera(state) {
     if (!f1 || !f2) return;
 
     // Get 3D positions
-    const pos1 = map2Dto3D(f1.x, f1.y, f1.z || 0);
-    const pos2 = map2Dto3D(f2.x, f2.y, f2.z || 0);
+    const pos1 = { x: f1.x, y: f1.y, z: f1.z || 0 };
+    const pos2 = { x: f2.x, y: f2.y, z: f2.z || 0 };
 
     // Calculate midpoint between bugs
     const midX = (pos1.x + pos2.x) / 2;
@@ -506,7 +498,7 @@ function updateBugs(state, deltaTime) {
         const animator = bugAnimators[index];
 
         // Position from server
-        const pos3d = map2Dto3D(fighter.x, fighter.y, fighter.z || 0);
+        const pos3d = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
 
         // Death/Victory fall handling - bugs fall to ground client-side
         const isDead = fighter.state === 'death';
@@ -905,7 +897,7 @@ function updateMotionTrails(state) {
 
         // Spawn trail point if moving fast enough
         if (speed > TRAIL_SPAWN_SPEED && fighter.state !== 'death') {
-            const pos3d = map2Dto3D(fighter.x, fighter.y, fighter.z || 0);
+            const pos3d = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
 
             // Color based on state
             let trailColor = 0x888888;  // Default gray
@@ -1015,7 +1007,7 @@ function processEvents(events) {
         }
 
         if (event.type === 'hit') {
-            const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
+            const pos3d = { x: event.data.x, y: event.data.y, z: 0 };
             const isCrit = event.data.isCrit;
             const isPoison = event.data.isPoison;
 
@@ -1034,7 +1026,7 @@ function processEvents(events) {
         }
 
         if (event.type === 'wallImpact') {
-            const pos3d = map2Dto3D(event.data.x, event.data.y, 0);
+            const pos3d = { x: event.data.x, y: event.data.y, z: 0 };
             createHitParticles(pos3d.x, pos3d.y, pos3d.z, 0x888888, 15, false);
             screenShake.intensity = Math.min(12, screenShake.intensity + event.data.stunApplied / 3);
         }
@@ -1099,7 +1091,7 @@ function updateFighterUI(index, fighter, state) {
     }
 
     const ui = fighterUI[index];
-    const pos3d = map2Dto3D(fighter.x, fighter.y, fighter.z || 0);
+    const pos3d = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
     ui.position.set(pos3d.x, pos3d.y + 50, pos3d.z);
     ui.lookAt(camera.position);
 

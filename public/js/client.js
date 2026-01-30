@@ -306,10 +306,6 @@ function updateConnectionStatus(isConnected) {
 // ============================================
 // ROSTER MODAL
 // ============================================
-
-// Old 2D roster removed - 3D Roster3DViewer in index.html handles this
-
-// ============================================
 // INIT
 // ============================================
 

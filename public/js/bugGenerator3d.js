@@ -2827,6 +2827,50 @@ class BugGenerator3D {
         wingGroup.rotation.y = side * 0.2;
     }
 
+    createDragonflyWing(wingGroup, scale, side, clearMat, veinMat) {
+        // Dragonfly: two pairs of long, narrow wings (fore and hind)
+        for (let pair = 0; pair < 2; pair++) {
+            const len = (pair === 0 ? 10 : 8) * scale; // Forewing longer
+            const width = 1.2 * scale;
+
+            const shape = new THREE.Shape();
+            shape.moveTo(0, 0);
+            shape.quadraticCurveTo(len * 0.3, width, len * 0.6, width * 0.8);
+            shape.quadraticCurveTo(len * 0.9, width * 0.4, len, 0);
+            shape.quadraticCurveTo(len * 0.9, -width * 0.3, len * 0.6, -width * 0.5);
+            shape.quadraticCurveTo(len * 0.3, -width * 0.4, 0, 0);
+
+            const geo = new THREE.ShapeGeometry(shape);
+            const wing = new THREE.Mesh(geo, clearMat);
+            wing.position.z = pair * -1.5 * scale; // Hindwing offset back
+            wingGroup.add(wing);
+
+            // Dense vein network (dragonfly characteristic)
+            const mainVeinGeo = new THREE.TubeGeometry(
+                new THREE.CatmullRomCurve3([
+                    new THREE.Vector3(0, 0, 0.05),
+                    new THREE.Vector3(len * 0.4, width * 0.3, 0.05),
+                    new THREE.Vector3(len * 0.8, 0, 0.05),
+                ]), 10, 0.04 * scale, 4, false
+            );
+            const mainVein = new THREE.Mesh(mainVeinGeo, veinMat);
+            mainVein.position.z = pair * -1.5 * scale;
+            wingGroup.add(mainVein);
+
+            // Cross veins
+            for (let i = 0; i < 5; i++) {
+                const crossGeo = new THREE.CylinderGeometry(0.02 * scale, 0.02 * scale, width * 1.2, 4);
+                const cross = new THREE.Mesh(crossGeo, veinMat);
+                cross.position.set(len * 0.15 + i * len * 0.15, 0.1 * scale, 0.05 + pair * -1.5 * scale);
+                cross.rotation.z = 0.3 + i * 0.1;
+                wingGroup.add(cross);
+            }
+        }
+
+        wingGroup.rotation.x = -0.1;
+        wingGroup.rotation.y = side * 0.25;
+    }
+
 }
 
 // ============================================

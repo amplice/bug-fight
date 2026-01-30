@@ -129,13 +129,13 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 ## Architecture
 
 ### Current Stack
-- **Frontend**: Vanilla JS, Canvas API, static HTML/CSS
+- **Frontend**: Vanilla JS, Three.js (3D), static HTML/CSS
 - **Backend**: Node.js + `ws` library
 - **Database**: JSON files (roster.json)
 - **Hosting**: Single VPS
 
 ### Target Stack (Near-term)
-- **Frontend**: Vite (bundling/dev), vanilla JS, Canvas API
+- **Frontend**: Vite (bundling/dev), vanilla JS, Three.js
 - **Backend**: Bun (native WebSocket, faster runtime)
 - **Database**: SQLite + Prisma ORM
 - **Hosting**: Single VPS
@@ -201,7 +201,7 @@ const rng = createSeededRNG(seed);
 - `public/js/renderer3d.js` - Three.js 3D rendering, camera controls, effects
 - `public/js/bugGenerator3d.js` - 3D bug mesh generation, BugAnimator class
 - `public/js/soundEngine.js` - Procedural Web Audio API sound engine
-- `public/js/procedural.js` - Client-side BugGenome for stats display
+- `public/js/procedural.js` - Client-side BugGenome class (constructor-only, reconstructs genome from server data)
 
 ### Key Stats
 - **Bulk** - HP, stamina pool
@@ -213,12 +213,13 @@ const rng = createSeededRNG(seed);
 Keep these simple. They affect range and damage type, not complex behaviors.
 
 ### System Sync Rule
-**The three bug systems MUST stay in sync at all times:**
-1. `server/BugGenome.js` — defines what traits exist and can be generated/bred
-2. `public/bug-builder.html` — UI dropdowns for manually building bugs
-3. `public/js/bugGenerator3d.js` — 3D renderer that visually represents traits
+**The bug systems MUST stay in sync at all times:**
+1. `server/BugGenome.js` — server-side genome (source of truth for traits, randomization, breeding, naming)
+2. `public/js/bugGenerator3d.js` — 3D renderer that visually represents traits
 
-When adding, removing, or renaming any trait option (weapon, defense, mobility, wing type, leg style, leg count, head/thorax/abdomen type, eye style, antenna style, texture), **update all three files**. The genome is the source of truth — the builder and renderer must match it exactly. No trait should exist in one system but not the others.
+When adding, removing, or renaming any trait option (weapon, defense, mobility, wing type, leg style, leg count, head/thorax/abdomen type, eye style, antenna style, texture), **update both files**. The server genome is the source of truth — the 3D renderer must match it exactly.
+
+Note: `public/js/procedural.js` is a thin constructor-only stub that receives genome data from the server via `Object.assign`. It has no trait lists or logic to sync.
 
 ## Implemented Features
 - Persistent roster of 20 bugs with fight records (W-L)
@@ -280,3 +281,12 @@ Commit and push after every significant change (new features, bug fixes, archite
 - This was the final stable 2D version before 3D conversion began
 
 **Current version:** `v0.3.0-alpha` - Full 3D with shape-based bugs
+
+### Coordinate System
+Server and client use the same native 3D coordinate system (no mapping layer):
+- **X**: -450 to 450 (left to right)
+- **Y**: 0 to 400 (floor to ceiling, y-up)
+- **Z**: -300 to 300 (back to front)
+- **Gravity**: `vy -= gravity` (pulls Y down toward 0)
+- **Jump**: positive `vy` (pushes Y up)
+- **Floor**: `y <= floorLevel`, **Ceiling**: `y > ceilingLevel`

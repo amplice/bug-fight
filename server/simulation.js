@@ -10,15 +10,14 @@ const RosterManager = require('./roster');
 
 const ARENA = {
     width: 900,
-    height: 600,
-    floorY: 550,
-    ceilingY: 80,
-    leftWall: 50,
-    rightWall: 850,
-    // 3D depth bounds (z-axis)
-    frontWall: 250,   // positive z
-    backWall: -250,   // negative z
-    depth: 500,       // total z range
+    height: 400,
+    depth: 600,
+    minX: -450,
+    maxX: 450,
+    minY: 0,      // floor
+    maxY: 400,    // ceiling
+    minZ: -300,   // back wall
+    maxZ: 300,    // front wall
 };
 
 const COUNTDOWN_SECONDS = 10;
@@ -447,16 +446,16 @@ class Fighter {
         this.z = 0;
 
         if (this.isGround) {
-            this.x = this.side === 'left' ? 200 : 700;
-            this.y = ARENA.floorY - 20;
+            this.x = this.side === 'left' ? -250 : 250;
+            this.y = ARENA.minY + 20;
         } else if (this.isFlying) {
-            this.x = this.side === 'left' ? 200 : 700;
-            this.y = ARENA.ceilingY + 100 + Math.random() * 150;
+            this.x = this.side === 'left' ? -250 : 250;
+            this.y = 220 + Math.random() * 150;
             // Flying bugs can have slight z offset since they maneuver in 3D
             this.z = (Math.random() - 0.5) * 50;
         } else if (this.isWallcrawler) {
-            this.x = this.side === 'left' ? 150 : 750;
-            this.y = ARENA.floorY - 20;
+            this.x = this.side === 'left' ? -300 : 300;
+            this.y = ARENA.minY + 20;
         }
     }
 
@@ -677,11 +676,11 @@ class Fighter {
         if (!this.isAlive && !isDead) return;
 
         const halfSize = this.spriteSize / 2;
-        const floorLevel = ARENA.floorY - halfSize;
+        const floorLevel = ARENA.minY + halfSize;
 
         // If dead but actually on the floor, no more physics needed
         // Check actual Y position, not grounded flag (flyers can have grounded=true while airborne)
-        if (isDead && this.y >= floorLevel - 1) {
+        if (isDead && this.y <= floorLevel + 1) {
             this.y = floorLevel;
             this.grounded = true;
             return;
@@ -715,22 +714,22 @@ class Fighter {
         const bounceFactor = isDead ? 0.15 : 0.3;  // Dead bugs bounce less
 
         if (!this.onWall) {
-            this.vy += this.gravity;
+            this.vy -= this.gravity;
         }
 
         this.x += this.vx;
         this.y += this.vy;
-        this.z += this.vz;  // 3D: apply z velocity
+        this.z += this.vz;
 
-        // Floor
-        if (this.y >= floorLevel) {
+        // Floor (y = low)
+        if (this.y <= floorLevel) {
             this.y = floorLevel;
             if (this.isFlying && !isDead) {
-                this.vy = -Math.abs(this.vy) * bounceFactor;
+                this.vy = Math.abs(this.vy) * bounceFactor;
             } else {
                 // Small bounce on death impact
                 if (isDead && Math.abs(this.vy) > 2) {
-                    this.vy = -Math.abs(this.vy) * bounceFactor;
+                    this.vy = Math.abs(this.vy) * bounceFactor;
                 } else {
                     this.vy = 0;
                     this.grounded = true;
@@ -741,15 +740,15 @@ class Fighter {
             this.grounded = false;
         }
 
-        // Ceiling
-        const ceilingLevel = ARENA.ceilingY + halfSize;
-        if (this.y < ceilingLevel) {
+        // Ceiling (y = high)
+        const ceilingLevel = ARENA.maxY - halfSize;
+        if (this.y > ceilingLevel) {
             this.y = ceilingLevel;
-            this.vy = Math.abs(this.vy) * bounceFactor;
+            this.vy = -Math.abs(this.vy) * bounceFactor;
         }
 
         // Walls - with wall stun detection
-        const leftLimit = ARENA.leftWall + halfSize;
+        const leftLimit = ARENA.minX + halfSize;
         if (this.x < leftLimit) {
             const impactVelocity = Math.abs(this.vx);
             this.x = leftLimit;
@@ -767,7 +766,7 @@ class Fighter {
             }
         }
 
-        const rightLimit = ARENA.rightWall - halfSize;
+        const rightLimit = ARENA.maxX - halfSize;
         if (this.x > rightLimit) {
             const impactVelocity = Math.abs(this.vx);
             this.x = rightLimit;
@@ -786,7 +785,7 @@ class Fighter {
         }
 
         // 3D: Front and back walls (z-axis bounds)
-        const frontLimit = ARENA.frontWall - halfSize;
+        const frontLimit = ARENA.maxZ - halfSize;
         if (this.z > frontLimit) {
             const impactVelocity = Math.abs(this.vz);
             this.z = frontLimit;
@@ -803,7 +802,7 @@ class Fighter {
             }
         }
 
-        const backLimit = ARENA.backWall + halfSize;
+        const backLimit = ARENA.minZ + halfSize;
         if (this.z < backLimit) {
             const impactVelocity = Math.abs(this.vz);
             this.z = backLimit;
@@ -861,7 +860,7 @@ class Fighter {
         const jumpForce = this.jumpPower * power;
 
         if (this.onWall) {
-            this.vy = -jumpForce * 0.8;
+            this.vy = jumpForce * 0.8;
             // Push perpendicular away from wall
             if (this.wallSide === 'left') this.vx = 6;
             else if (this.wallSide === 'right') this.vx = -6;
@@ -870,7 +869,7 @@ class Fighter {
             this.onWall = false;
             this.grounded = false;
         } else {
-            this.vy = -jumpForce;
+            this.vy = jumpForce;
             this.grounded = false;
         }
 
@@ -920,35 +919,35 @@ class Fighter {
     // Wall awareness helpers
     getWallProximity() {
         // Returns 0-1 value, 1 = at wall, 0 = at center
-        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
-        const arenaHalfWidth = (ARENA.rightWall - ARENA.leftWall) / 2;
+        const arenaCenter = (ARENA.minX + ARENA.maxX) / 2;
+        const arenaHalfWidth = (ARENA.maxX - ARENA.minX) / 2;
         const distFromCenter = Math.abs(this.x - arenaCenter);
         return distFromCenter / arenaHalfWidth;
     }
 
     getNearestWallSide() {
-        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+        const arenaCenter = (ARENA.minX + ARENA.maxX) / 2;
         return this.x < arenaCenter ? 'left' : 'right';
     }
 
     getDistanceToWall(side) {
         if (side === 'left') {
-            return this.x - ARENA.leftWall;
+            return this.x - ARENA.minX;
         } else {
-            return ARENA.rightWall - this.x;
+            return ARENA.maxX - this.x;
         }
     }
 
     isCornered(threshold = 100) {
         // Returns true if within threshold pixels of a wall
-        const leftDist = this.x - ARENA.leftWall;
-        const rightDist = ARENA.rightWall - this.x;
+        const leftDist = this.x - ARENA.minX;
+        const rightDist = ARENA.maxX - this.x;
         return Math.min(leftDist, rightDist) < threshold;
     }
 
     getEscapeDirection() {
         // Returns direction to move away from nearest wall (toward center)
-        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+        const arenaCenter = (ARENA.minX + ARENA.maxX) / 2;
         return this.x < arenaCenter ? 1 : -1; // Move right if on left, left if on right
     }
 
@@ -1148,23 +1147,23 @@ class Fighter {
 
         if (this.isFlying) {
             // TRUE 3D AERIAL COMBAT
-            const hasHeightAdvantage = this.y < opponent.y - 40;  // We're above them
+            const hasHeightAdvantage = this.y > opponent.y + 40;  // We're above them
             const canDive = hasHeightAdvantage && horizDist < 200 && staminaPercent > 0.4;
 
             if (opponent.isFlying) {
                 // AIR-TO-AIR DOGFIGHT
                 // Maintain height advantage while pursuing
-                const targetHeight = opponent.y - 60 - (instinctFactor * 40);  // Higher instinct = more height advantage
+                const targetHeight = opponent.y + 60 + (instinctFactor * 40);  // Higher instinct = more height advantage
 
                 // Pursuit in full 3D space
                 this.vx += Math.sign(dx) * speed * 0.8;
                 this.vz += Math.sign(dz) * speed * 0.8;  // Full z pursuit
 
                 // Height management - try to get above opponent
-                if (this.y > targetHeight) {
-                    this.vy -= 0.3;  // Climb to get above (reduced)
-                } else if (this.y < targetHeight - 50) {
-                    this.vy += 0.2;  // Don't go too far above
+                if (this.y < targetHeight) {
+                    this.vy += 0.3;  // Climb to get above
+                } else if (this.y > targetHeight + 50) {
+                    this.vy -= 0.2;  // Don't go too far above
                 }
 
                 // Banking maneuvers - strafe while pursuing
@@ -1188,7 +1187,7 @@ class Fighter {
                 const diveSpeed = speed * 2;  // Reduced dive speed
 
                 this.vx += Math.sign(dx) * diveSpeed * Math.cos(diveAngle);
-                this.vy += 0.6;  // Reduced downward force
+                this.vy -= 0.6;  // Dive downward
                 this.vz += Math.sign(dz) * diveSpeed * 0.5;
 
                 // Mark as diving for damage bonus
@@ -1210,20 +1209,20 @@ class Fighter {
             } else if (staminaPercent < 0.25) {
                 // LOW STAMINA - descend to conserve energy, don't climb!
                 this.vx += Math.sign(dx) * speed * 0.3;
-                this.vy += 0.2;  // Descend slowly to save stamina
+                this.vy -= 0.2;  // Descend slowly to save stamina
                 this.vz += Math.sign(dz) * speed * 0.3;
                 this.isDiving = false;
 
             } else {
                 // POSITIONING - circle above ground opponent
-                const idealHeight = opponent.y - 100 - (instinctFactor * 50);
+                const idealHeight = opponent.y + 100 + (instinctFactor * 50);
                 const idealDist = 120 + (1 - this.drives.aggression) * 80;
 
                 // Adjust height
-                if (this.y > idealHeight) {
-                    this.vy -= 0.25;
-                } else if (this.y < idealHeight - 30) {
-                    this.vy += 0.15;
+                if (this.y < idealHeight) {
+                    this.vy += 0.25;
+                } else if (this.y > idealHeight + 30) {
+                    this.vy -= 0.15;
                 }
 
                 // Circle around opponent in 3D - figure-8 pattern
@@ -1271,7 +1270,7 @@ class Fighter {
             this.vz += forwardZ * speed * 0.9;
 
             // Jump at elevated opponents (less frequent)
-            if (opponent.isFlying || opponent.onWall || opponent.y < this.y - 50) {
+            if (opponent.isFlying || opponent.onWall || opponent.y > this.y + 50) {
                 if (this.grounded && horizDist < attackRange * 2.5 && Math.random() < 0.02 + this.drives.aggression * 0.04) {
                     this.jump(0.8);
                     // Jump forward in facing direction
@@ -1305,21 +1304,21 @@ class Fighter {
 
             let targetX = opponent.x + Math.cos(this.circleAngle) * circleRadius;
             let targetZ = opponent.z + Math.sin(this.circleAngle) * zRadius;
-            let targetY = opponent.y - 80 + Math.sin(this.circleAngle) * circleRadius * orbitTilt;
+            let targetY = opponent.y + 80 + Math.sin(this.circleAngle) * circleRadius * orbitTilt;
 
             // Add vertical bobbing for more dynamic flight
             targetY += Math.sin(verticalAngle) * 30;
 
             // Wall avoidance
             if (instinctFactor > 0.3) {
-                const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+                const arenaCenter = (ARENA.minX + ARENA.maxX) / 2;
                 const wallBias = (arenaCenter - targetX) * instinctFactor * 0.2;
                 targetX += wallBias;
-                targetZ = clamp(targetZ, ARENA.backWall + 80, ARENA.frontWall - 80);
+                targetZ = clamp(targetZ, ARENA.minZ + 80, ARENA.maxZ - 80);
             }
 
-            // Ceiling/floor avoidance
-            targetY = clamp(targetY, ARENA.ceilingY + 60, ARENA.floorY - 60);
+            // Floor/ceiling avoidance
+            targetY = clamp(targetY, ARENA.minY + 60, ARENA.maxY - 60);
 
             // Smooth movement toward target
             this.vx += (targetX - this.x) * 0.035;
@@ -1327,8 +1326,8 @@ class Fighter {
             this.vz += (targetZ - this.z) * 0.035;
 
             // Maintain height advantage over grounded opponents
-            if (!opponent.isFlying && this.y > opponent.y - 50) {
-                this.vy -= 0.4;
+            if (!opponent.isFlying && this.y < opponent.y + 50) {
+                this.vy += 0.4;
             }
 
             // Subtle z-weave for unpredictability
@@ -1344,7 +1343,7 @@ class Fighter {
             if (iAmCornered && instinctFactor > 0.3) {
                 targetX += wallAvoidance * 50;
             }
-            targetZ = clamp(targetZ, ARENA.backWall + 60, ARENA.frontWall - 60);
+            targetZ = clamp(targetZ, ARENA.minZ + 60, ARENA.maxZ - 60);
 
             this.vx += (targetX - this.x) * 0.04;
             this.vz += (targetZ - this.z) * 0.04;
@@ -1404,7 +1403,7 @@ class Fighter {
 
         // Calculate escape vectors
         const iAmCornered = this.isCornered(100);
-        const iAmCorneredZ = this.z > ARENA.frontWall - 80 || this.z < ARENA.backWall + 80;
+        const iAmCorneredZ = this.z > ARENA.maxZ - 80 || this.z < ARENA.minZ + 80;
         const escapeDir = this.getEscapeDirection();
         const escapeDirZ = this.z > 0 ? -1 : 1;  // Toward z-center
 
@@ -1435,7 +1434,7 @@ class Fighter {
 
             } else if (staminaPercent < 0.25) {
                 // LOW STAMINA - descend while retreating to save energy
-                this.vy += 0.4;  // Descend, don't climb!
+                this.vy -= 0.4;  // Descend, don't climb!
 
                 let retreatX = retreatDir;
                 let retreatZ = retreatDirZ;
@@ -1455,7 +1454,7 @@ class Fighter {
                 // Primary strategy: gain altitude while creating distance
 
                 // Climb away - higher = safer
-                this.vy -= 0.7;
+                this.vy += 0.7;
 
                 // Wall-aware horizontal retreat
                 let retreatX = retreatDir;
@@ -1481,13 +1480,13 @@ class Fighter {
                 this.vz += retreatZ * speed * 1.5;
 
                 // Ceiling bounce
-                if (this.y < ARENA.ceilingY + 80) {
-                    this.vy += 0.5;
+                if (this.y > ARENA.maxY - 80) {
+                    this.vy -= 0.5;
                 }
 
                 // If opponent is also flying and close, perform evasive dive
                 if (opponent.isFlying && dist < 150 && Math.random() < 0.03) {
-                    this.vy += 1.5;  // Sudden dive
+                    this.vy -= 1.5;  // Sudden dive
                     this.vz += (Math.random() > 0.5 ? 1 : -1) * speed * 3;
                 }
             }
@@ -1495,10 +1494,10 @@ class Fighter {
         } else if (this.isWallcrawler) {
             if (this.onWall) {
                 // Climb up for safety
-                this.vy = -speed * 4;
+                this.vy = speed * 4;
             } else {
                 // Rush to nearest wall for safety
-                const nearestWall = this.x < (ARENA.leftWall + ARENA.rightWall) / 2 ? 'left' : 'right';
+                const nearestWall = this.x < (ARENA.minX + ARENA.maxX) / 2 ? 'left' : 'right';
                 this.vx += nearestWall === 'left' ? -speed * 3 : speed * 3;
                 // Also retreat in z
                 this.vz += retreatDirZ * speed * 0.5;
@@ -1546,41 +1545,41 @@ class Fighter {
     updateWallClimbing(opponent, dist) {
         const halfSize = this.spriteSize / 2;
         const staminaPercent = this.stamina / this.maxStamina;
-        const arenaCenter = (ARENA.leftWall + ARENA.rightWall) / 2;
+        const arenaCenter = (ARENA.minX + ARENA.maxX) / 2;
 
         if (this.onWall) {
             // Snap to wall position based on which wall we're on
             if (this.wallSide === 'left') {
-                this.x = ARENA.leftWall + halfSize;
+                this.x = ARENA.minX + halfSize;
                 this.vx = 0;
             } else if (this.wallSide === 'right') {
-                this.x = ARENA.rightWall - halfSize;
+                this.x = ARENA.maxX - halfSize;
                 this.vx = 0;
             } else if (this.wallSide === 'front') {
-                this.z = ARENA.frontWall - halfSize;
+                this.z = ARENA.maxZ - halfSize;
                 this.vz = 0;
             } else if (this.wallSide === 'back') {
-                this.z = ARENA.backWall + halfSize;
+                this.z = ARENA.minZ + halfSize;
                 this.vz = 0;
             }
 
-            const minY = ARENA.ceilingY + halfSize + 10;
-            const maxY = ARENA.floorY - halfSize - 10;
+            const minY = ARENA.minY + halfSize + 10;
+            const maxY = ARENA.maxY - halfSize - 10;
             this.y = Math.max(minY, Math.min(maxY, this.y));
 
             this.grounded = true;
 
             // Wall climbing movement - always try to match or gain height advantage
-            const targetY = opponent.y - 30; // Want to be slightly above opponent
+            const targetY = opponent.y + 30; // Want to be slightly above opponent
             const heightDiff = this.y - targetY;
 
             // LOW STAMINA: Must descend to conserve energy
             if (staminaPercent < 0.2) {
                 // Critical stamina - drop down immediately
-                this.vy = 4; // Slide down the wall
+                this.vy = -4; // Slide down the wall
             } else if (staminaPercent < 0.35) {
                 // Low stamina - descend slowly, don't climb
-                this.vy = 2;
+                this.vy = -2;
             } else if (this.aiState === 'aggressive') {
                 // Aggressively match opponent height for attack positioning
                 if (Math.abs(heightDiff) > 20) {
@@ -1592,7 +1591,7 @@ class Fighter {
                 }
             } else if (this.aiState === 'retreating') {
                 // Climb high for safety - but only if we have stamina
-                this.vy = -3.5;
+                this.vy = 3.5;
             } else if (this.aiState === 'circling') {
                 // Circle by moving up and down on wall
                 this.vy = Math.sin(this.moveTimer / 15) * 2.5;
@@ -1611,7 +1610,7 @@ class Fighter {
             // - We have stamina
             // - We're aggressive
             if (horizDist < 250 && hasLineOfSight && staminaPercent > 0.3) {
-                const heightAdvantage = this.y < opponent.y - 10;
+                const heightAdvantage = this.y > opponent.y + 10;
                 const pounceChance = 0.03 +
                     (this.drives.aggression * 0.1) +
                     (heightAdvantage ? 0.05 : 0) +
@@ -1636,7 +1635,7 @@ class Fighter {
                         this.vz = pounceDir * jumpPower * Math.cos(angle);
                         this.vx = Math.sign(opponent.x - this.x) * 4;
                     }
-                    this.vy = -6 + Math.min(4, dy / 40); // Upward arc, adjusted for height diff
+                    this.vy = 6 + Math.max(-4, dy / 40); // Upward arc, adjusted for height diff
 
                     // Use some stamina for the jump
                     this.spendStamina(5);
@@ -1655,10 +1654,10 @@ class Fighter {
             }
         } else {
             // NOT ON WALL - decide whether to seek wall
-            const nearLeftWall = this.x < ARENA.leftWall + 80;
-            const nearRightWall = this.x > ARENA.rightWall - 80;
-            const nearFrontWall = this.z > ARENA.frontWall - 80;
-            const nearBackWall = this.z < ARENA.backWall + 80;
+            const nearLeftWall = this.x < ARENA.minX + 80;
+            const nearRightWall = this.x > ARENA.maxX - 80;
+            const nearFrontWall = this.z > ARENA.maxZ - 80;
+            const nearBackWall = this.z < ARENA.minZ + 80;
             const nearAnyWall = nearLeftWall || nearRightWall || nearFrontWall || nearBackWall;
 
             // DON'T climb walls if stamina is too low - need to recover on ground first
@@ -1670,7 +1669,7 @@ class Fighter {
             if (nearAnyWall && this.grounded && canClimb) {
                 const wantToClimb =
                     opponent.isFlying ||      // Opponent flying - match vertical mobility
-                    opponent.y < this.y - 40 || // Opponent above - gain height
+                    opponent.y > this.y + 40 || // Opponent above - gain height
                     (this.drives.caution > 0.6 && Math.random() < 0.15) ||
                     (dist < 120 && Math.random() < 0.12) || // Close combat - escape up
                     (this.aiState === 'retreating' && staminaPercent > 0.7); // Only retreat to wall if high stamina
@@ -1682,7 +1681,7 @@ class Fighter {
                     else if (nearRightWall) this.wallSide = 'right';
                     else if (nearFrontWall) this.wallSide = 'front';
                     else this.wallSide = 'back';
-                    this.vy = -3; // Initial upward boost
+                    this.vy = 3; // Initial upward boost
                 }
             }
 
@@ -1692,7 +1691,7 @@ class Fighter {
             // DON'T seek walls for stamina recovery - that doesn't work!
             const shouldSeekWall = canClimb && (
                 (opponent.isFlying && !this.onWall) ||
-                (dist > 200 && opponent.y < this.y - 50) // They're above us at range
+                (dist > 200 && opponent.y > this.y + 50) // They're above us at range
             );
 
             if (shouldSeekWall) {
@@ -2196,7 +2195,7 @@ class Simulation {
 
                     // Flying bugs can dodge vertically too
                     if (target.isFlying && !target.grounded) {
-                        dodgeDir.y = -2 - Math.random() * 3;  // Dodge upward
+                        dodgeDir.y = 2 + Math.random() * 3;  // Dodge upward
                     }
 
                     // Apply dodge movement
@@ -2263,7 +2262,7 @@ class Simulation {
                 }
 
                 // DIVE ATTACK BONUS - flying bug attacking from above
-                const isDiveAttack = attacker.isFlying && attacker.isDiving && attacker.y < target.y;
+                const isDiveAttack = attacker.isFlying && attacker.isDiving && attacker.y > target.y;
                 if (isDiveAttack) {
                     const heightBonus = Math.min(1.5, 1 + Math.abs(target.y - attacker.y) / 200);
                     damage = Math.floor(damage * heightBonus);
@@ -2271,7 +2270,7 @@ class Simulation {
                 }
 
                 // HEIGHT ADVANTAGE BONUS - any bug attacking from above
-                const heightAdvantage = target.y - attacker.y;
+                const heightAdvantage = attacker.y - target.y;
                 if (heightAdvantage > 40 && !isDiveAttack) {
                     damage = Math.floor(damage * 1.15);  // 15% bonus
                 }
@@ -2354,7 +2353,7 @@ class Simulation {
                 // 3D: Calculate 3D direction vector for knockback
                 const dirZ = dist > 0 ? dz / dist : 0;
                 target.vx += dirX * knockbackForce;
-                target.vy += dirY * knockbackForce * 0.3 - 2; // More upward pop
+                target.vy += dirY * knockbackForce * 0.3 + 2; // More upward pop
                 target.vz += dirZ * knockbackForce * 0.6;  // More z knockback
 
                 // Track knockback state for wall stun detection
