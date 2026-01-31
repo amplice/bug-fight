@@ -12,6 +12,7 @@ const BugFightsSound = (() => {
     // Continuous sound tracking
     let ambientNodes = null;
     let wingBuzzNodes = [null, null];
+    let skitterNodes = [null, null];
     let lastPhase = null;
 
     // ============================================
@@ -126,9 +127,9 @@ const BugFightsSound = (() => {
         }
 
         const gain = ctx.createGain();
-        const vol = (0.2 + intensity * 0.4) * volume;
+        const vol = (0.35 + intensity * 0.35) * volume;
         gain.gain.setValueAtTime(vol, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + (isCrit ? 0.25 : 0.12));
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (isCrit ? 0.3 : 0.18));
 
         source.connect(filter);
         filter.connect(gain);
@@ -193,15 +194,15 @@ const BugFightsSound = (() => {
         filter.Q.value = 5;
 
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.2 * volume, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        gain.gain.setValueAtTime(0.35 * volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
         source.connect(filter);
         filter.connect(gain);
         gain.connect(masterGain);
 
         source.start(now);
-        source.stop(now + 0.2);
+        source.stop(now + 0.25);
     }
 
     function playFeint(result) {
@@ -217,15 +218,15 @@ const BugFightsSound = (() => {
         filter.frequency.value = 2000;
 
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.15 * volume, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        gain.gain.setValueAtTime(0.25 * volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
         source.connect(filter);
         filter.connect(gain);
         gain.connect(masterGain);
 
         source.start(now);
-        source.stop(now + 0.1);
+        source.stop(now + 0.12);
 
         // If target was baited: add a quick descending tone (gotcha!)
         if (result === 'dodge-bait' || result === 'flinch') {
@@ -235,7 +236,7 @@ const BugFightsSound = (() => {
             osc.frequency.exponentialRampToValueAtTime(300, now + 0.15);
 
             const baitGain = ctx.createGain();
-            baitGain.gain.setValueAtTime(0.12 * volume, now + 0.03);
+            baitGain.gain.setValueAtTime(0.2 * volume, now + 0.03);
             baitGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
             osc.connect(baitGain);
@@ -303,8 +304,8 @@ const BugFightsSound = (() => {
         filter.Q.value = 8;
 
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.08 * volume, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        gain.gain.setValueAtTime(0.15 * volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
         source.connect(filter);
         filter.connect(gain);
@@ -320,7 +321,7 @@ const BugFightsSound = (() => {
 
         // Bell/gong - sine + harmonics
         const freqs = [440, 880, 1320];
-        const gains = [0.3, 0.15, 0.08];
+        const gains = [0.18, 0.1, 0.06];
 
         freqs.forEach((freq, i) => {
             const osc = ctx.createOscillator();
@@ -338,7 +339,7 @@ const BugFightsSound = (() => {
         });
 
         // Metallic hit component
-        createNoiseBurst(0.3, 3000, 10, 'bandpass', 0.2, 0.15);
+        createNoiseBurst(0.3, 3000, 10, 'bandpass', 0.1, 0.15);
     }
 
     function playCountdown() {
@@ -374,7 +375,7 @@ const BugFightsSound = (() => {
 
             const gain = ctx.createGain();
             gain.gain.setValueAtTime(0, now + i * 0.08);
-            gain.gain.linearRampToValueAtTime(0.2 * volume, now + i * 0.08 + 0.05);
+            gain.gain.linearRampToValueAtTime(0.12 * volume, now + i * 0.08 + 0.05);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
 
             osc.connect(gain);
@@ -390,7 +391,7 @@ const BugFightsSound = (() => {
 
         const rootGain = ctx.createGain();
         rootGain.gain.setValueAtTime(0, now + 0.15);
-        rootGain.gain.linearRampToValueAtTime(0.15 * volume, now + 0.2);
+        rootGain.gain.linearRampToValueAtTime(0.08 * volume, now + 0.2);
         rootGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
 
         root.connect(rootGain);
@@ -515,6 +516,64 @@ const BugFightsSound = (() => {
         }
     }
 
+    function updateSkitter(bugIndex, grounded, speed, isFlying) {
+        if (!ensureContext()) return;
+
+        // Skitter when grounded and moving (not flying bugs)
+        const shouldSkitter = grounded && !isFlying && speed > 1.5;
+        const node = skitterNodes[bugIndex];
+
+        if (shouldSkitter && !node) {
+            // High-pass filtered noise for chitinous tapping
+            const noise = ctx.createBufferSource();
+            noise.buffer = noiseBuffer;
+            noise.loop = true;
+
+            const hpf = ctx.createBiquadFilter();
+            hpf.type = 'highpass';
+            hpf.frequency.value = 3000;
+            hpf.Q.value = 2;
+
+            // Rapid amplitude modulation = individual "taps"
+            const lfo = ctx.createOscillator();
+            lfo.type = 'square';
+            lfo.frequency.value = 12 + speed * 2;
+            const lfoGain = ctx.createGain();
+            lfoGain.gain.value = 1;
+            const modGain = ctx.createGain();
+            modGain.gain.value = 0;
+            lfo.connect(lfoGain);
+            lfoGain.connect(modGain.gain);
+
+            // Output gain
+            const gain = ctx.createGain();
+            gain.gain.value = 0.08 * volume;
+
+            noise.connect(hpf);
+            hpf.connect(modGain);
+            modGain.connect(gain);
+            gain.connect(masterGain);
+
+            noise.start();
+            lfo.start();
+
+            skitterNodes[bugIndex] = { noise, hpf, lfo, lfoGain, modGain, gain };
+
+        } else if (!shouldSkitter && node) {
+            try {
+                node.noise.stop();
+                node.lfo.stop();
+            } catch (e) { /* already stopped */ }
+            skitterNodes[bugIndex] = null;
+
+        } else if (shouldSkitter && node) {
+            // Update rate and volume based on speed
+            const speedFactor = Math.min(speed / 8, 1);
+            node.lfo.frequency.value = 12 + speed * 2;
+            node.gain.gain.value = (0.05 + speedFactor * 0.08) * volume;
+        }
+    }
+
     // ============================================
     // UPDATE (called each frame from renderer)
     // ============================================
@@ -535,8 +594,9 @@ const BugFightsSound = (() => {
             }
             if (state.phase === 'victory') {
                 playVictory();
-                // Stop wing buzzes
+                // Stop wing buzzes and skitter
                 wingBuzzNodes.forEach((_, i) => updateWingBuzz(i, false, true, 0));
+                skitterNodes.forEach((_, i) => updateSkitter(i, false, 0, false));
             }
             lastPhase = state.phase;
         }
@@ -553,7 +613,7 @@ const BugFightsSound = (() => {
             }
         }
 
-        // Update wing buzzes during fights
+        // Update wing buzzes and skitter during fights
         if (state.phase === 'fighting' && state.fighters && state.fighters.length >= 2) {
             state.fighters.forEach((f, i) => {
                 const speed = Math.sqrt(
@@ -561,7 +621,9 @@ const BugFightsSound = (() => {
                     (f.vy || 0) * (f.vy || 0) +
                     (f.vz || 0) * (f.vz || 0)
                 );
-                updateWingBuzz(i, f.isFlying, f.grounded, speed);
+                // Wing buzz and skitter disabled - too grating, needs rework
+                // updateWingBuzz(i, f.isFlying, f.grounded, speed);
+                // updateSkitter(i, f.grounded, speed, f.isFlying);
             });
         }
 
@@ -609,6 +671,7 @@ const BugFightsSound = (() => {
         // Stop continuous sounds when muted
         if (muted) {
             wingBuzzNodes.forEach((_, i) => updateWingBuzz(i, false, true, 0));
+            skitterNodes.forEach((_, i) => updateSkitter(i, false, 0, false));
         }
     }
 
