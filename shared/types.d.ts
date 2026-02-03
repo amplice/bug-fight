@@ -39,7 +39,7 @@ interface BugColor {
     lightness: number;
 }
 
-/** The serialized genome shape — transmitted over WebSocket, stored in roster.json */
+/** The serialized genome shape — transmitted over WebSocket, stored in SQLite */
 interface GenomeData {
     bulk: number;
     speed: number;
@@ -252,7 +252,7 @@ type WSServerMessage = WSInitMessage | WSStateMessage;
 // ROSTER
 // ============================================
 
-/** Bug as stored in roster.json */
+/** Bug as stored in database and in-memory cache */
 interface RosterBug {
     id: string;
     genome: GenomeData;
@@ -280,7 +280,7 @@ interface RosterClientBug {
     genome: GenomeData;
 }
 
-/** Roster data as stored in roster.json on disk */
+/** Roster data format (legacy roster.json, used for migration) */
 interface RosterFile {
     bugs: RosterBug[];
     savedAt: string;

@@ -31,8 +31,6 @@ let player = {
     money: parseInt(localStorage.getItem('bugfights_money') || '1000') || 1000,
 };
 let currentBet: { amount: number; on: number | null } = { amount: 0, on: null };
-let lastFightNumber = 0;
-
 // Odds format preference
 let oddsFormat: 'decimal' | 'american' = (localStorage.getItem('bugfights_odds_format') as 'decimal' | 'american') || 'decimal';
 
@@ -42,7 +40,7 @@ let onEvent: ((event: GameEvent) => void) | null = null;
 
 function connect(): void {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
 
     console.log('Connecting to', wsUrl);
     ws = new WebSocket(wsUrl);

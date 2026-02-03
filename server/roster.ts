@@ -238,25 +238,6 @@ class RosterManager {
         }
     }
 
-    getRoster(): RosterClientBug[] {
-        return this.bugs.map(bug => ({
-            id: bug.id,
-            name: bug.name,
-            genome: bug.genome,
-            stats: {
-                bulk: bug.genome.bulk,
-                speed: bug.genome.speed,
-                fury: bug.genome.fury,
-                instinct: bug.genome.instinct
-            },
-            weapon: bug.genome.weapon,
-            defense: bug.genome.defense,
-            mobility: bug.genome.mobility,
-            wins: bug.wins,
-            losses: bug.losses
-        }));
-    }
-
     getRosterForClient(): RosterClientBug[] {
         return this.bugs.map(bug => ({
             id: bug.id,

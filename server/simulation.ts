@@ -2285,7 +2285,7 @@ class Simulation {
                 fightNumber: this.fightNumber,
                 bug1Id: this.bugIds[0]!,
                 bug2Id: this.bugIds[1]!,
-                winnerId: winnerId ?? undefined,
+                winnerId,
                 duration: this.tick,
                 isDraw: this.winner === 0,
                 eventsSummary: `${f1.name} vs ${f2.name}` +

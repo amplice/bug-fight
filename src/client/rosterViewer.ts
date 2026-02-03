@@ -5,17 +5,10 @@ import * as THREE from 'three';
 import { BugGenome } from './procedural';
 import { BugGenerator3D, BugAnimator } from './bugGenerator3d';
 
-type ThreeScene = THREE.Scene;
-type ThreePerspectiveCamera = THREE.PerspectiveCamera;
-type ThreeGroup = THREE.Group;
-type ThreeWebGLRenderer = THREE.WebGLRenderer;
-type ThreeObject3D = THREE.Object3D;
-type ThreeMesh = THREE.Mesh;
-
 interface RosterBugScene {
-    scene: ThreeScene;
-    camera: ThreePerspectiveCamera;
-    bugGroup: ThreeGroup;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    bugGroup: THREE.Group;
     animator: BugAnimator;
     ctx: CanvasRenderingContext2D;
     rotationY: number;
@@ -28,7 +21,7 @@ class Roster3DViewer {
     private closeBtn: HTMLElement;
     private bugScenes: RosterBugScene[];
     private animationId: number | null;
-    private sharedRenderer: ThreeWebGLRenderer | null;
+    private sharedRenderer: THREE.WebGLRenderer | null;
     private sharedCanvas: HTMLCanvasElement | null;
 
     constructor() {
@@ -271,8 +264,8 @@ class Roster3DViewer {
         this.stopAnimation();
 
         this.bugScenes.forEach(sceneData => {
-            sceneData.scene.traverse((obj: ThreeObject3D) => {
-                const mesh = obj as ThreeMesh;
+            sceneData.scene.traverse((obj: THREE.Object3D) => {
+                const mesh = obj as THREE.Mesh;
                 if (mesh.geometry) mesh.geometry.dispose();
                 if (mesh.material) {
                     if (Array.isArray(mesh.material)) {

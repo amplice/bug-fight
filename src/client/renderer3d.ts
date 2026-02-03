@@ -8,18 +8,6 @@ import { BugGenerator3D, BugAnimator } from './bugGenerator3d';
 import { BugFightsSound } from './soundEngine';
 import { BugFightsClient } from './client';
 
-type ThreeOrbitControls = OrbitControls;
-type ThreeMaterial = THREE.Material;
-type ThreeMeshBasicMaterial = THREE.MeshBasicMaterial;
-type ThreeMeshStandardMaterial = THREE.MeshStandardMaterial;
-type ThreeSprite = THREE.Sprite;
-type ThreeScene = THREE.Scene;
-type ThreePerspectiveCamera = THREE.PerspectiveCamera;
-type ThreeGroup = THREE.Group;
-type ThreeWebGLRenderer = THREE.WebGLRenderer;
-type ThreeObject3D = THREE.Object3D;
-type ThreeMesh = THREE.Mesh;
-
 // ============================================
 // INTERNAL INTERFACES
 // ============================================
@@ -58,7 +46,7 @@ interface DeathFallState {
 }
 
 interface HitParticle {
-    mesh: ThreeMesh;
+    mesh: THREE.Mesh;
     vx: number;
     vy: number;
     vz: number;
@@ -68,14 +56,14 @@ interface HitParticle {
 }
 
 interface DamageNumber {
-    sprite: ThreeSprite;
+    sprite: THREE.Sprite;
     vy: number;
     life: number;
     decay: number;
 }
 
 interface MotionTrail {
-    mesh: ThreeMesh;
+    mesh: THREE.Mesh;
     life: number;
     decay: number;
 }
@@ -85,10 +73,10 @@ interface ScreenShakeState {
 }
 
 interface WallSet {
-    left: ThreeMesh | null;
-    right: ThreeMesh | null;
-    front: ThreeMesh | null;
-    back: ThreeMesh | null;
+    left: THREE.Mesh | null;
+    right: THREE.Mesh | null;
+    front: THREE.Mesh | null;
+    back: THREE.Mesh | null;
 }
 
 // ============================================
@@ -111,12 +99,12 @@ const ARENA_3D: ArenaConfig = {
 // STATE
 // ============================================
 
-let scene: ThreeScene;
-let camera: ThreePerspectiveCamera;
-let renderer: ThreeWebGLRenderer;
-let controls: ThreeOrbitControls;
+let scene: THREE.Scene;
+let camera: THREE.PerspectiveCamera;
+let renderer: THREE.WebGLRenderer;
+let controls: OrbitControls;
 let arena: Record<string, unknown> = {};
-let bugMeshes: [ThreeGroup | null, ThreeGroup | null] = [null, null];
+let bugMeshes: [THREE.Group | null, THREE.Group | null] = [null, null];
 let bugAnimators: [BugAnimator | null, BugAnimator | null] = [null, null];
 let lastTime: number = performance.now();
 let walls: WallSet = { left: null, right: null, front: null, back: null };
@@ -155,10 +143,10 @@ const MAX_TRAIL_POINTS: number = 12;
 const TRAIL_SPAWN_SPEED: number = 5;  // Minimum speed to spawn trail
 
 // Fighter UI
-let fighterUI: [ThreeGroup | null, ThreeGroup | null] = [null, null];
+let fighterUI: [THREE.Group | null, THREE.Group | null] = [null, null];
 
 // Recursively dispose Three.js object and all children
-function disposeObject(obj: ThreeObject3D | null): void {
+function disposeObject(obj: THREE.Object3D | null): void {
     if (!obj) return;
     if (obj.children) {
         while (obj.children.length > 0) {
@@ -166,11 +154,11 @@ function disposeObject(obj: ThreeObject3D | null): void {
             obj.remove(obj.children[0]!);
         }
     }
-    const mesh = obj as ThreeMesh;
+    const mesh = obj as THREE.Mesh;
     if (mesh.geometry) mesh.geometry.dispose();
     if (mesh.material) {
         if (Array.isArray(mesh.material)) {
-            mesh.material.forEach((m: ThreeMaterial) => m.dispose());
+            mesh.material.forEach((m: THREE.Material) => m.dispose());
         } else {
             mesh.material.dispose();
         }
@@ -270,7 +258,7 @@ function buildArena(): void {
     scene.add(new THREE.Points(substrateGeo, substrateMat));
 
     // Walls (transparent, with individual materials for climb highlighting)
-    const createWallMat = (): ThreeMeshBasicMaterial => new THREE.MeshBasicMaterial({
+    const createWallMat = (): THREE.MeshBasicMaterial => new THREE.MeshBasicMaterial({
         color: 0x333333, transparent: true, opacity: 0.1, side: THREE.DoubleSide
     });
 
@@ -338,7 +326,7 @@ function addPlants(): void {
     const numPlants: number = 4 + Math.floor(Math.random() * 4);
 
     for (let i = 0; i < numPlants; i++) {
-        const plantGroup: ThreeGroup = new THREE.Group();
+        const plantGroup: THREE.Group = new THREE.Group();
         const side: number = Math.random() < 0.5 ? -1 : 1;
         const nearX: boolean = Math.random() < 0.5;
 
@@ -503,10 +491,10 @@ function onWindowResize(): void {
 // BUG RENDERING
 // ============================================
 
-function createBug(bugData: GenomeData, _index?: number): ThreeGroup {
+function createBug(bugData: GenomeData, _index?: number): THREE.Group {
     const genome = new BugGenome(bugData);
     const generator = new BugGenerator3D(genome);
-    const bugGroup: ThreeGroup = generator.generate();
+    const bugGroup: THREE.Group = generator.generate();
 
     // Scale down for arena
     bugGroup.scale.setScalar(2.5);
@@ -519,26 +507,26 @@ function updateBugs(state: GameState, deltaTime: number): void {
     if (!state.bugs || state.bugs.length < 2) return;
 
     // Reset wall highlighting
-    (Object.values(walls) as Array<ThreeMesh | null>).forEach((wall: ThreeMesh | null) => {
+    (Object.values(walls) as Array<THREE.Mesh | null>).forEach((wall: THREE.Mesh | null) => {
         if (wall && wall.material) {
-            (wall.material as ThreeMeshBasicMaterial).color.setHex(0x333333);
-            (wall.material as ThreeMeshBasicMaterial).opacity = 0.1;
+            (wall.material as THREE.MeshBasicMaterial).color.setHex(0x333333);
+            (wall.material as THREE.MeshBasicMaterial).opacity = 0.1;
         }
     });
 
     // Highlight walls being climbed
     state.fighters.forEach((fighter: FighterState) => {
         if (fighter.onWall && fighter.wallSide && walls[fighter.wallSide]) {
-            const wall: ThreeMesh = walls[fighter.wallSide]!;
-            (wall.material as ThreeMeshBasicMaterial).color.setHex(0x44ff88);  // Green tint
-            (wall.material as ThreeMeshBasicMaterial).opacity = 0.2;
+            const wall: THREE.Mesh = walls[fighter.wallSide]!;
+            (wall.material as THREE.MeshBasicMaterial).color.setHex(0x44ff88);  // Green tint
+            (wall.material as THREE.MeshBasicMaterial).opacity = 0.2;
         }
     });
 
     // Check for new fight
     if (state.fightNumber !== currentFightNumber) {
         // Clear old bugs - dispose GPU resources
-        bugMeshes.forEach((mesh: ThreeGroup | null) => {
+        bugMeshes.forEach((mesh: THREE.Group | null) => {
             if (mesh) {
                 scene.remove(mesh);
                 disposeObject(mesh);
@@ -548,7 +536,7 @@ function updateBugs(state: GameState, deltaTime: number): void {
         bugAnimators = [null, null];
 
         // Clear UI - dispose GPU resources
-        fighterUI.forEach((ui: ThreeGroup | null) => {
+        fighterUI.forEach((ui: THREE.Group | null) => {
             if (ui) {
                 scene.remove(ui);
                 disposeObject(ui);
@@ -590,7 +578,7 @@ function updateBugs(state: GameState, deltaTime: number): void {
             scene.add(bugMeshes[index as 0 | 1]!);
         }
 
-        const bug: ThreeGroup = bugMeshes[index as 0 | 1]!;
+        const bug: THREE.Group = bugMeshes[index as 0 | 1]!;
         const animator: BugAnimator = bugAnimators[index as 0 | 1]!;
 
         // Position from server
@@ -811,19 +799,19 @@ function updateBugs(state: GameState, deltaTime: number): void {
 
         // Flash effect (hit feedback)
         if (fighter.flashTimer > 0 && fighter.flashTimer % 2 === 0) {
-            bug.traverse((child: ThreeObject3D) => {
-                const m = child as ThreeMesh;
+            bug.traverse((child: THREE.Object3D) => {
+                const m = child as THREE.Mesh;
                 if (m.isMesh && m.material) {
-                    const mat = m.material as ThreeMeshStandardMaterial;
+                    const mat = m.material as THREE.MeshStandardMaterial;
                     mat.emissive = new THREE.Color(0xffffff);
                     mat.emissiveIntensity = 0.8;
                 }
             });
         } else {
-            bug.traverse((child: ThreeObject3D) => {
-                const m = child as ThreeMesh;
+            bug.traverse((child: THREE.Object3D) => {
+                const m = child as THREE.Mesh;
                 if (m.isMesh && m.material) {
-                    const mat = m.material as ThreeMeshStandardMaterial;
+                    const mat = m.material as THREE.MeshStandardMaterial;
                     if (mat.emissive) {
                         mat.emissive = new THREE.Color(0x000000);
                         mat.emissiveIntensity = 0;
@@ -836,13 +824,13 @@ function updateBugs(state: GameState, deltaTime: number): void {
         if (fighter.drives) {
             const aggression: number = fighter.drives.aggression || 0.5;
             const caution: number = fighter.drives.caution || 0.5;
-            bug.traverse((child: ThreeObject3D) => {
-                const m = child as ThreeMesh;
+            bug.traverse((child: THREE.Object3D) => {
+                const m = child as THREE.Mesh;
                 if (m.isMesh && m.material && !m.userData['isEye']) {
                     // Subtle color shift based on drives
                     const r: number = 0.1 * (aggression - 0.5);
                     const b: number = 0.1 * (caution - 0.5);
-                    const mat = m.material as ThreeMeshStandardMaterial;
+                    const mat = m.material as THREE.MeshStandardMaterial;
                     if (mat.emissive) {
                         mat.emissive.setRGB(Math.max(0, r), 0, Math.max(0, b));
                         mat.emissiveIntensity = 0.2;
@@ -1038,7 +1026,7 @@ function updateMotionTrails(state: GameState): void {
             const trail: MotionTrail | undefined = motionTrails[index as 0 | 1][i];
             if (!trail) continue;
             trail.life -= trail.decay;
-            (trail.mesh.material as ThreeMeshBasicMaterial).opacity = trail.life * 0.6;
+            (trail.mesh.material as THREE.MeshBasicMaterial).opacity = trail.life * 0.6;
             trail.mesh.scale.setScalar(trail.life);
 
             if (trail.life <= 0) {
@@ -1062,7 +1050,7 @@ function updateEffects(): void {
         p.vx *= 0.98;  // Air resistance
         p.vz *= 0.98;
         p.life -= p.decay;
-        (p.mesh.material as ThreeMeshBasicMaterial).opacity = Math.pow(p.life, 0.5);  // Fade out more gradually at first
+        (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.pow(p.life, 0.5);  // Fade out more gradually at first
 
         // Sparks orient to direction of travel and shrink lengthwise
         if (p.isSpark) {
@@ -1153,8 +1141,8 @@ function processEvents(events: GameEvent[]): void {
 // FIGHTER UI
 // ============================================
 
-function createFighterUI(_index: number, name: string): ThreeGroup {
-    const group: ThreeGroup = new THREE.Group();
+function createFighterUI(_index: number, name: string): THREE.Group {
+    const group: THREE.Group = new THREE.Group();
 
     // Health bar background
     const bgGeo = new THREE.PlaneGeometry(50, 6);
@@ -1203,14 +1191,14 @@ function updateFighterUI(index: number, fighter: FighterState, state: GameState)
         scene.add(fighterUI[index as 0 | 1]!);
     }
 
-    const ui: ThreeGroup = fighterUI[index as 0 | 1]!;
+    const ui: THREE.Group = fighterUI[index as 0 | 1]!;
     const pos3d: Vec3 = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
     ui.position.set(pos3d.x, pos3d.y + 50, pos3d.z);
     ui.lookAt(camera.position);
 
     const hpPercent: number = fighter.hp / fighter.maxHp;
-    const fillMesh: ThreeMesh = ui.userData['fillMesh'] as ThreeMesh;
-    const fillMat: ThreeMeshBasicMaterial = ui.userData['fillMat'] as ThreeMeshBasicMaterial;
+    const fillMesh: THREE.Mesh = ui.userData['fillMesh'] as THREE.Mesh;
+    const fillMat: THREE.MeshBasicMaterial = ui.userData['fillMat'] as THREE.MeshBasicMaterial;
 
     fillMesh.scale.x = hpPercent;
     fillMesh.position.x = (1 - hpPercent) * -24;

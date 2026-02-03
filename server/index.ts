@@ -1,11 +1,12 @@
 // Bug Fights - Bun WebSocket Server
 // Runs simulation 24/7 and broadcasts to all clients
 
+import { resolve } from 'path';
 import { Simulation, TICK_RATE, TICK_MS } from './simulation';
 import type { ServerWebSocket } from 'bun';
 import prisma from './db';
 
-const STATIC_DIR = import.meta.dir + '/../dist/client';
+const STATIC_DIR = resolve(import.meta.dir + '/../dist/client');
 
 // Read version from package.json
 const pkg = await Bun.file(import.meta.dir + '/../package.json').json() as { version: string };
@@ -64,8 +65,8 @@ const server = Bun.serve({
     async fetch(req, server) {
         const url = new URL(req.url);
 
-        // WebSocket upgrade
-        if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+        // WebSocket upgrade on /ws path
+        if (url.pathname === '/ws' && req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
             if (server.upgrade(req)) return undefined;
             return new Response('WebSocket upgrade failed', { status: 400 });
         }
@@ -132,10 +133,14 @@ const server = Bun.serve({
 
         // Static file serving
         let filePath = url.pathname === '/' ? '/index.html' : url.pathname;
-        filePath = filePath.split('?')[0]!;
-        filePath = filePath.replace(/\.\.\//g, ''); // prevent traversal
+        filePath = decodeURIComponent(filePath.split('?')[0]!);
 
-        const file = Bun.file(STATIC_DIR + filePath);
+        const resolved = resolve(STATIC_DIR, '.' + filePath);
+        if (!resolved.startsWith(STATIC_DIR)) {
+            return new Response('403 Forbidden', { status: 403 });
+        }
+
+        const file = Bun.file(resolved);
         if (await file.exists()) {
             return new Response(file);
         }
