@@ -357,8 +357,7 @@ function initClient(): void {
     updateUI();
 }
 
-// Export for renderer
-window.BugFightsClient = {
+export const BugFightsClient: BugFightsClientAPI = {
     init: initClient,
     getState: () => gameState,
     getCommentary: () => commentary,

@@ -1,18 +1,24 @@
 // Bug Fights - 3D Renderer
 // Three.js based shape rendering
 
-// ============================================
-// THREE.JS TYPE ALIASES (inline imports)
-// Aliases shared with rosterViewer.ts (ThreeScene, ThreePerspectiveCamera,
-// ThreeGroup, ThreeWebGLRenderer, ThreeObject3D, ThreeMesh) are declared there.
-// Only declare the additional aliases needed by this file.
-// ============================================
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { BugGenome } from './procedural';
+import { BugGenerator3D, BugAnimator } from './bugGenerator3d';
+import { BugFightsSound } from './soundEngine';
+import { BugFightsClient } from './client';
 
-type ThreeOrbitControls = import('three/examples/jsm/controls/OrbitControls').OrbitControls;
-type ThreeMaterial = import('three').Material;
-type ThreeMeshBasicMaterial = import('three').MeshBasicMaterial;
-type ThreeMeshStandardMaterial = import('three').MeshStandardMaterial;
-type ThreeSprite = import('three').Sprite;
+type ThreeOrbitControls = OrbitControls;
+type ThreeMaterial = THREE.Material;
+type ThreeMeshBasicMaterial = THREE.MeshBasicMaterial;
+type ThreeMeshStandardMaterial = THREE.MeshStandardMaterial;
+type ThreeSprite = THREE.Sprite;
+type ThreeScene = THREE.Scene;
+type ThreePerspectiveCamera = THREE.PerspectiveCamera;
+type ThreeGroup = THREE.Group;
+type ThreeWebGLRenderer = THREE.WebGLRenderer;
+type ThreeObject3D = THREE.Object3D;
+type ThreeMesh = THREE.Mesh;
 
 // ============================================
 // INTERNAL INTERFACES
@@ -189,7 +195,7 @@ function initThreeJS(): void {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    controls = new (THREE as any).OrbitControls(camera, renderer.domElement) as ThreeOrbitControls;
+    controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 200;
@@ -474,9 +480,9 @@ function onKeyDown(event: KeyboardEvent): void {
         case '5': setCameraPreset('action'); break;
         case 'r': case 'R': setCameraPreset(currentPreset); break;
         case 'm': case 'M':
-            if (window.BugFightsSound) {
-                window.BugFightsSound.init();
-                const muted: boolean = window.BugFightsSound.toggleMute();
+            if (BugFightsSound) {
+                BugFightsSound.init();
+                const muted: boolean = BugFightsSound.toggleMute();
                 const btn: HTMLElement | null = document.getElementById('sound-toggle');
                 if (btn) btn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
             }
@@ -1109,8 +1115,8 @@ function processEvents(events: GameEvent[]): void {
 
     events.forEach((event: GameEvent) => {
         // Sound engine handles all event types
-        if (window.BugFightsSound) {
-            window.BugFightsSound.handleEvent(event);
+        if (BugFightsSound) {
+            BugFightsSound.handleEvent(event);
         }
 
         if (event.type === 'hit') {
@@ -1238,8 +1244,8 @@ function render3D(state: GameState): void {
     updateEffects();
 
     // Update sound engine (wing buzzes, ambient, phase changes)
-    if (window.BugFightsSound) {
-        window.BugFightsSound.update(state.fighters);
+    if (BugFightsSound) {
+        BugFightsSound.update(state.fighters);
     }
 
     // Screen shake
@@ -1252,7 +1258,7 @@ function render3D(state: GameState): void {
 }
 
 function gameLoop3D(): void {
-    const state: GameState = window.BugFightsClient.getState();
+    const state: GameState = BugFightsClient.getState();
     render3D(state);
     requestAnimationFrame(gameLoop3D);
 }
@@ -1267,8 +1273,8 @@ function initRenderer3D(): void {
 
     // Initialize sound engine on first user interaction (browser requirement)
     const initSound = (): void => {
-        if (window.BugFightsSound) {
-            window.BugFightsSound.init();
+        if (BugFightsSound) {
+            BugFightsSound.init();
         }
         document.removeEventListener('click', initSound);
         document.removeEventListener('keydown', initSound);
@@ -1280,9 +1286,8 @@ function initRenderer3D(): void {
     console.log('Camera: 1=Front, 2=Side, 3=Top, 4=Isometric, 5=Action (default), R=Reset, Mouse=Orbit');
 }
 
-// Export
-window.BugFightsRenderer3D = {
+export const BugFightsRenderer3D: Renderer3DAPI = {
     init: initRenderer3D,
     setCameraPreset: setCameraPreset,
-    createBugForRoster: createBug,  // Export for roster viewer
+    createBugForRoster: createBug,
 };

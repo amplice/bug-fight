@@ -2,9 +2,7 @@ node_modules/
 .DS_Store
 *.log
 server/dist/
-public/js/*.js
-public/js/*.js.map
-!public/js/.gitkeep
+dist/
 .env
 prisma/*.db
 prisma/*.db-journal

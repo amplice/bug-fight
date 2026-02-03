@@ -1,12 +1,16 @@
 // Bug Fights - 3D Roster Viewer
 // Displays all roster bugs in a modal with interactive 3D preview
 
-type ThreeScene = import('three').Scene;
-type ThreePerspectiveCamera = import('three').PerspectiveCamera;
-type ThreeGroup = import('three').Group;
-type ThreeWebGLRenderer = import('three').WebGLRenderer;
-type ThreeObject3D = import('three').Object3D;
-type ThreeMesh = import('three').Mesh;
+import * as THREE from 'three';
+import { BugGenome } from './procedural';
+import { BugGenerator3D, BugAnimator } from './bugGenerator3d';
+
+type ThreeScene = THREE.Scene;
+type ThreePerspectiveCamera = THREE.PerspectiveCamera;
+type ThreeGroup = THREE.Group;
+type ThreeWebGLRenderer = THREE.WebGLRenderer;
+type ThreeObject3D = THREE.Object3D;
+type ThreeMesh = THREE.Mesh;
 
 interface RosterBugScene {
     scene: ThreeScene;
@@ -292,3 +296,5 @@ class Roster3DViewer {
         }
     }
 }
+
+export { Roster3DViewer };

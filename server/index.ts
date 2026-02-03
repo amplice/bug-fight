@@ -5,7 +5,7 @@ import { Simulation, TICK_RATE, TICK_MS } from './simulation';
 import type { ServerWebSocket } from 'bun';
 import prisma from './db';
 
-const PUBLIC_DIR = import.meta.dir + '/../public';
+const STATIC_DIR = import.meta.dir + '/../dist/client';
 
 // Read version from package.json
 const pkg = await Bun.file(import.meta.dir + '/../package.json').json() as { version: string };
@@ -135,7 +135,7 @@ const server = Bun.serve({
         filePath = filePath.split('?')[0]!;
         filePath = filePath.replace(/\.\.\//g, ''); // prevent traversal
 
-        const file = Bun.file(PUBLIC_DIR + filePath);
+        const file = Bun.file(STATIC_DIR + filePath);
         if (await file.exists()) {
             return new Response(file);
         }

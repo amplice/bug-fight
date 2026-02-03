@@ -740,5 +740,4 @@ const BugFightsSound: BugFightsSoundAPI = (() => {
     };
 })();
 
-// Export
-window.BugFightsSound = BugFightsSound;
+export { BugFightsSound };

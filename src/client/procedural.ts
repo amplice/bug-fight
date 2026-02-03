@@ -48,6 +48,4 @@ class BugGenome {
     }
 }
 
-if (typeof window !== 'undefined') {
-    window.BugGenome = BugGenome;
-}
+export { BugGenome };

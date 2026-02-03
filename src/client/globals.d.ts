@@ -1,23 +1,11 @@
 // Bug Fights - Client Global Declarations
-// Augments the Window interface with our global objects and declares THREE.
+// Window augmentation for global functions called via onclick in HTML
 
-// THREE.js is loaded via CDN script tag — declare it as a global
-declare const THREE: typeof import('three');
-
-// Global functions attached to window by app.ts (called via onclick in HTML)
-declare function setCamera(preset: string): void;
-declare function toggleSound(): void;
-declare function toggleDebugOverlay(): void;
-
-// Client modules attached to window
+// Global functions exposed by main.ts for HTML onclick handlers
 interface Window {
-    BugGenome: typeof BugGenome;
-    BugFightsClient: BugFightsClientAPI;
-    BugFightsSound: BugFightsSoundAPI;
-    BugGenerator3D: typeof BugGenerator3D;
-    BugAnimator: typeof BugAnimator;
-    BugFightsRenderer3D: Renderer3DAPI;
-    Roster3DViewer: typeof Roster3DViewer;
+    setCamera(preset: string): void;
+    toggleSound(): void;
+    toggleDebugOverlay(): void;
 }
 
 // ============================================
@@ -62,5 +50,3 @@ interface Renderer3DAPI {
     setCameraPreset(preset: string): void;
     createBugForRoster(genome: GenomeData): import('three').Group;
 }
-
-// BugGenerator3D and BugAnimator are now defined in bugGenerator3d.ts

@@ -1,12 +1,17 @@
 // Bug Fights - App Initialization & UI Controls
 // Camera control, sound toggle, debug overlay, and DOMContentLoaded init
 
+import { BugFightsClient } from './client';
+import { BugFightsRenderer3D } from './renderer3d';
+import { BugFightsSound } from './soundEngine';
+import { Roster3DViewer } from './rosterViewer';
+
 // ============================================
 // CAMERA CONTROL
 // ============================================
 
-function setCamera(preset: string): void {
-    window.BugFightsRenderer3D.setCameraPreset(preset);
+export function setCamera(preset: string): void {
+    BugFightsRenderer3D.setCameraPreset(preset);
 
     // Update button states
     document.querySelectorAll('.camera-btn').forEach(btn => btn.classList.remove('active'));
@@ -18,15 +23,13 @@ function setCamera(preset: string): void {
 // SOUND TOGGLE
 // ============================================
 
-function toggleSound(): void {
-    if (window.BugFightsSound) {
-        window.BugFightsSound.init(); // Ensure initialized
-        const muted = window.BugFightsSound.toggleMute();
-        const btn = document.getElementById('sound-toggle');
-        if (btn) {
-            btn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
-            btn.classList.toggle('active', !muted);
-        }
+export function toggleSound(): void {
+    BugFightsSound.init(); // Ensure initialized
+    const muted = BugFightsSound.toggleMute();
+    const btn = document.getElementById('sound-toggle');
+    if (btn) {
+        btn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+        btn.classList.toggle('active', !muted);
     }
 }
 
@@ -36,7 +39,7 @@ function toggleSound(): void {
 
 let debugEnabled = false;
 
-function toggleDebugOverlay(): void {
+export function toggleDebugOverlay(): void {
     debugEnabled = !debugEnabled;
     const overlay = document.getElementById('debug-overlay');
     const btn = document.getElementById('debug-toggle');
@@ -123,26 +126,21 @@ function updateDebugOverlay(state: GameState): void {
 }
 
 function hookDebugOverlay(): void {
-    if (window.BugFightsClient) {
-        // Poll for state changes to update debug
-        setInterval(() => {
-            if (debugEnabled && window.BugFightsClient) {
-                const state = window.BugFightsClient.getState();
-                if (state) updateDebugOverlay(state);
-            }
-        }, 100);
-    }
+    setInterval(() => {
+        if (debugEnabled) {
+            const state = BugFightsClient.getState();
+            if (state) updateDebugOverlay(state);
+        }
+    }, 100);
 }
 
 // ============================================
 // INITIALIZATION
 // ============================================
 
-let roster3DViewer: Roster3DViewer;
-
-document.addEventListener('DOMContentLoaded', () => {
-    window.BugFightsClient.init();
-    window.BugFightsRenderer3D.init();
-    roster3DViewer = new Roster3DViewer();
+export function initApp(): void {
+    BugFightsClient.init();
+    BugFightsRenderer3D.init();
+    new Roster3DViewer();
     hookDebugOverlay();
-});
+}

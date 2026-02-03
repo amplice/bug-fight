@@ -27,8 +27,8 @@
         "accentHue": 66.15652961381831
       },
       "name": "Clamper Swift",
-      "wins": 41,
-      "losses": 69,
+      "wins": 56,
+      "losses": 99,
       "createdAt": "2026-01-29T15:04:14.263Z"
     },
     {
@@ -58,8 +58,8 @@
         "accentHue": 79.91793285294821
       },
       "name": "Shredder Dash",
-      "wins": 94,
-      "losses": 11,
+      "wins": 120,
+      "losses": 13,
       "createdAt": "2026-01-29T15:04:14.263Z"
     },
     {
@@ -89,8 +89,8 @@
         "accentHue": 86.38037198541537
       },
       "name": "Gnasher Mass",
-      "wins": 5,
-      "losses": 92,
+      "wins": 10,
+      "losses": 123,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -120,8 +120,8 @@
         "accentHue": 255.31681420184404
       },
       "name": "Stabber Blob",
-      "wins": 61,
-      "losses": 29,
+      "wins": 74,
+      "losses": 40,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -151,8 +151,8 @@
         "accentHue": 126.49717049875397
       },
       "name": "Clamper Dart",
-      "wins": 14,
-      "losses": 92,
+      "wins": 22,
+      "losses": 116,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -182,8 +182,8 @@
         "accentHue": 132.79848620067793
       },
       "name": "Clamper Mass",
-      "wins": 71,
-      "losses": 30,
+      "wins": 91,
+      "losses": 37,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -213,8 +213,8 @@
         "accentHue": 96.69717050212247
       },
       "name": "Chomper Blob",
-      "wins": 104,
-      "losses": 5,
+      "wins": 132,
+      "losses": 6,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -244,8 +244,8 @@
         "accentHue": 39.816764433946304
       },
       "name": "Crusher Bulk",
-      "wins": 67,
-      "losses": 30,
+      "wins": 88,
+      "losses": 45,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -275,8 +275,8 @@
         "accentHue": 94.25560161944748
       },
       "name": "Chomper Ball",
-      "wins": 41,
-      "losses": 53,
+      "wins": 58,
+      "losses": 68,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -306,8 +306,8 @@
         "accentHue": 135.5242864797284
       },
       "name": "Shredder Crawler",
-      "wins": 44,
-      "losses": 52,
+      "wins": 63,
+      "losses": 72,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -337,8 +337,8 @@
         "accentHue": 77.51406773619314
       },
       "name": "Slasher Chain",
-      "wins": 71,
-      "losses": 25,
+      "wins": 93,
+      "losses": 36,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -368,7 +368,7 @@
         "accentHue": 260.5946196169305
       },
       "name": "Toxic Scout",
-      "wins": 89,
+      "wins": 123,
       "losses": 2,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
@@ -399,8 +399,8 @@
         "accentHue": 285.15501915515443
       },
       "name": "Lancer Swift",
-      "wins": 31,
-      "losses": 66,
+      "wins": 40,
+      "losses": 82,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -430,8 +430,8 @@
         "accentHue": 68.63818359039817
       },
       "name": "Spike Dart",
-      "wins": 50,
-      "losses": 43,
+      "wins": 65,
+      "losses": 68,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -461,8 +461,8 @@
         "accentHue": 85.58587412161864
       },
       "name": "Gorer Scout",
-      "wins": 21,
-      "losses": 82,
+      "wins": 24,
+      "losses": 103,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -492,8 +492,8 @@
         "accentHue": 126.1608825444317
       },
       "name": "Gorer Lance",
-      "wins": 94,
-      "losses": 19,
+      "wins": 120,
+      "losses": 22,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -523,8 +523,8 @@
         "accentHue": 125.07050391612887
       },
       "name": "Slasher Heavy",
-      "wins": 43,
-      "losses": 36,
+      "wins": 63,
+      "losses": 44,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -555,7 +555,7 @@
       },
       "name": "Stabber Swift",
       "wins": 10,
-      "losses": 102,
+      "losses": 131,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -586,7 +586,7 @@
       },
       "name": "Lancer Chain",
       "wins": 3,
-      "losses": 101,
+      "losses": 127,
       "createdAt": "2026-01-29T15:04:14.264Z"
     },
     {
@@ -616,10 +616,10 @@
         "accentHue": 35.935269813830736
       },
       "name": "Ramhorn Dash",
-      "wins": 48,
-      "losses": 63,
+      "wins": 57,
+      "losses": 78,
       "createdAt": "2026-01-29T15:04:14.264Z"
     }
   ],
-  "savedAt": "2026-01-31T15:39:28.555Z"
+  "savedAt": "2026-02-03T20:57:04.653Z"
 }

@@ -1,6 +1,9 @@
 // Bug Fights - 3D Shape-Based Bug Generator
 // Generates procedural 3D bugs from genome using primitive shapes
 
+import * as THREE from 'three';
+import type { BugGenome } from './procedural';
+
 // ============================================
 // CHITIN TEXTURE GENERATOR CLASS
 // Creates realistic insect exoskeleton textures
@@ -3946,6 +3949,4 @@ class BugAnimator {
     }
 }
 
-// Export
-window.BugGenerator3D = BugGenerator3D;
-window.BugAnimator = BugAnimator;
+export { BugGenerator3D, BugAnimator };

@@ -4,20 +4,23 @@
   "type": "module",
   "description": "24/7 Bug Fighting Simulation",
   "scripts": {
-    "build:client": "tsc -p tsconfig.client.json",
-    "dev": "bun run server/index.ts",
+    "dev:server": "bun run server/index.ts",
+    "dev:client": "vite",
+    "build:client": "vite build",
     "start": "bun run server/index.ts",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/three": "^0.182.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",
     "@prisma/adapter-libsql": "^7.3.0",
     "@prisma/client": "^7.3.0",
-    "prisma": "^7.3.0"
+    "prisma": "^7.3.0",
+    "three": "^0.182.0"
   }
 }

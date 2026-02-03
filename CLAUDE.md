@@ -130,15 +130,9 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 
 ### Current Stack
 - **Language**: TypeScript (strict mode, zero-error build)
-- **Frontend**: TypeScript (module: "none", script-tag loading), Three.js (3D), static HTML/CSS
+- **Frontend**: Vite (bundling/HMR dev server), TypeScript (ES modules), Three.js (3D)
 - **Backend**: Bun (native HTTP + WebSocket via Bun.serve()), runs .ts directly
 - **Database**: SQLite via Prisma ORM (libsql adapter)
-- **Hosting**: Single VPS
-
-### Target Stack (Near-term)
-- **Frontend**: Vite (bundling/dev), TypeScript, Three.js
-- **Backend**: Bun (native WebSocket, faster runtime)
-- **Database**: SQLite + Prisma ORM
 - **Hosting**: Single VPS
 
 ### Target Stack (Endgame)
@@ -201,26 +195,28 @@ const rng = createSeededRNG(seed);
 - `server/db.ts` - Prisma client singleton (libsql adapter)
 - `server/BugGenome.ts` - Bug genetics and genome generation
 - `prisma/schema.prisma` - Database schema (Bug, Fight models)
-- `src/client/client.ts` - WebSocket client, betting logic, UI updates → compiles to `public/js/client.js`
+- `src/client/main.ts` - Vite entry point, exposes onclick handlers to window
+- `src/client/app.ts` - App initialization, camera controls, sound toggle, debug overlay
+- `src/client/client.ts` - WebSocket client, betting logic, UI updates
 - `src/client/renderer3d.ts` - Three.js 3D rendering, camera controls, effects
 - `src/client/bugGenerator3d.ts` - 3D bug mesh generation, BugAnimator class
 - `src/client/soundEngine.ts` - Procedural Web Audio API sound engine
 - `src/client/procedural.ts` - Client-side BugGenome class
 - `src/client/rosterViewer.ts` - 3D roster viewer modal (Three.js)
-- `src/client/app.ts` - Camera controls, sound toggle, debug overlay, init
-- `src/client/globals.d.ts` - Client global type declarations (THREE, window APIs)
+- `src/client/index.html` - 3D arena and betting UI (Vite entry HTML)
+- `src/client/globals.d.ts` - Window augmentation for onclick handlers + API interfaces
 - `shared/types.d.ts` - Shared type definitions (GenomeData, FighterState, GameEvent, etc.)
 
 **Config:**
 - `tsconfig.json` - Base strict TypeScript config
 - `tsconfig.server.json` - Server config (ESNext, bundler resolution, bun-types)
-- `tsconfig.client.json` - Client config (module: "none", outDir: public/js)
+- `tsconfig.client.json` - Client config (ESNext modules, bundler resolution)
+- `vite.config.ts` - Vite config (root, publicDir, proxy, build output)
 - `prisma.config.ts` - Prisma config (SQLite datasource URL)
 
 **Other:**
-- `public/index.html` - 3D arena and betting UI
-- `public/js/*.js` - Compiled client output (gitignored, built from src/client/*.ts)
-- `server/dist/*.js` - Compiled server output (gitignored, built from server/*.ts)
+- `public/css/style.css` - Static CSS (copied to dist by Vite publicDir)
+- `dist/client/` - Vite production build output (gitignored)
 
 ### Key Stats
 - **Bulk** - HP, stamina pool
@@ -252,7 +248,7 @@ Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenom
 ## Next Steps
 1. ~~Migrate to Bun (native WebSocket, faster runtime)~~ ✓
 2. ~~Migrate to SQLite + Prisma ORM (replace roster.json)~~ ✓
-3. Migrate to Vite (bundling, dev server, HMR)
+3. ~~Migrate to Vite (bundling, dev server, HMR)~~ ✓
 4. Add breeding system (winners pass on genomes)
 5. Revisit variants as genetic traits, not cosmetic rarity
 6. Integrate drand for provable randomness (replace Math.random with seeded RNG)
@@ -263,9 +259,10 @@ Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenom
 The server runs in a **tmux session** called `bugfights` for persistence across Claude sessions.
 
 **Build commands:**
-- **Client build**: `npx tsc -p tsconfig.client.json` (compiles client TS to public/js/)
+- **Client build**: `npx vite build` (bundles client to dist/client/)
 - **Typecheck**: `npx tsc -p tsconfig.server.json --noEmit && npx tsc -p tsconfig.client.json --noEmit`
 - **Run server**: `npx bun run server/index.ts` (Bun runs .ts directly, no build step)
+- **Dev client**: `npx vite` (starts Vite dev server on port 5173 with HMR, proxies API/WS to 8080)
 
 **Common commands:**
 - **Start/Restart server**: `tmux kill-session -t bugfights 2>/dev/null; tmux new-session -d -s bugfights -c /home/play/bugfights "npx bun run server/index.ts"`
