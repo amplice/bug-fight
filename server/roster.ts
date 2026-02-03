@@ -1,11 +1,9 @@
 // Bug Fights - Roster Manager
 // Manages persistent bug roster with fight records
 
-import fs = require('fs');
-import path = require('path');
-import BugGenome = require('./BugGenome');
+import BugGenome from './BugGenome';
 
-const ROSTER_FILE = path.join(__dirname, '..', '..', 'roster.json');
+const ROSTER_FILE = import.meta.dir + '/../roster.json';
 const ROSTER_SIZE = 20;
 
 class RosterManager {
@@ -13,13 +11,19 @@ class RosterManager {
 
     constructor() {
         this.bugs = [];
-        this.load();
     }
 
-    load(): void {
+    static async create(): Promise<RosterManager> {
+        const manager = new RosterManager();
+        await manager.load();
+        return manager;
+    }
+
+    async load(): Promise<void> {
         try {
-            if (fs.existsSync(ROSTER_FILE)) {
-                const data: RosterFile = JSON.parse(fs.readFileSync(ROSTER_FILE, 'utf8'));
+            const file = Bun.file(ROSTER_FILE);
+            if (await file.exists()) {
+                const data: RosterFile = await file.json();
                 this.bugs = data.bugs || [];
                 console.log(`Loaded roster with ${this.bugs.length} bugs`);
             } else {
@@ -37,12 +41,10 @@ class RosterManager {
     }
 
     save(): void {
-        try {
-            const data: RosterFile = { bugs: this.bugs, savedAt: new Date().toISOString() };
-            fs.writeFileSync(ROSTER_FILE, JSON.stringify(data, null, 2));
-        } catch (err) {
+        const data: RosterFile = { bugs: this.bugs, savedAt: new Date().toISOString() };
+        Bun.write(ROSTER_FILE, JSON.stringify(data, null, 2)).catch(err => {
             console.error('Error saving roster:', err);
-        }
+        });
     }
 
     generateRoster(): void {
@@ -207,4 +209,4 @@ class RosterManager {
     }
 }
 
-export = RosterManager;
+export default RosterManager;

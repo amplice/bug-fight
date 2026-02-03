@@ -1,8 +1,8 @@
 // Bug Fights - Server Simulation
 // Handles all game logic, runs 24/7
 
-import BugGenome = require('./BugGenome');
-import RosterManager = require('./roster');
+import BugGenome from './BugGenome';
+import RosterManager from './roster';
 
 // ============================================
 // CONSTANTS
@@ -1656,7 +1656,7 @@ class Simulation {
         this.tick = 0;
         this.fightNumber = 0;
 
-        this.roster = new RosterManager();
+        this.roster = null as unknown as InstanceType<typeof RosterManager>;
 
         this.fighters = [];
         this.bugs = [];
@@ -1669,8 +1669,13 @@ class Simulation {
 
         this.attackCooldowns = [0, 0];
         this.victoryTimer = 0;
+    }
 
-        this.setupNextFight();
+    static async create(): Promise<Simulation> {
+        const sim = new Simulation();
+        sim.roster = await RosterManager.create();
+        sim.setupNextFight();
+        return sim;
     }
 
     setupNextFight(): void {

@@ -280,4 +280,4 @@ class BugGenome {
     }
 }
 
-export = BugGenome;
+export default BugGenome;

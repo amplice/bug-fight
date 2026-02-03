@@ -1,144 +1,39 @@
-// Bug Fights - WebSocket Server
+// Bug Fights - Bun WebSocket Server
 // Runs simulation 24/7 and broadcasts to all clients
 
-import http = require('http');
-import fs = require('fs');
-import path = require('path');
-import WebSocket = require('ws');
-
 import { Simulation, TICK_RATE, TICK_MS } from './simulation';
-const { version } = require('../../package.json') as { version: string };
+import type { ServerWebSocket } from 'bun';
 
-// ============================================
-// HTTP SERVER (Static Files)
-// ============================================
+const PUBLIC_DIR = import.meta.dir + '/../public';
 
-const MIME_TYPES: Record<string, string> = {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-};
-
-const PROJECT_ROOT = path.join(__dirname, '..', '..');
-const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public');
-
-function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
-    let filePath = req.url === '/' ? '/index.html' : req.url ?? '/index.html';
-
-    // Remove query string
-    filePath = filePath.split('?')[0]!;
-
-    // API endpoints
-    if (filePath === '/api/roster') {
-        res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        });
-        res.end(JSON.stringify(simulation.getRoster()));
-        return;
-    }
-
-    // Security: prevent directory traversal
-    filePath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
-
-    const fullPath = path.join(PUBLIC_DIR, filePath);
-    const ext = path.extname(fullPath).toLowerCase();
-    const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
-
-    fs.readFile(fullPath, (err, data) => {
-        if (err) {
-            if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-                res.writeHead(404, { 'Content-Type': 'text/plain' });
-                res.end('404 Not Found');
-            } else {
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('500 Internal Server Error');
-            }
-            return;
-        }
-
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(data);
-    });
-}
-
-const server = http.createServer(serveStatic);
-
-// ============================================
-// WEBSOCKET SERVER
-// ============================================
-
-const wss = new WebSocket.Server({ server });
-
-// Track connected clients
-const clients = new Set<WebSocket>();
-
-wss.on('connection', (ws: WebSocket) => {
-    console.log(`Client connected. Total: ${clients.size + 1}`);
-    clients.add(ws);
-
-    // Send initial state immediately
-    const state = simulation.getState();
-    const initMsg: WSInitMessage = {
-        type: 'init',
-        state: state,
-    };
-    ws.send(JSON.stringify(initMsg));
-
-    ws.on('message', (message: WebSocket.Data) => {
-        try {
-            const data = JSON.parse(message.toString()) as { type: string };
-            // Handle client messages (e.g., bet placement)
-            // For now, betting is client-side only
-            console.log('Received:', data.type);
-        } catch (e) {
-            console.error('Invalid message:', e);
-        }
-    });
-
-    ws.on('close', () => {
-        clients.delete(ws);
-        console.log(`Client disconnected. Total: ${clients.size}`);
-    });
-
-    ws.on('error', (err: Error) => {
-        console.error('WebSocket error:', err);
-        clients.delete(ws);
-    });
-});
-
-function broadcast(data: WSServerMessage): void {
-    const message = JSON.stringify(data);
-    clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
-        }
-    });
-}
+// Read version from package.json
+const pkg = await Bun.file(import.meta.dir + '/../package.json').json() as { version: string };
+const version: string = pkg.version;
 
 // ============================================
 // GAME SIMULATION
 // ============================================
 
-const simulation = new Simulation();
+const simulation = await Simulation.create();
 
-let lastTickTime = Date.now();
+// Track connected clients
+const clients = new Set<ServerWebSocket<unknown>>();
+
+function broadcast(data: WSServerMessage): void {
+    const message = JSON.stringify(data);
+    for (const client of clients) {
+        client.send(message);
+    }
+}
+
+// Game loop
 let tickCount = 0;
+const startTime = Date.now();
 
-function gameLoop(): void {
-    const now = Date.now();
-
-    // Run simulation tick
+setInterval(() => {
     simulation.update();
     tickCount++;
 
-    // Broadcast state to all clients
     const stateMsg: WSStateMessage = {
         type: 'state',
         state: simulation.getState(),
@@ -146,40 +41,101 @@ function gameLoop(): void {
     broadcast(stateMsg);
 
     // Log stats periodically
-    if (tickCount % (TICK_RATE * 10) === 0) { // Every 10 seconds
-        const elapsed = (now - lastTickTime) / 1000;
+    if (tickCount % (TICK_RATE * 10) === 0) {
+        const elapsed = (Date.now() - startTime) / 1000;
         const actualRate = tickCount / elapsed;
-        console.log(`Tick ${simulation.tick} | Fight #${simulation.fightNumber} | Phase: ${simulation.phase} | Clients: ${clients.size} | Rate: ${actualRate.toFixed(1)}/s`);
+        console.log(
+            `Tick ${simulation.tick} | Fight #${simulation.fightNumber} | ` +
+            `Phase: ${simulation.phase} | Clients: ${clients.size} | Rate: ${actualRate.toFixed(1)}/s`
+        );
     }
-}
-
-// Run game loop at fixed interval
-setInterval(gameLoop, TICK_MS);
+}, TICK_MS);
 
 // ============================================
-// START SERVER
+// BUN HTTP + WEBSOCKET SERVER
 // ============================================
 
-const PORT = process.env['PORT'] ?? 8080;
+const PORT = Number(process.env['PORT'] ?? 8080);
 
-server.listen(PORT, () => {
-    const versionPadded = version.padEnd(14);
-    console.log(`
+const server = Bun.serve({
+    port: PORT,
+
+    async fetch(req, server) {
+        const url = new URL(req.url);
+
+        // WebSocket upgrade
+        if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+            if (server.upgrade(req)) return undefined;
+            return new Response('WebSocket upgrade failed', { status: 400 });
+        }
+
+        // API: roster
+        if (url.pathname === '/api/roster') {
+            return Response.json(simulation.getRoster(), {
+                headers: { 'Access-Control-Allow-Origin': '*' },
+            });
+        }
+
+        // Static file serving
+        let filePath = url.pathname === '/' ? '/index.html' : url.pathname;
+        filePath = filePath.split('?')[0]!;
+        filePath = filePath.replace(/\.\.\//g, ''); // prevent traversal
+
+        const file = Bun.file(PUBLIC_DIR + filePath);
+        if (await file.exists()) {
+            return new Response(file);
+        }
+
+        return new Response('404 Not Found', { status: 404 });
+    },
+
+    websocket: {
+        open(ws) {
+            clients.add(ws);
+            console.log(`Client connected. Total: ${clients.size}`);
+
+            const initMsg: WSInitMessage = {
+                type: 'init',
+                state: simulation.getState(),
+            };
+            ws.send(JSON.stringify(initMsg));
+        },
+
+        message(ws, message) {
+            try {
+                const data = JSON.parse(String(message)) as { type: string };
+                console.log('Received:', data.type);
+            } catch (e) {
+                console.error('Invalid message:', e);
+            }
+        },
+
+        close(ws) {
+            clients.delete(ws);
+            console.log(`Client disconnected. Total: ${clients.size}`);
+        },
+    },
+});
+
+// ============================================
+// STARTUP BANNER
+// ============================================
+
+const versionPadded = version.padEnd(14);
+console.log(`
 ╔════════════════════════════════════════════╗
 ║         BUG FIGHTS SERVER ${versionPadded}║
 ╠════════════════════════════════════════════╣
-║  HTTP Server:  http://localhost:${PORT}       ║
-║  WebSocket:    ws://localhost:${PORT}         ║
+║  HTTP + WS:    http://localhost:${server.port}       ║
 ║  Tick Rate:    ${TICK_RATE} ticks/second            ║
+║  Runtime:      Bun ${Bun.version}                 ║
 ╚════════════════════════════════════════════╝
-    `);
-    console.log('Simulation started. Fights running 24/7...\n');
-});
+`);
+console.log('Simulation started. Fights running 24/7...\n');
 
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\nShutting down...');
-    wss.close();
-    server.close();
+    server.stop();
     process.exit(0);
 });

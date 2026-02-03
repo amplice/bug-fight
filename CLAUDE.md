@@ -131,7 +131,7 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 ### Current Stack
 - **Language**: TypeScript (strict mode, zero-error build)
 - **Frontend**: TypeScript (module: "none", script-tag loading), Three.js (3D), static HTML/CSS
-- **Backend**: Node.js + `ws` library, TypeScript compiled to CommonJS
+- **Backend**: Bun (native HTTP + WebSocket via Bun.serve()), runs .ts directly
 - **Database**: JSON files (roster.json)
 - **Hosting**: Single VPS
 
@@ -260,14 +260,12 @@ Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenom
 The server runs in a **tmux session** called `bugfights` for persistence across Claude sessions.
 
 **Build commands:**
-- **Full build**: `npm run build` (builds server + client)
-- **Server only**: `npm run build:server`
-- **Client only**: `npm run build:client`
-- **Typecheck (no emit)**: `npm run typecheck`
-- **Dev mode (tsx)**: `npm run dev` (runs server directly from .ts without building)
+- **Client build**: `npx tsc -p tsconfig.client.json` (compiles client TS to public/js/)
+- **Typecheck**: `npx tsc -p tsconfig.server.json --noEmit && npx tsc -p tsconfig.client.json --noEmit`
+- **Run server**: `npx bun run server/index.ts` (Bun runs .ts directly, no build step)
 
 **Common commands:**
-- **Start/Restart server**: `tmux kill-session -t bugfights 2>/dev/null; tmux new-session -d -s bugfights -c /home/play/bugfights "node server/dist/index.js"`
+- **Start/Restart server**: `tmux kill-session -t bugfights 2>/dev/null; tmux new-session -d -s bugfights -c /home/play/bugfights "npx bun run server/index.ts"`
 - **View logs**: `tmux attach -t bugfights` (detach with `Ctrl+B` then `D`)
 - **Check status**: `tmux list-sessions`
 - **Kill server**: `tmux kill-session -t bugfights`
@@ -290,8 +288,7 @@ When user says "restart the server", "kill the server", "start the server", etc.
 **Manual run (without tmux):**
 ```bash
 npm install
-npm run build
-npm start
+npx bun run server/index.ts
 ```
 
 Then open http://localhost:8080
