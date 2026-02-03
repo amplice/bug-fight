@@ -129,13 +129,14 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 ## Architecture
 
 ### Current Stack
-- **Frontend**: Vanilla JS, Three.js (3D), static HTML/CSS
-- **Backend**: Node.js + `ws` library
+- **Language**: TypeScript (strict mode, zero-error build)
+- **Frontend**: TypeScript (module: "none", script-tag loading), Three.js (3D), static HTML/CSS
+- **Backend**: Node.js + `ws` library, TypeScript compiled to CommonJS
 - **Database**: JSON files (roster.json)
 - **Hosting**: Single VPS
 
 ### Target Stack (Near-term)
-- **Frontend**: Vite (bundling/dev), vanilla JS, Three.js
+- **Frontend**: Vite (bundling/dev), TypeScript, Three.js
 - **Backend**: Bun (native WebSocket, faster runtime)
 - **Database**: SQLite + Prisma ORM
 - **Hosting**: Single VPS
@@ -147,7 +148,7 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 - **Hosting**: TBD based on scale needs
 
 ### Architecture Decisions
-- **TypeScript**: Yes. Migrate sooner rather than later. Type safety helps with breeding/genetics complexity.
+- **TypeScript**: Fully migrated. Strict mode with `noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch`. Shared types in `shared/types.d.ts`.
 - **User accounts**: Yes. Persistent balances, leaderboards. Potentially on-chain/crypto in future.
 - **Frontend state**: Vanilla JS (just objects). No framework unless UI complexity demands it.
 - **Scaling**: Single VPS until performance requires otherwise.
@@ -192,16 +193,31 @@ const rng = createSeededRNG(seed);
 - Maybe revisit for on-chain betting pools where verification must happen in smart contract
 
 ### Files
-- `server/index.js` - HTTP server, WebSocket handling
-- `server/simulation.js` - Game engine, Fighter class, 3D combat AI
-- `server/roster.js` - Persistent bug roster management
-- `server/BugGenome.js` - Bug genetics and genome generation
+
+**TypeScript Source:**
+- `server/index.ts` - HTTP server, WebSocket handling → compiles to `server/dist/index.js`
+- `server/simulation.ts` - Game engine, Fighter class, 3D combat AI
+- `server/roster.ts` - Persistent bug roster management
+- `server/BugGenome.ts` - Bug genetics and genome generation
+- `src/client/client.ts` - WebSocket client, betting logic, UI updates → compiles to `public/js/client.js`
+- `src/client/renderer3d.ts` - Three.js 3D rendering, camera controls, effects
+- `src/client/bugGenerator3d.ts` - 3D bug mesh generation, BugAnimator class
+- `src/client/soundEngine.ts` - Procedural Web Audio API sound engine
+- `src/client/procedural.ts` - Client-side BugGenome class
+- `src/client/rosterViewer.ts` - 3D roster viewer modal (Three.js)
+- `src/client/app.ts` - Camera controls, sound toggle, debug overlay, init
+- `src/client/globals.d.ts` - Client global type declarations (THREE, window APIs)
+- `shared/types.d.ts` - Shared type definitions (GenomeData, FighterState, GameEvent, etc.)
+
+**Config:**
+- `tsconfig.json` - Base strict TypeScript config
+- `tsconfig.server.json` - Server config (CommonJS, outDir: server/dist)
+- `tsconfig.client.json` - Client config (module: "none", outDir: public/js)
+
+**Other:**
 - `public/index.html` - 3D arena and betting UI
-- `public/js/client.js` - WebSocket client, betting logic, UI updates
-- `public/js/renderer3d.js` - Three.js 3D rendering, camera controls, effects
-- `public/js/bugGenerator3d.js` - 3D bug mesh generation, BugAnimator class
-- `public/js/soundEngine.js` - Procedural Web Audio API sound engine
-- `public/js/procedural.js` - Client-side BugGenome class (constructor-only, reconstructs genome from server data)
+- `public/js/*.js` - Compiled client output (gitignored, built from src/client/*.ts)
+- `server/dist/*.js` - Compiled server output (gitignored, built from server/*.ts)
 
 ### Key Stats
 - **Bulk** - HP, stamina pool
@@ -214,12 +230,13 @@ Keep these simple. They affect range and damage type, not complex behaviors.
 
 ### System Sync Rule
 **The bug systems MUST stay in sync at all times:**
-1. `server/BugGenome.js` — server-side genome (source of truth for traits, randomization, breeding, naming)
-2. `public/js/bugGenerator3d.js` — 3D renderer that visually represents traits
+1. `server/BugGenome.ts` — server-side genome (source of truth for traits, randomization, breeding, naming)
+2. `src/client/bugGenerator3d.ts` — 3D renderer that visually represents traits
+3. `shared/types.d.ts` — Type definitions for all traits (WeaponType, DefenseType, etc.)
 
-When adding, removing, or renaming any trait option (weapon, defense, mobility, wing type, leg style, leg count, head/thorax/abdomen type, eye style, antenna style, texture), **update both files**. The server genome is the source of truth — the 3D renderer must match it exactly.
+When adding, removing, or renaming any trait option (weapon, defense, mobility, wing type, leg style, leg count, head/thorax/abdomen type, eye style, antenna style, texture), **update all three files**. The server genome is the source of truth — the types and 3D renderer must match it exactly.
 
-Note: `public/js/procedural.js` is a thin constructor-only stub that receives genome data from the server via `Object.assign`. It has no trait lists or logic to sync.
+Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenome that receives genome data from the server. It has no trait lists or logic to sync.
 
 ## Implemented Features
 - Persistent roster of 20 bugs with fight records (W-L)
@@ -230,18 +247,27 @@ Note: `public/js/procedural.js` is a thin constructor-only stub that receives ge
 - Roster viewer modal
 
 ## Next Steps
-1. Add breeding system (winners pass on genomes)
-2. Revisit variants as genetic traits, not cosmetic rarity
-3. Migrate to Bun + Vite + SQLite/Prisma + TypeScript stack
-4. Integrate drand for provable randomness (replace Math.random with seeded RNG)
-5. User accounts with persistent balances and leaderboards
+1. Migrate to Bun (native WebSocket, faster runtime)
+2. Migrate to SQLite + Prisma ORM (replace roster.json)
+3. Migrate to Vite (bundling, dev server, HMR)
+4. Add breeding system (winners pass on genomes)
+5. Revisit variants as genetic traits, not cosmetic rarity
+6. Integrate drand for provable randomness (replace Math.random with seeded RNG)
+7. User accounts with persistent balances and leaderboards
 
 ## Running
 
 The server runs in a **tmux session** called `bugfights` for persistence across Claude sessions.
 
+**Build commands:**
+- **Full build**: `npm run build` (builds server + client)
+- **Server only**: `npm run build:server`
+- **Client only**: `npm run build:client`
+- **Typecheck (no emit)**: `npm run typecheck`
+- **Dev mode (tsx)**: `npm run dev` (runs server directly from .ts without building)
+
 **Common commands:**
-- **Start/Restart server**: `tmux kill-session -t bugfights 2>/dev/null; tmux new-session -d -s bugfights "cd /home/play/bugfights && node server/index.js"`
+- **Start/Restart server**: `tmux kill-session -t bugfights 2>/dev/null; tmux new-session -d -s bugfights -c /home/play/bugfights "node server/dist/index.js"`
 - **View logs**: `tmux attach -t bugfights` (detach with `Ctrl+B` then `D`)
 - **Check status**: `tmux list-sessions`
 - **Kill server**: `tmux kill-session -t bugfights`
@@ -251,10 +277,10 @@ The server runs in a **tmux session** called `bugfights` for persistence across 
 tmux capture-pane -t bugfights -p -S -100
 ```
 This captures the last 100 lines of fight logs showing:
-- Combat events (⚔️ hits, 💨 dodges, ❌ misses) with damage and momentum
-- AI state transitions (🔥 aggressive, 🔄 circling, 🏃 retreating, 💫 stunned)
-- Periodic summaries (📈) every 10s with HP, attacks, hit rates
-- Stalemate warnings (⚠️ at 10s, 🚨 at 20s) with detailed diagnosis
+- Combat events (hits, dodges, misses) with damage and momentum
+- AI state transitions (aggressive, circling, retreating, stunned)
+- Periodic summaries every 10s with HP, attacks, hit rates
+- Stalemate warnings at 10s/20s with detailed diagnosis
 - Fight results with final stats
 
 Use `-S -200` or higher for more history. Useful for diagnosing why bugs are behaving certain ways (both retreating, low stamina, flyer vs grounder mismatches, etc.)
@@ -264,6 +290,7 @@ When user says "restart the server", "kill the server", "start the server", etc.
 **Manual run (without tmux):**
 ```bash
 npm install
+npm run build
 npm start
 ```
 

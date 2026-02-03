@@ -7,6 +7,9 @@
 // ============================================
 
 class ChitinTextureGenerator {
+    size: number;
+    noiseGrid: number[] | null;
+
     constructor(size = 512) {
         this.size = size;
         // Noise helpers
@@ -24,13 +27,13 @@ class ChitinTextureGenerator {
     }
 
     // Seeded random for reproducible results
-    seededRandom(seed) {
+    seededRandom(seed: number) {
         const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
         return x - Math.floor(x);
     }
 
     // Value noise with smooth interpolation
-    noise2D(x, y, scale = 1) {
+    noise2D(x: number, y: number, scale = 1) {
         const gridSize = 32;
         x = x * scale;
         y = y * scale;
@@ -47,10 +50,10 @@ class ChitinTextureGenerator {
         const tx = sx * sx * (3 - 2 * sx);
         const ty = sy * sy * (3 - 2 * sy);
 
-        const n00 = this.noiseGrid[y0 * gridSize + x0];
-        const n10 = this.noiseGrid[y0 * gridSize + x1];
-        const n01 = this.noiseGrid[y1 * gridSize + x0];
-        const n11 = this.noiseGrid[y1 * gridSize + x1];
+        const n00 = this.noiseGrid![y0 * gridSize + x0]!;
+        const n10 = this.noiseGrid![y0 * gridSize + x1]!;
+        const n01 = this.noiseGrid![y1 * gridSize + x0]!;
+        const n11 = this.noiseGrid![y1 * gridSize + x1]!;
 
         const nx0 = n00 + tx * (n10 - n00);
         const nx1 = n01 + tx * (n11 - n01);
@@ -59,7 +62,7 @@ class ChitinTextureGenerator {
     }
 
     // Fractal Brownian Motion - layered noise for organic look
-    fbm(x, y, octaves = 4) {
+    fbm(x: number, y: number, octaves = 4) {
         let value = 0;
         let amplitude = 0.5;
         let frequency = 1;
@@ -79,7 +82,7 @@ class ChitinTextureGenerator {
      * Generate complete texture set for a texture type
      * Returns { diffuse, normal, roughness } textures
      */
-    generate(textureType, primaryColor, secondaryColor, seed = 0) {
+    generate(textureType: string, primaryColor: string, secondaryColor: string, seed = 0) {
         switch (textureType) {
             case 'plated':
                 return this.generatePlated(primaryColor, secondaryColor, seed);
@@ -96,17 +99,17 @@ class ChitinTextureGenerator {
     }
 
     // Parse hex color to RGB object
-    hexToRgb(hex) {
+    hexToRgb(hex: string) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         return result ? {
-            r: parseInt(result[1], 16),
-            g: parseInt(result[2], 16),
-            b: parseInt(result[3], 16)
+            r: parseInt(result[1]!, 16),
+            g: parseInt(result[2]!, 16),
+            b: parseInt(result[3]!, 16)
         } : { r: 128, g: 128, b: 128 };
     }
 
     // Blend two colors
-    blendColors(c1, c2, t) {
+    blendColors(c1: {r: number; g: number; b: number}, c2: {r: number; g: number; b: number}, t: number) {
         return {
             r: Math.round(c1.r + (c2.r - c1.r) * t),
             g: Math.round(c1.g + (c2.g - c1.g) * t),
@@ -118,7 +121,7 @@ class ChitinTextureGenerator {
      * SMOOTH CHITIN - Sleek wasp/ant exoskeleton
      * Satin finish - not glossy plastic, more natural matte-ish
      */
-    generateSmooth(primaryColor, secondaryColor, seed) {
+    generateSmooth(primaryColor: string, secondaryColor: string, seed: number) {
         const size = this.size;
         const primary = this.hexToRgb(primaryColor);
 
@@ -131,9 +134,9 @@ class ChitinTextureGenerator {
             c.height = size;
         });
 
-        const diffuseCtx = diffuseCanvas.getContext('2d');
-        const normalCtx = normalCanvas.getContext('2d');
-        const roughnessCtx = roughnessCanvas.getContext('2d');
+        const diffuseCtx = diffuseCanvas.getContext('2d')!;
+        const normalCtx = normalCanvas.getContext('2d')!;
+        const roughnessCtx = roughnessCanvas.getContext('2d')!;
 
         const diffuseData = diffuseCtx.createImageData(size, size);
         const normalData = normalCtx.createImageData(size, size);
@@ -181,7 +184,7 @@ class ChitinTextureGenerator {
      * PLATED CHITIN - Beetle armor with overlapping segments
      * Visible plate edges, highlights on ridges, darker in crevices
      */
-    generatePlated(primaryColor, secondaryColor, seed) {
+    generatePlated(primaryColor: string, secondaryColor: string, seed: number) {
         const size = this.size;
         const primary = this.hexToRgb(primaryColor);
         const secondary = this.hexToRgb(secondaryColor);
@@ -201,9 +204,9 @@ class ChitinTextureGenerator {
             c.height = size;
         });
 
-        const diffuseCtx = diffuseCanvas.getContext('2d');
-        const normalCtx = normalCanvas.getContext('2d');
-        const roughnessCtx = roughnessCanvas.getContext('2d');
+        const diffuseCtx = diffuseCanvas.getContext('2d')!;
+        const normalCtx = normalCanvas.getContext('2d')!;
+        const roughnessCtx = roughnessCanvas.getContext('2d')!;
 
         const diffuseData = diffuseCtx.createImageData(size, size);
         const normalData = normalCtx.createImageData(size, size);
@@ -290,7 +293,7 @@ class ChitinTextureGenerator {
      * ROUGH CHITIN - Bumpy, weathered surface with pits and protrusions
      * Like old beetles, crickets - worn, textured exoskeleton
      */
-    generateRough(primaryColor, secondaryColor, seed) {
+    generateRough(primaryColor: string, secondaryColor: string, seed: number) {
         const size = this.size;
         const primary = this.hexToRgb(primaryColor);
         const secondary = this.hexToRgb(secondaryColor);
@@ -304,16 +307,16 @@ class ChitinTextureGenerator {
             c.height = size;
         });
 
-        const diffuseCtx = diffuseCanvas.getContext('2d');
-        const normalCtx = normalCanvas.getContext('2d');
-        const roughnessCtx = roughnessCanvas.getContext('2d');
+        const diffuseCtx = diffuseCanvas.getContext('2d')!;
+        const normalCtx = normalCanvas.getContext('2d')!;
+        const roughnessCtx = roughnessCanvas.getContext('2d')!;
 
         const diffuseData = diffuseCtx.createImageData(size, size);
         const normalData = normalCtx.createImageData(size, size);
         const roughnessData = roughnessCtx.createImageData(size, size);
 
         // Seeded random for consistent bumps
-        const seededRand = (n) => {
+        const seededRand = (n: number) => {
             const x = Math.sin(seed + n * 127.1) * 43758.5453;
             return x - Math.floor(x);
         };
@@ -371,15 +374,15 @@ class ChitinTextureGenerator {
                     const bnx = (dx / radius) * normalStrength * (isRaised ? 1 : -1);
                     const bny = (dy / radius) * normalStrength * (isRaised ? 1 : -1);
 
-                    normalData.data[idx] = Math.max(0, Math.min(255, normalData.data[idx] + bnx));
-                    normalData.data[idx + 1] = Math.max(0, Math.min(255, normalData.data[idx + 1] + bny));
+                    normalData.data[idx] = Math.max(0, Math.min(255, normalData.data[idx]! + bnx));
+                    normalData.data[idx + 1] = Math.max(0, Math.min(255, normalData.data[idx + 1]! + bny));
 
                     // Darken pits slightly in diffuse
                     if (!isRaised) {
                         const darkening = (1 - dist / radius) * 0.15;
-                        diffuseData.data[idx] *= (1 - darkening);
-                        diffuseData.data[idx + 1] *= (1 - darkening);
-                        diffuseData.data[idx + 2] *= (1 - darkening);
+                        diffuseData.data[idx] = diffuseData.data[idx]! * (1 - darkening);
+                        diffuseData.data[idx + 1] = diffuseData.data[idx + 1]! * (1 - darkening);
+                        diffuseData.data[idx + 2] = diffuseData.data[idx + 2]! * (1 - darkening);
                     }
                 }
             }
@@ -396,7 +399,7 @@ class ChitinTextureGenerator {
      * SPOTTED CHITIN - Bold spots like ladybugs or leopard beetles
      * Large, clearly visible spots with slight depth
      */
-    generateSpotted(primaryColor, secondaryColor, seed) {
+    generateSpotted(primaryColor: string, secondaryColor: string, seed: number) {
         const size = this.size;
         const primary = this.hexToRgb(primaryColor);
         const secondary = this.hexToRgb(secondaryColor);
@@ -417,16 +420,16 @@ class ChitinTextureGenerator {
             c.height = size;
         });
 
-        const diffuseCtx = diffuseCanvas.getContext('2d');
-        const normalCtx = normalCanvas.getContext('2d');
-        const roughnessCtx = roughnessCanvas.getContext('2d');
+        const diffuseCtx = diffuseCanvas.getContext('2d')!;
+        const normalCtx = normalCanvas.getContext('2d')!;
+        const roughnessCtx = roughnessCanvas.getContext('2d')!;
 
         const diffuseData = diffuseCtx.createImageData(size, size);
         const normalData = normalCtx.createImageData(size, size);
         const roughnessData = roughnessCtx.createImageData(size, size);
 
         // Seeded random
-        const seededRand = (n) => {
+        const seededRand = (n: number) => {
             const x = Math.sin(seed + n * 127.1) * 43758.5453;
             return x - Math.floor(x);
         };
@@ -455,7 +458,7 @@ class ChitinTextureGenerator {
 
                 // Check each spot
                 for (let s = 0; s < spots.length; s++) {
-                    const spot = spots[s];
+                    const spot = spots[s]!;
                     // Handle wrapping for seamless texture
                     let dx = x - spot.x;
                     let dy = y - spot.y;
@@ -519,7 +522,7 @@ class ChitinTextureGenerator {
      * STRIPED CHITIN - Horizontal bands like a sailor shirt
      * Stripes wrap around body segments like rings
      */
-    generateStriped(primaryColor, secondaryColor, seed) {
+    generateStriped(primaryColor: string, secondaryColor: string, seed: number) {
         const size = this.size;
         const primary = this.hexToRgb(primaryColor);
         const secondary = this.hexToRgb(secondaryColor);
@@ -540,16 +543,16 @@ class ChitinTextureGenerator {
             c.height = size;
         });
 
-        const diffuseCtx = diffuseCanvas.getContext('2d');
-        const normalCtx = normalCanvas.getContext('2d');
-        const roughnessCtx = roughnessCanvas.getContext('2d');
+        const diffuseCtx = diffuseCanvas.getContext('2d')!;
+        const normalCtx = normalCanvas.getContext('2d')!;
+        const roughnessCtx = roughnessCanvas.getContext('2d')!;
 
         const diffuseData = diffuseCtx.createImageData(size, size);
         const normalData = normalCtx.createImageData(size, size);
         const roughnessData = roughnessCtx.createImageData(size, size);
 
         // Seeded random
-        const seededRand = (n) => {
+        const seededRand = (n: number) => {
             const x = Math.sin(seed + n * 127.1) * 43758.5453;
             return x - Math.floor(x);
         };
@@ -612,8 +615,8 @@ class ChitinTextureGenerator {
         return this.createTextures(diffuseCanvas, normalCanvas, roughnessCanvas);
     }
 
-    createTextures(diffuseCanvas, normalCanvas, roughnessCanvas) {
-        const createTex = (canvas) => {
+    createTextures(diffuseCanvas: HTMLCanvasElement, normalCanvas: HTMLCanvasElement, roughnessCanvas: HTMLCanvasElement) {
+        const createTex = (canvas: HTMLCanvasElement) => {
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
@@ -633,11 +636,13 @@ class ChitinTextureGenerator {
 
 // Legacy TextureGenerator for backwards compatibility
 class TextureGenerator {
+    chitinGen: ChitinTextureGenerator;
+
     constructor(size = 256) {
         this.chitinGen = new ChitinTextureGenerator(size);
     }
 
-    generate(textureType) {
+    generate(textureType: string) {
         // Return just the normal map for backwards compatibility
         const textures = this.chitinGen.generate(textureType, '#888888', '#666666', 0);
         return textures.normal;
@@ -648,12 +653,19 @@ class TextureGenerator {
 // ============================================
 
 class BugGenerator3D {
-    constructor(genome) {
-        this.genome = genome;
+    genome: BugGenome;
+    colors: Record<string, string>;
+    sizeMultiplier: number;
+    chitinTextures: { diffuse: import('three').CanvasTexture; normal: import('three').CanvasTexture; roughness: import('three').CanvasTexture } | null;
+    normalMap: import('three').CanvasTexture | null;
+
+    constructor(genome: GenomeData) {
+        this.genome = genome as unknown as BugGenome;
         this.colors = this.generateColors();
-        this.sizeMultiplier = genome.getSizeMultiplier ? genome.getSizeMultiplier() : 1;
+        this.sizeMultiplier = (genome as any).getSizeMultiplier ? (genome as any).getSizeMultiplier() : 1;
         // Cached chitin textures (diffuse, normal, roughness)
         this.chitinTextures = null;
+        this.normalMap = null;
     }
 
 
@@ -682,11 +694,11 @@ class BugGenerator3D {
         };
     }
 
-    hslToHex(h, s, l) {
+    hslToHex(h: number, s: number, l: number) {
         s /= 100;
         l /= 100;
         const a = s * Math.min(l, 1 - l);
-        const f = n => {
+        const f = (n: number) => {
             const k = (n + h / 30) % 12;
             const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
             return Math.round(255 * color).toString(16).padStart(2, '0');
@@ -694,7 +706,7 @@ class BugGenerator3D {
         return `#${f(0)}${f(8)}${f(4)}`;
     }
 
-    darken(hex, amount) {
+    darken(hex: string, amount: number) {
         const num = parseInt(hex.slice(1), 16);
         const r = Math.max(0, (num >> 16) * (1 - amount));
         const g = Math.max(0, ((num >> 8) & 0x00FF) * (1 - amount));
@@ -702,7 +714,7 @@ class BugGenerator3D {
         return `#${Math.round(r).toString(16).padStart(2, '0')}${Math.round(g).toString(16).padStart(2, '0')}${Math.round(b).toString(16).padStart(2, '0')}`;
     }
 
-    lighten(hex, amount) {
+    lighten(hex: string, amount: number) {
         const num = parseInt(hex.slice(1), 16);
         const r = Math.min(255, (num >> 16) + (255 - (num >> 16)) * amount);
         const g = Math.min(255, ((num >> 8) & 0x00FF) + (255 - ((num >> 8) & 0x00FF)) * amount);
@@ -714,9 +726,9 @@ class BugGenerator3D {
      * Remap UVs for cylindrical mapping around Z axis
      * Makes stripes wrap around the body like rings
      */
-    remapUVsForStripes(geometry) {
-        const pos = geometry.attributes.position;
-        const uv = geometry.attributes.uv;
+    remapUVsForStripes(geometry: import('three').BufferGeometry) {
+        const pos = geometry.attributes.position as import('three').BufferAttribute;
+        const uv = geometry.attributes.uv as import('three').BufferAttribute;
 
         // Find Z bounds for normalization
         let minZ = Infinity, maxZ = -Infinity;
@@ -757,7 +769,7 @@ class BugGenerator3D {
     /**
      * Create sphere geometry, with UV remapping if striped
      */
-    createBodySphere(radius, widthSegments, heightSegments) {
+    createBodySphere(radius: number, widthSegments: number, heightSegments: number) {
         const geo = new THREE.SphereGeometry(radius, widthSegments, heightSegments);
         return geo;
     }
@@ -765,7 +777,7 @@ class BugGenerator3D {
     /**
      * Apply UV remapping after scaling if needed
      */
-    finalizeBodyGeometry(geometry) {
+    finalizeBodyGeometry(geometry: import('three').BufferGeometry) {
         if (this.needsStripeUVs()) {
             this.remapUVsForStripes(geometry);
         }
@@ -776,7 +788,7 @@ class BugGenerator3D {
      * Create material with realistic chitin texture
      * Set options.skipTexture = true to skip texture (for eyes, etc.)
      */
-    createMaterial(colorKey, options = {}) {
+    createMaterial(colorKey: string, options: Record<string, any> = {}) {
         const color = this.colors[colorKey] || colorKey;
         const textureType = this.genome.textureType || 'smooth';
         // Generate and cache chitin textures if not already created
@@ -784,8 +796,8 @@ class BugGenerator3D {
             const chitinGen = new ChitinTextureGenerator(512);
             this.chitinTextures = chitinGen.generate(
                 textureType,
-                this.colors.primary,
-                this.colors.dark,
+                this.colors.primary!,
+                this.colors.dark!,
                 Math.random() * 10000
             );
         }
@@ -812,7 +824,7 @@ class BugGenerator3D {
                 normalIntensity = 0.5;
         }
 
-        const materialOptions = {
+        const materialOptions: Record<string, any> = {
             metalness: options.metalness || 0.15,
             transparent: options.transparent || false,
             opacity: options.opacity || 1,
@@ -921,7 +933,7 @@ class BugGenerator3D {
         return bugGroup;
     }
 
-    createAbdomen(bulkFactor, scale) {
+    createAbdomen(bulkFactor: number, scale: number) {
         const group = new THREE.Group();
         group.name = 'abdomen';
         const defense = this.genome.defense || 'none';
@@ -1073,7 +1085,7 @@ class BugGenerator3D {
 
                 // Internal structure showing through
                 const internalMat = new THREE.MeshStandardMaterial({
-                    color: this.darken(this.colors.primary, 0.4),
+                    color: this.darken(this.colors.primary!, 0.4),
                     roughness: 0.6,
                 });
                 const internalGeo = new THREE.SphereGeometry(1, 10, 8);
@@ -1167,7 +1179,7 @@ class BugGenerator3D {
         // Shell defense - add armored plates
         if (defense === 'shell') {
             const plateMat = new THREE.MeshStandardMaterial({
-                color: this.darken(this.colors.primary, 0.2),
+                color: this.darken(this.colors.primary!, 0.2),
                 roughness: 0.2,
                 metalness: 0.6,
             });
@@ -1206,7 +1218,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createThorax(bulkFactor, speedFactor, scale) {
+    createThorax(bulkFactor: number, speedFactor: number, scale: number) {
         const group = new THREE.Group();
         group.name = 'thorax';
         const defense = this.genome.defense || 'none';
@@ -1346,7 +1358,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createHead(speedFactor, scale) {
+    createHead(speedFactor: number, scale: number) {
         const group = new THREE.Group();
         group.name = 'head';
         const eyeStyle = this.genome.eyeStyle || 'compound';
@@ -1708,7 +1720,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createLegs(legStyle, scale, legCount) {
+    createLegs(legStyle: string, scale: number, legCount: number) {
         const group = new THREE.Group();
         group.name = 'legs';
         const style = legStyle || 'insect';
@@ -1760,7 +1772,7 @@ class BugGenerator3D {
             attachments = extra;
         }
 
-        attachments.forEach((attach, i) => {
+        attachments.forEach((attach: any, i: number) => {
             // Create right leg (positive X side)
             const rightLeg = this.createArticulatedLeg(style, attach, scale, 1, i, legConfigs);
             rightLeg.userData.phase = attach.phase;
@@ -1779,7 +1791,7 @@ class BugGenerator3D {
         return group;
     }
 
-    getLegConfig(style, scale) {
+    getLegConfig(style: string, scale: number) {
         const configs = {
             insect: {
                 attachments: [
@@ -1883,10 +1895,10 @@ class BugGenerator3D {
             },
         };
 
-        return configs[style] || configs.insect;
+        return (configs as Record<string, any>)[style] || configs.insect;
     }
 
-    createArticulatedLeg(style, attach, scale, side, legIndex, config) {
+    createArticulatedLeg(style: string, attach: any, scale: number, side: number, legIndex: number, config: any) {
         // Root group positioned at attachment point
         const legRoot = new THREE.Group();
         legRoot.position.set(-side * attach.x * scale, attach.y * scale, attach.z * scale);
@@ -1983,7 +1995,7 @@ class BugGenerator3D {
         return legRoot;
     }
 
-    addLegArmor(pivot, length, radius, scale) {
+    addLegArmor(pivot: import('three').Group, length: number, radius: number, scale: number) {
         const armorMat = new THREE.MeshStandardMaterial({
             color: this.colors.dark,
             roughness: 0.25,
@@ -1998,7 +2010,7 @@ class BugGenerator3D {
         }
     }
 
-    addRaptorialSpines(pivot, length, radius, scale, side) {
+    addRaptorialSpines(pivot: import('three').Group, length: number, radius: number, scale: number, side: number) {
         const spineMat = this.createChitinMaterial('dark');
 
         for (let i = 0; i < 5; i++) {
@@ -2010,7 +2022,7 @@ class BugGenerator3D {
         }
     }
 
-    addFoot(parent, radius, scale, style) {
+    addFoot(parent: import('three').Group, radius: number, scale: number, style: string) {
         const footMat = this.createChitinMaterial('dark');
 
         switch (style) {
@@ -2073,7 +2085,7 @@ class BugGenerator3D {
         }
     }
 
-    createChitinMaterial(colorKey, options = {}) {
+    createChitinMaterial(colorKey: string, options: Record<string, any> = {}) {
         const color = this.colors[colorKey] || colorKey;
         const textureType = this.genome.textureType || 'smooth';
 
@@ -2125,7 +2137,7 @@ class BugGenerator3D {
         });
     }
 
-    createAntennae(scale) {
+    createAntennae(scale: number) {
         const group = new THREE.Group();
         group.name = 'antennae';
         const style = this.genome.antennaStyle || 'segmented';
@@ -2288,7 +2300,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createWeapon(weaponType, scale) {
+    createWeapon(weaponType: string, scale: number) {
         const group = new THREE.Group();
         group.name = 'weapon';
 
@@ -2459,7 +2471,7 @@ class BugGenerator3D {
                 );
 
                 // Custom radius function for tapering
-                const radiusFunc = (t) => (1.0 - t * 0.5) * scale;
+                const radiusFunc = (t: number) => (1.0 - t * 0.5) * scale;
 
                 // Main tail tube - continuous and connected (thinner)
                 const tailGeo = new THREE.TubeGeometry(tailCurve, 24, 0.5 * scale, 8, false);
@@ -2687,7 +2699,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createWings(scale) {
+    createWings(scale: number) {
         const group = new THREE.Group();
         group.name = 'wings';
         const wingType = this.genome.wingType || 'fly';
@@ -2754,7 +2766,7 @@ class BugGenerator3D {
         return group;
     }
 
-    createFlyWing(wingGroup, scale, side, clearMat, veinMat) {
+    createFlyWing(wingGroup: import('three').Group, scale: number, side: number, clearMat: import('three').Material, veinMat: import('three').Material) {
         // Rounded fly wing shape
         const shape = new THREE.Shape();
         shape.moveTo(0, 0);
@@ -2790,7 +2802,7 @@ class BugGenerator3D {
         wingGroup.rotation.y = side * 0.3;
     }
 
-    createBeetleWing(wingGroup, scale, side, elytraMat, clearMat, veinMat) {
+    createBeetleWing(wingGroup: import('three').Group, scale: number, side: number, elytraMat: import('three').Material, clearMat: import('three').Material, veinMat: import('three').Material) {
         // Hardened elytra (wing cover)
         const elytraShape = new THREE.Shape();
         elytraShape.moveTo(0, 0);
@@ -2827,7 +2839,7 @@ class BugGenerator3D {
         wingGroup.rotation.y = side * 0.2;
     }
 
-    createDragonflyWing(wingGroup, scale, side, clearMat, veinMat) {
+    createDragonflyWing(wingGroup: import('three').Group, scale: number, side: number, clearMat: import('three').Material, veinMat: import('three').Material) {
         // Dragonfly: two pairs of long, narrow wings (fore and hind)
         for (let pair = 0; pair < 2; pair++) {
             const len = (pair === 0 ? 10 : 8) * scale; // Forewing longer
@@ -2878,7 +2890,26 @@ class BugGenerator3D {
 // ============================================
 
 class BugAnimator {
-    constructor(bugGroup) {
+    bug: import('three').Group;
+    time: number;
+    state: string;
+    stateTime: number;
+    speed: number;
+    isFlying: boolean;
+    isDiving: boolean;
+    grounded: boolean;
+    onWall: boolean;
+    isJumping: boolean;
+    jumpPhase: number;
+    vy: number;
+    weaponType: string;
+    deathPhase: string;
+    deathFallY: number;
+    deathRotation: number;
+    deathLanded: boolean;
+    groundedDeathTime: number;
+
+    constructor(bugGroup: import('three').Group) {
         this.bug = bugGroup;
         this.time = 0;
         this.state = 'idle';
@@ -2900,7 +2931,7 @@ class BugAnimator {
         this.groundedDeathTime = 0;
     }
 
-    update(deltaTime, state = 'idle', fighter = null) {
+    update(deltaTime: number, state = 'idle', fighter: FighterState | null = null) {
         this.time += deltaTime;
 
         if (state !== this.state) {
@@ -2988,7 +3019,7 @@ class BugAnimator {
             if (flyingAirborne) {
                 // Flying in air: legs hang down with slight dangle
                 const dangle = Math.sin(this.time * 3) * 0.05;
-                this.bug.userData.legs.children.forEach((leg) => {
+                this.bug.userData.legs.children.forEach((leg: any) => {
                     if (leg.userData.segments && leg.userData.segments.length > 0) {
                         const coxa = leg.userData.segments[0];
                         if (coxa && coxa.baseRotation) {
@@ -3014,7 +3045,7 @@ class BugAnimator {
                 const ascending = this.vy < 0;
                 const jumpIntensity = Math.min(1.5, Math.abs(this.vy) / 8);  // Higher max, more sensitive
 
-                this.bug.userData.legs.children.forEach((leg) => {
+                this.bug.userData.legs.children.forEach((leg: any) => {
                     if (leg.userData.segments && leg.userData.segments.length > 0) {
                         const side = leg.userData.side === 'left' ? -1 : 1;
 
@@ -3061,7 +3092,7 @@ class BugAnimator {
                 const legSpeed = 6 + speedFactor * 18;  // Much faster (was 3 + 12)
                 const legAmplitude = 0.15 + speedFactor * 0.7;  // Much bigger (was 0.05 + 0.4)
 
-                this.bug.userData.legs.children.forEach((leg) => {
+                this.bug.userData.legs.children.forEach((leg: any) => {
                     if (leg.userData.segments && leg.userData.segments.length > 0) {
                         const phase = leg.userData.phase || 0;
                         const side = leg.userData.side === 'left' ? -1 : 1;
@@ -3562,7 +3593,7 @@ class BugAnimator {
         // Legs buckle
         if (this.bug.userData.legs) {
             const buckle = Math.exp(-t * 0.3) * 0.3;
-            this.bug.userData.legs.children.forEach(leg => {
+            this.bug.userData.legs.children.forEach((leg: any) => {
                 if (leg.userData.segments && leg.userData.segments.length > 1) {
                     // Femur buckles inward
                     const femur = leg.userData.segments[1];
@@ -3634,10 +3665,10 @@ class BugAnimator {
         }
     }
 
-    animateJumpLegs(t, phase) {
+    animateJumpLegs(t: number, phase: string) {
         if (!this.bug.userData.legs) return;
 
-        this.bug.userData.legs.children.forEach((leg) => {
+        this.bug.userData.legs.children.forEach((leg: any) => {
             if (leg.userData.segments && leg.userData.segments.length > 0) {
                 const side = leg.userData.side === 'left' ? -1 : 1;
                 const coxa = leg.userData.segments[0];
@@ -3811,10 +3842,10 @@ class BugAnimator {
         }
     }
 
-    animateDeathLegs(progress, twitch = 0) {
+    animateDeathLegs(progress: number, twitch = 0) {
         if (!this.bug.userData.legs) return;
 
-        this.bug.userData.legs.children.forEach(leg => {
+        this.bug.userData.legs.children.forEach((leg: any) => {
             if (leg.userData.segments && leg.userData.segments.length > 0) {
                 const side = leg.userData.side === 'left' ? -1 : 1;
                 const legIndex = leg.userData.index || 0;
@@ -3823,7 +3854,7 @@ class BugAnimator {
                 const legDelay = legIndex * 0.1;
                 const legProgress = Math.max(0, Math.min(1, (progress - legDelay) / (1 - legDelay)));
 
-                leg.userData.segments.forEach((seg, i) => {
+                leg.userData.segments.forEach((seg: any, i: number) => {
                     if (seg && seg.baseRotation) {
                         // Curl inward and up (since bug will be upside down)
                         const curlAmount = legProgress * (0.4 + i * 0.15);
@@ -3884,13 +3915,13 @@ class BugAnimator {
 
         // Legs do a little victory dance
         if (this.bug.userData.legs) {
-            this.bug.userData.legs.children.forEach((leg, index) => {
+            this.bug.userData.legs.children.forEach((leg: any, index: number) => {
                 if (leg.userData.segments && leg.userData.segments.length > 0) {
                     const phase = leg.userData.phase || (index * 0.3);
                     const side = leg.userData.side === 'left' ? -1 : 1;
 
                     // All segments do a celebratory wave
-                    leg.userData.segments.forEach((seg, i) => {
+                    leg.userData.segments.forEach((seg: any, i: number) => {
                         if (seg && seg.baseRotation) {
                             const segPhase = phase + i * 0.2;
                             seg.pivot.rotation.x = seg.baseRotation.x + Math.sin(t * 4 + segPhase) * 0.15;

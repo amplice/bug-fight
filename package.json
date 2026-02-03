@@ -2,12 +2,23 @@
   "name": "bugfights",
   "version": "0.3.0-alpha",
   "description": "24/7 Bug Fighting Simulation",
-  "main": "server/index.js",
+  "main": "server/dist/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "tsc -p tsconfig.client.json",
+    "build": "npm run build:server && npm run build:client",
+    "dev": "tsx server/index.ts",
+    "start": "node server/dist/index.js",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "dependencies": {
     "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "@types/three": "^0.182.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }

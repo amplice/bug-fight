@@ -2,10 +2,94 @@
 // Three.js based shape rendering
 
 // ============================================
+// THREE.JS TYPE ALIASES (inline imports)
+// Aliases shared with rosterViewer.ts (ThreeScene, ThreePerspectiveCamera,
+// ThreeGroup, ThreeWebGLRenderer, ThreeObject3D, ThreeMesh) are declared there.
+// Only declare the additional aliases needed by this file.
+// ============================================
+
+type ThreeOrbitControls = import('three/examples/jsm/controls/OrbitControls').OrbitControls;
+type ThreeMaterial = import('three').Material;
+type ThreeMeshBasicMaterial = import('three').MeshBasicMaterial;
+type ThreeMeshStandardMaterial = import('three').MeshStandardMaterial;
+type ThreeSprite = import('three').Sprite;
+
+// ============================================
+// INTERNAL INTERFACES
+// ============================================
+
+interface Vec3 {
+    x: number;
+    y: number;
+    z: number;
+}
+
+interface CameraPreset {
+    position: Vec3;
+    target: Vec3;
+}
+
+interface ActionCameraState {
+    enabled: boolean;
+    currentPos: Vec3;
+    currentTarget: Vec3;
+    smoothing: number;
+    minDistance: number;
+    maxDistance: number;
+    heightOffset: number;
+    behindOffset: number;
+}
+
+interface DeathFallState {
+    active: boolean;
+    startY: number;
+    currentY: number;
+    velocityY: number;
+    landed: boolean;
+    lastAliveY: number;
+    lastAliveX: number;
+    lastAliveZ: number;
+}
+
+interface HitParticle {
+    mesh: ThreeMesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    life: number;
+    decay: number;
+    isSpark: boolean;
+}
+
+interface DamageNumber {
+    sprite: ThreeSprite;
+    vy: number;
+    life: number;
+    decay: number;
+}
+
+interface MotionTrail {
+    mesh: ThreeMesh;
+    life: number;
+    decay: number;
+}
+
+interface ScreenShakeState {
+    intensity: number;
+}
+
+interface WallSet {
+    left: ThreeMesh | null;
+    right: ThreeMesh | null;
+    front: ThreeMesh | null;
+    back: ThreeMesh | null;
+}
+
+// ============================================
 // CONSTANTS
 // ============================================
 
-const ARENA_3D = {
+const ARENA_3D: ArenaConfig = {
     width: 900,
     height: 400,
     depth: 600,
@@ -21,25 +105,28 @@ const ARENA_3D = {
 // STATE
 // ============================================
 
-let scene, camera, renderer, controls;
-let arena = {};
-let bugMeshes = [null, null];
-let bugAnimators = [null, null];
-let lastTime = performance.now();
-let walls = { left: null, right: null, front: null, back: null };
+let scene: ThreeScene;
+let camera: ThreePerspectiveCamera;
+let renderer: ThreeWebGLRenderer;
+let controls: ThreeOrbitControls;
+let arena: Record<string, unknown> = {};
+let bugMeshes: [ThreeGroup | null, ThreeGroup | null] = [null, null];
+let bugAnimators: [BugAnimator | null, BugAnimator | null] = [null, null];
+let lastTime: number = performance.now();
+let walls: WallSet = { left: null, right: null, front: null, back: null };
 
 // Camera presets
-const CAMERA_PRESETS = {
+const CAMERA_PRESETS: Record<string, CameraPreset> = {
     front: { position: { x: 0, y: 200, z: 800 }, target: { x: 0, y: 150, z: 0 } },
     side: { position: { x: 800, y: 200, z: 0 }, target: { x: 0, y: 150, z: 0 } },
     top: { position: { x: 0, y: 800, z: 100 }, target: { x: 0, y: 0, z: 0 } },
     isometric: { position: { x: 500, y: 400, z: 500 }, target: { x: 0, y: 100, z: 0 } },
 };
 
-let currentPreset = 'action';  // Default to action camera
+let currentPreset: string = 'action';  // Default to action camera
 
 // Action camera state
-let actionCamera = {
+let actionCamera: ActionCameraState = {
     enabled: true,
     currentPos: { x: 0, y: 300, z: 600 },
     currentTarget: { x: 0, y: 100, z: 0 },
@@ -49,36 +136,37 @@ let actionCamera = {
     heightOffset: 150,  // Camera height above midpoint
     behindOffset: 400,  // Base distance behind the action
 };
-let currentFightNumber = 0;
+let currentFightNumber: number = 0;
 
 // Effects
-let hitParticles = [];
-let damageNumbers = [];
-let screenShake = { intensity: 0 };
+let hitParticles: HitParticle[] = [];
+let damageNumbers: DamageNumber[] = [];
+let screenShake: ScreenShakeState = { intensity: 0 };
 
 // Motion trails for fast-moving bugs
-let motionTrails = [[], []];  // One trail array per bug
-const MAX_TRAIL_POINTS = 12;
-const TRAIL_SPAWN_SPEED = 5;  // Minimum speed to spawn trail
+let motionTrails: [MotionTrail[], MotionTrail[]] = [[], []];  // One trail array per bug
+const MAX_TRAIL_POINTS: number = 12;
+const TRAIL_SPAWN_SPEED: number = 5;  // Minimum speed to spawn trail
 
 // Fighter UI
-let fighterUI = [null, null];
+let fighterUI: [ThreeGroup | null, ThreeGroup | null] = [null, null];
 
 // Recursively dispose Three.js object and all children
-function disposeObject(obj) {
+function disposeObject(obj: ThreeObject3D | null): void {
     if (!obj) return;
     if (obj.children) {
         while (obj.children.length > 0) {
-            disposeObject(obj.children[0]);
-            obj.remove(obj.children[0]);
+            disposeObject(obj.children[0]!);
+            obj.remove(obj.children[0]!);
         }
     }
-    if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) {
-        if (Array.isArray(obj.material)) {
-            obj.material.forEach(m => m.dispose());
+    const mesh = obj as ThreeMesh;
+    if (mesh.geometry) mesh.geometry.dispose();
+    if (mesh.material) {
+        if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m: ThreeMaterial) => m.dispose());
         } else {
-            obj.material.dispose();
+            mesh.material.dispose();
         }
     }
 }
@@ -87,21 +175,21 @@ function disposeObject(obj) {
 // INITIALIZATION
 // ============================================
 
-function initThreeJS() {
+function initThreeJS(): void {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d1117);
 
     camera = new THREE.PerspectiveCamera(60, 900 / 600, 1, 5000);
     setCameraPreset('action');  // Default to action camera
 
-    const canvas = document.getElementById('arena3d');
+    const canvas = document.getElementById('arena3d') as HTMLCanvasElement;
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(900, 600);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls = new (THREE as any).OrbitControls(camera, renderer.domElement) as ThreeOrbitControls;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 200;
@@ -118,7 +206,7 @@ function initThreeJS() {
     console.log('Three.js initialized');
 }
 
-function setupLighting() {
+function setupLighting(): void {
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambient);
 
@@ -144,7 +232,7 @@ function setupLighting() {
     scene.add(groundLight);
 }
 
-function buildArena() {
+function buildArena(): void {
     // Floor
     const floorGeo = new THREE.PlaneGeometry(ARENA_3D.width, ARENA_3D.depth);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2218, roughness: 0.9, metalness: 0.1 });
@@ -156,9 +244,9 @@ function buildArena() {
 
     // Substrate particles
     const substrateGeo = new THREE.BufferGeometry();
-    const positions = [];
-    const colors = [];
-    const substrateColors = [0x4a3a28, 0x5a4a35, 0x3a2a18, 0x6a5a45];
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const substrateColors: number[] = [0x4a3a28, 0x5a4a35, 0x3a2a18, 0x6a5a45];
 
     for (let i = 0; i < 500; i++) {
         positions.push(
@@ -166,7 +254,7 @@ function buildArena() {
             Math.random() * 3,
             (Math.random() - 0.5) * ARENA_3D.depth * 0.95
         );
-        const c = new THREE.Color(substrateColors[Math.floor(Math.random() * 4)]);
+        const c = new THREE.Color(substrateColors[Math.floor(Math.random() * 4)]!);
         colors.push(c.r, c.g, c.b);
     }
 
@@ -176,7 +264,7 @@ function buildArena() {
     scene.add(new THREE.Points(substrateGeo, substrateMat));
 
     // Walls (transparent, with individual materials for climb highlighting)
-    const createWallMat = () => new THREE.MeshBasicMaterial({
+    const createWallMat = (): ThreeMeshBasicMaterial => new THREE.MeshBasicMaterial({
         color: 0x333333, transparent: true, opacity: 0.1, side: THREE.DoubleSide
     });
 
@@ -219,9 +307,9 @@ function buildArena() {
     addPlants();
 }
 
-function addRocks() {
+function addRocks(): void {
     const rockMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.9, metalness: 0.1 });
-    const numRocks = 3 + Math.floor(Math.random() * 3);
+    const numRocks: number = 3 + Math.floor(Math.random() * 3);
 
     for (let i = 0; i < numRocks; i++) {
         const rockGeo = new THREE.DodecahedronGeometry(15 + Math.random() * 25, 0);
@@ -239,14 +327,14 @@ function addRocks() {
     }
 }
 
-function addPlants() {
+function addPlants(): void {
     const stemMat = new THREE.MeshStandardMaterial({ color: 0x2d5a2d });
-    const numPlants = 4 + Math.floor(Math.random() * 4);
+    const numPlants: number = 4 + Math.floor(Math.random() * 4);
 
     for (let i = 0; i < numPlants; i++) {
-        const plantGroup = new THREE.Group();
-        const side = Math.random() < 0.5 ? -1 : 1;
-        const nearX = Math.random() < 0.5;
+        const plantGroup: ThreeGroup = new THREE.Group();
+        const side: number = Math.random() < 0.5 ? -1 : 1;
+        const nearX: boolean = Math.random() < 0.5;
 
         if (nearX) {
             plantGroup.position.set(
@@ -262,9 +350,9 @@ function addPlants() {
             );
         }
 
-        const numStems = 3 + Math.floor(Math.random() * 4);
+        const numStems: number = 3 + Math.floor(Math.random() * 4);
         for (let j = 0; j < numStems; j++) {
-            const height = 30 + Math.random() * 50;
+            const height: number = 30 + Math.random() * 50;
             const stemGeo = new THREE.CylinderGeometry(1, 2, height, 6);
             const stem = new THREE.Mesh(stemGeo, stemMat);
             stem.position.set((Math.random() - 0.5) * 10, height / 2, (Math.random() - 0.5) * 10);
@@ -281,14 +369,14 @@ function addPlants() {
 // CAMERA CONTROLS
 // ============================================
 
-function setCameraPreset(presetName) {
+function setCameraPreset(presetName: string): void {
     if (presetName === 'action') {
         currentPreset = 'action';
         actionCamera.enabled = true;
         return;
     }
 
-    const preset = CAMERA_PRESETS[presetName];
+    const preset: CameraPreset | undefined = CAMERA_PRESETS[presetName];
     if (!preset) return;
 
     currentPreset = presetName;
@@ -300,59 +388,59 @@ function setCameraPreset(presetName) {
     }
 }
 
-function updateActionCamera(state) {
+function updateActionCamera(state: GameState): void {
     if (!actionCamera.enabled || !state || !state.fighters || state.fighters.length < 2) {
         return;
     }
 
-    const f1 = state.fighters[0];
-    const f2 = state.fighters[1];
+    const f1: FighterState | undefined = state.fighters[0];
+    const f2: FighterState | undefined = state.fighters[1];
 
     if (!f1 || !f2) return;
 
     // Get 3D positions
-    const pos1 = { x: f1.x, y: f1.y, z: f1.z || 0 };
-    const pos2 = { x: f2.x, y: f2.y, z: f2.z || 0 };
+    const pos1: Vec3 = { x: f1.x, y: f1.y, z: f1.z || 0 };
+    const pos2: Vec3 = { x: f2.x, y: f2.y, z: f2.z || 0 };
 
     // Calculate midpoint between bugs
-    const midX = (pos1.x + pos2.x) / 2;
-    const midY = (pos1.y + pos2.y) / 2;
-    const midZ = (pos1.z + pos2.z) / 2;
+    const midX: number = (pos1.x + pos2.x) / 2;
+    const midY: number = (pos1.y + pos2.y) / 2;
+    const midZ: number = (pos1.z + pos2.z) / 2;
 
     // Calculate distance between bugs for zoom
-    const dx = pos2.x - pos1.x;
-    const dy = pos2.y - pos1.y;
-    const dz = pos2.z - pos1.z;
-    const bugDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const dx: number = pos2.x - pos1.x;
+    const dy: number = pos2.y - pos1.y;
+    const dz: number = pos2.z - pos1.z;
+    const bugDistance: number = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
     // Calculate camera distance based on bug separation
     // Closer bugs = closer camera, further bugs = further camera
-    const zoomFactor = Math.max(actionCamera.minDistance,
+    const zoomFactor: number = Math.max(actionCamera.minDistance,
                                 Math.min(actionCamera.maxDistance,
                                          bugDistance * 1.2 + 200));
 
     // Calculate camera angle - orbit around the action
     // Use midpoint position to determine viewing angle
-    const angleFromCenter = Math.atan2(midX, midZ);
+    const angleFromCenter: number = Math.atan2(midX, midZ);
 
     // Position camera to see both bugs well
     // Offset perpendicular to the line between bugs for better view
-    const perpAngle = Math.atan2(dx, dz) + Math.PI / 2;
+    const perpAngle: number = Math.atan2(dx, dz) + Math.PI / 2;
 
     // Target position - looking at the midpoint, slightly above
-    const targetX = midX;
-    const targetY = Math.max(80, midY);
-    const targetZ = midZ;
+    const targetX: number = midX;
+    const targetY: number = Math.max(80, midY);
+    const targetZ: number = midZ;
 
     // Camera position - behind and above the action
     // Mix between perpendicular view and front view for dynamic feel
-    const cameraAngle = perpAngle * 0.6 + angleFromCenter * 0.4;
-    const idealX = midX + Math.sin(cameraAngle) * zoomFactor;
-    const idealY = targetY + actionCamera.heightOffset + (bugDistance * 0.15);
-    const idealZ = midZ + Math.cos(cameraAngle) * zoomFactor;
+    const cameraAngle: number = perpAngle * 0.6 + angleFromCenter * 0.4;
+    const idealX: number = midX + Math.sin(cameraAngle) * zoomFactor;
+    const idealY: number = targetY + actionCamera.heightOffset + (bugDistance * 0.15);
+    const idealZ: number = midZ + Math.cos(cameraAngle) * zoomFactor;
 
     // Smooth interpolation
-    const smoothing = actionCamera.smoothing;
+    const smoothing: number = actionCamera.smoothing;
     actionCamera.currentPos.x += (idealX - actionCamera.currentPos.x) * smoothing;
     actionCamera.currentPos.y += (idealY - actionCamera.currentPos.y) * smoothing;
     actionCamera.currentPos.z += (idealZ - actionCamera.currentPos.z) * smoothing;
@@ -377,7 +465,7 @@ function updateActionCamera(state) {
     }
 }
 
-function onKeyDown(event) {
+function onKeyDown(event: KeyboardEvent): void {
     switch (event.key) {
         case '1': setCameraPreset('front'); break;
         case '2': setCameraPreset('side'); break;
@@ -388,18 +476,18 @@ function onKeyDown(event) {
         case 'm': case 'M':
             if (window.BugFightsSound) {
                 window.BugFightsSound.init();
-                const muted = window.BugFightsSound.toggleMute();
-                const btn = document.getElementById('sound-toggle');
+                const muted: boolean = window.BugFightsSound.toggleMute();
+                const btn: HTMLElement | null = document.getElementById('sound-toggle');
                 if (btn) btn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
             }
             break;
     }
 }
 
-function onWindowResize() {
-    const container = document.getElementById('arena3d');
-    const width = container.clientWidth || 900;
-    const height = container.clientHeight || 600;
+function onWindowResize(): void {
+    const container: HTMLElement | null = document.getElementById('arena3d');
+    const width: number = container?.clientWidth || 900;
+    const height: number = container?.clientHeight || 600;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
@@ -409,10 +497,10 @@ function onWindowResize() {
 // BUG RENDERING
 // ============================================
 
-function createBug(bugData, index) {
+function createBug(bugData: GenomeData, _index?: number): ThreeGroup {
     const genome = new BugGenome(bugData);
     const generator = new BugGenerator3D(genome);
-    const bugGroup = generator.generate();
+    const bugGroup: ThreeGroup = generator.generate();
 
     // Scale down for arena
     bugGroup.scale.setScalar(2.5);
@@ -420,31 +508,31 @@ function createBug(bugData, index) {
     return bugGroup;
 }
 
-function updateBugs(state, deltaTime) {
+function updateBugs(state: GameState, deltaTime: number): void {
     if (!state.fighters || state.fighters.length < 2) return;
     if (!state.bugs || state.bugs.length < 2) return;
 
     // Reset wall highlighting
-    Object.values(walls).forEach(wall => {
+    (Object.values(walls) as Array<ThreeMesh | null>).forEach((wall: ThreeMesh | null) => {
         if (wall && wall.material) {
-            wall.material.color.setHex(0x333333);
-            wall.material.opacity = 0.1;
+            (wall.material as ThreeMeshBasicMaterial).color.setHex(0x333333);
+            (wall.material as ThreeMeshBasicMaterial).opacity = 0.1;
         }
     });
 
     // Highlight walls being climbed
-    state.fighters.forEach(fighter => {
+    state.fighters.forEach((fighter: FighterState) => {
         if (fighter.onWall && fighter.wallSide && walls[fighter.wallSide]) {
-            const wall = walls[fighter.wallSide];
-            wall.material.color.setHex(0x44ff88);  // Green tint
-            wall.material.opacity = 0.2;
+            const wall: ThreeMesh = walls[fighter.wallSide]!;
+            (wall.material as ThreeMeshBasicMaterial).color.setHex(0x44ff88);  // Green tint
+            (wall.material as ThreeMeshBasicMaterial).opacity = 0.2;
         }
     });
 
     // Check for new fight
     if (state.fightNumber !== currentFightNumber) {
         // Clear old bugs - dispose GPU resources
-        bugMeshes.forEach(mesh => {
+        bugMeshes.forEach((mesh: ThreeGroup | null) => {
             if (mesh) {
                 scene.remove(mesh);
                 disposeObject(mesh);
@@ -454,7 +542,7 @@ function updateBugs(state, deltaTime) {
         bugAnimators = [null, null];
 
         // Clear UI - dispose GPU resources
-        fighterUI.forEach(ui => {
+        fighterUI.forEach((ui: ThreeGroup | null) => {
             if (ui) {
                 scene.remove(ui);
                 disposeObject(ui);
@@ -463,51 +551,53 @@ function updateBugs(state, deltaTime) {
         fighterUI = [null, null];
 
         // Clear motion trails - dispose GPU resources
-        motionTrails.forEach((trail, index) => {
-            trail.forEach(t => {
+        motionTrails.forEach((trail: MotionTrail[], index: number) => {
+            trail.forEach((t: MotionTrail) => {
                 scene.remove(t.mesh);
                 disposeObject(t.mesh);
             });
-            motionTrails[index] = [];
+            motionTrails[index as 0 | 1] = [];
         });
 
         // Clear lingering particles and damage numbers
-        hitParticles.forEach(p => {
+        hitParticles.forEach((p: HitParticle) => {
             scene.remove(p.mesh);
             disposeObject(p.mesh);
         });
         hitParticles = [];
-        damageNumbers.forEach(d => {
-            scene.remove(d.mesh);
-            disposeObject(d.mesh);
+        damageNumbers.forEach((d: DamageNumber) => {
+            scene.remove(d.sprite);
+            disposeObject(d.sprite);
         });
         damageNumbers = [];
 
         currentFightNumber = state.fightNumber;
     }
 
-    state.fighters.forEach((fighter, index) => {
+    state.fighters.forEach((fighter: FighterState, index: number) => {
         // Create bug if needed
-        if (!bugMeshes[index]) {
-            bugMeshes[index] = createBug(state.bugs[index], index);
-            bugAnimators[index] = new BugAnimator(bugMeshes[index]);
-            scene.add(bugMeshes[index]);
+        if (!bugMeshes[index as 0 | 1]) {
+            const bugData: GenomeData | undefined = state.bugs[index];
+            if (!bugData) return;
+            bugMeshes[index as 0 | 1] = createBug(bugData, index);
+            bugAnimators[index as 0 | 1] = new BugAnimator(bugMeshes[index as 0 | 1]!);
+            scene.add(bugMeshes[index as 0 | 1]!);
         }
 
-        const bug = bugMeshes[index];
-        const animator = bugAnimators[index];
+        const bug: ThreeGroup = bugMeshes[index as 0 | 1]!;
+        const animator: BugAnimator = bugAnimators[index as 0 | 1]!;
 
         // Position from server
-        const pos3d = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
+        const pos3d: Vec3 = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
 
         // Death/Victory fall handling - bugs fall to ground client-side
-        const isDead = fighter.state === 'death';
-        const isVictory = fighter.state === 'victory';
-        const floorY = 20;  // Floor level in 3D coordinates
+        const isDead: boolean = fighter.state === 'death';
+        const isVictory: boolean = fighter.state === 'victory';
+        const floorY: number = 20;  // Floor level in 3D coordinates
 
         // Initialize death fall tracking
-        if (!bug.userData.deathFall) {
-            bug.userData.deathFall = {
+        if (!bug.userData['deathFall']) {
+            bug.userData['deathFall'] = {
                 active: false,
                 startY: 0,
                 currentY: 0,
@@ -516,120 +606,122 @@ function updateBugs(state, deltaTime) {
                 lastAliveY: pos3d.y,  // Track position before death
                 lastAliveX: pos3d.x,
                 lastAliveZ: pos3d.z
-            };
+            } as DeathFallState;
         }
+
+        const deathFall: DeathFallState = bug.userData['deathFall'] as DeathFallState;
 
         // Track position while alive (save last known airborne position)
         if (!isDead && !isVictory) {
-            bug.userData.deathFall.lastAliveY = pos3d.y;
-            bug.userData.deathFall.lastAliveX = pos3d.x;
-            bug.userData.deathFall.lastAliveZ = pos3d.z;
-            bug.userData.deathFall.active = false;
-            bug.userData.deathFall.landed = false;
+            deathFall.lastAliveY = pos3d.y;
+            deathFall.lastAliveX = pos3d.x;
+            deathFall.lastAliveZ = pos3d.z;
+            deathFall.active = false;
+            deathFall.landed = false;
         }
 
         // Victory bugs stay where they are (no fall, no teleport)
-        if (isVictory && !bug.userData.deathFall.active) {
-            bug.userData.deathFall.active = true;
-            bug.userData.deathFall.landed = true;  // Don't fall, just stay
-            console.log(`Bug ${index} victory - staying at Y=${bug.userData.deathFall.lastAliveY.toFixed(1)}`);
+        if (isVictory && !deathFall.active) {
+            deathFall.active = true;
+            deathFall.landed = true;  // Don't fall, just stay
+            console.log(`Bug ${index} victory - staying at Y=${deathFall.lastAliveY.toFixed(1)}`);
         }
 
         // Dead bugs fall to ground using LAST ALIVE position (not current server position)
-        if (isDead && !bug.userData.deathFall.active) {
-            const startY = bug.userData.deathFall.lastAliveY;
+        if (isDead && !deathFall.active) {
+            const startY: number = deathFall.lastAliveY;
             // Only fall if we were above ground
             if (startY > floorY + 5) {
-                bug.userData.deathFall.active = true;
-                bug.userData.deathFall.startY = startY;
-                bug.userData.deathFall.currentY = startY;
-                bug.userData.deathFall.velocityY = 0;
-                bug.userData.deathFall.landed = false;
+                deathFall.active = true;
+                deathFall.startY = startY;
+                deathFall.currentY = startY;
+                deathFall.velocityY = 0;
+                deathFall.landed = false;
                 console.log(`Bug ${index} death fall starting from Y=${startY.toFixed(1)}`);
             } else {
                 // Already on ground, mark as landed immediately
-                bug.userData.deathFall.active = true;
-                bug.userData.deathFall.landed = true;
+                deathFall.active = true;
+                deathFall.landed = true;
             }
         }
 
         // Animate the fall (dead bugs only)
-        if (isDead && bug.userData.deathFall.active && !bug.userData.deathFall.landed) {
+        if (isDead && deathFall.active && !deathFall.landed) {
             // Apply gravity
-            bug.userData.deathFall.velocityY -= 0.8;  // Gravity (negative because Y+ is up in 3D)
-            bug.userData.deathFall.currentY += bug.userData.deathFall.velocityY;
+            deathFall.velocityY -= 0.8;  // Gravity (negative because Y+ is up in 3D)
+            deathFall.currentY += deathFall.velocityY;
 
             // Check for floor collision
-            if (bug.userData.deathFall.currentY <= floorY) {
-                bug.userData.deathFall.currentY = floorY;
+            if (deathFall.currentY <= floorY) {
+                deathFall.currentY = floorY;
                 // Small bounce
-                if (Math.abs(bug.userData.deathFall.velocityY) > 3) {
-                    bug.userData.deathFall.velocityY = -bug.userData.deathFall.velocityY * 0.3;
+                if (Math.abs(deathFall.velocityY) > 3) {
+                    deathFall.velocityY = -deathFall.velocityY * 0.3;
                 } else {
-                    bug.userData.deathFall.velocityY = 0;
-                    bug.userData.deathFall.landed = true;
+                    deathFall.velocityY = 0;
+                    deathFall.landed = true;
                     console.log(`Bug ${index} landed on floor`);
                 }
             }
 
             // Use saved X/Z position (where bug was when it died) and falling Y
-            const fallX = bug.userData.deathFall.lastAliveX;
-            const fallZ = bug.userData.deathFall.lastAliveZ;
-            bug.position.set(fallX, bug.userData.deathFall.currentY, fallZ);
-        } else if (bug.userData.deathFall.active && bug.userData.deathFall.landed) {
+            const fallX: number = deathFall.lastAliveX;
+            const fallZ: number = deathFall.lastAliveZ;
+            bug.position.set(fallX, deathFall.currentY, fallZ);
+        } else if (deathFall.active && deathFall.landed) {
             // Dead: stay on floor, Victory: stay at last position
-            const fallX = bug.userData.deathFall.lastAliveX;
-            const fallZ = bug.userData.deathFall.lastAliveZ;
-            const stayY = isDead ? floorY : bug.userData.deathFall.lastAliveY;
+            const fallX: number = deathFall.lastAliveX;
+            const fallZ: number = deathFall.lastAliveZ;
+            const stayY: number = isDead ? floorY : deathFall.lastAliveY;
             bug.position.set(fallX, stayY, fallZ);
         } else {
             // Normal positioning - clamp Y to stay within arena bounds
-            const clampedY = Math.min(pos3d.y, ARENA_3D.maxY - 20);  // Keep below ceiling with small margin
+            const clampedY: number = Math.min(pos3d.y, ARENA_3D.maxY - 20);  // Keep below ceiling with small margin
             bug.position.set(pos3d.x, clampedY, pos3d.z);
         }
 
         // === ROTATION TO FACE OPPONENT ===
-        const vx = fighter.vx || 0;
-        const vy = fighter.vy || 0;
-        const vz = fighter.vz || 0;
-        const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        const vx: number = fighter.vx || 0;
+        const vy: number = fighter.vy || 0;
+        const vz: number = fighter.vz || 0;
+        const speed: number = Math.sqrt(vx * vx + vy * vy + vz * vz);
 
         // Use facingAngle from server (angle toward opponent in XZ plane)
         // Server: atan2(dx, dz) where 0 = +Z direction, PI/2 = +X direction
         // Three.js: rotation.y of 0 = facing +Z (bug's head is at +Z in local space)
         // These match! No adjustment needed.
-        let baseRotY = fighter.facingAngle !== undefined
+        let baseRotY: number = fighter.facingAngle !== undefined
             ? fighter.facingAngle
             : (fighter.facingRight ? Math.PI / 2 : -Math.PI / 2);
 
         // Banking (roll) based on lateral velocity - lean into turns (reduced)
-        const maxBank = Math.PI / 8;  // 22.5 degrees max (was 30)
-        const bankAmount = clamp3D(-vz * 0.05, -maxBank, maxBank);
+        const maxBank: number = Math.PI / 8;  // 22.5 degrees max (was 30)
+        const bankAmount: number = clamp3D(-vz * 0.05, -maxBank, maxBank);
 
         // Pitch based on vertical velocity - tilt up/down when climbing/diving (reduced)
-        const maxPitch = Math.PI / 6;  // 30 degrees max (was 36)
-        const pitchAmount = clamp3D(vy * 0.05, -maxPitch, maxPitch);
+        const maxPitch: number = Math.PI / 6;  // 30 degrees max (was 36)
+        const pitchAmount: number = clamp3D(vy * 0.05, -maxPitch, maxPitch);
 
         // Apply rotations with smoothing (skip if on wall or dead - they have special handling)
         if (!fighter.onWall && !isDead) {
-            const smoothFactor = 0.12;
-            bug.userData.targetRotX = bug.userData.targetRotX || 0;
-            bug.userData.targetRotY = bug.userData.targetRotY || baseRotY;
-            bug.userData.targetRotZ = bug.userData.targetRotZ || 0;
+            const smoothFactor: number = 0.12;
+            bug.userData['targetRotX'] = bug.userData['targetRotX'] as number || 0;
+            bug.userData['targetRotY'] = bug.userData['targetRotY'] as number || baseRotY;
+            bug.userData['targetRotZ'] = bug.userData['targetRotZ'] as number || 0;
 
-            bug.userData.targetRotX = pitchAmount;
-            bug.userData.targetRotY = baseRotY;
-            bug.userData.targetRotZ = bankAmount;
+            bug.userData['targetRotX'] = pitchAmount;
+            bug.userData['targetRotY'] = baseRotY;
+            bug.userData['targetRotZ'] = bankAmount;
 
-            bug.rotation.x += (bug.userData.targetRotX - bug.rotation.x) * smoothFactor;
-            bug.rotation.y += (bug.userData.targetRotY - bug.rotation.y) * smoothFactor;
-            bug.rotation.z += (bug.userData.targetRotZ - bug.rotation.z) * smoothFactor;
+            bug.rotation.x += ((bug.userData['targetRotX'] as number) - bug.rotation.x) * smoothFactor;
+            bug.rotation.y += ((bug.userData['targetRotY'] as number) - bug.rotation.y) * smoothFactor;
+            bug.rotation.z += ((bug.userData['targetRotZ'] as number) - bug.rotation.z) * smoothFactor;
 
             // Additional visual effects for flying bugs (not dead/victory)
             if (fighter.isFlying && !isDead && !isVictory) {
                 // Hovering bob when slow
                 if (speed < 3) {
-                    const bob = Math.sin(performance.now() / 200) * 3;
+                    const bob: number = Math.sin(performance.now() / 200) * 3;
                     bug.position.y += bob;
                 }
 
@@ -673,7 +765,7 @@ function updateBugs(state, deltaTime) {
             const targetProj = headTarget.clone().sub(feetTarget.clone().multiplyScalar(headTarget.dot(feetTarget))).normalize();
 
             // Angle between them (rotation around feetTarget axis)
-            let angle = Math.acos(Math.max(-1, Math.min(1, headProj.dot(targetProj))));
+            let angle: number = Math.acos(Math.max(-1, Math.min(1, headProj.dot(targetProj))));
 
             // Determine sign using cross product
             const cross = new THREE.Vector3().crossVectors(headProj, targetProj);
@@ -687,7 +779,7 @@ function updateBugs(state, deltaTime) {
 
             // Push bug position toward wall so feet touch the surface
             // The bug's body center is offset from the wall, so push it closer
-            const wallOffset = 15;  // Distance to push toward wall
+            const wallOffset: number = 15;  // Distance to push toward wall
             if (fighter.wallSide === 'left') {
                 bug.position.x = ARENA_3D.minX + wallOffset;
             } else if (fighter.wallSide === 'right') {
@@ -701,9 +793,9 @@ function updateBugs(state, deltaTime) {
 
         // Animation - pass velocity for speed-based animations
         // Override grounded state for death/victory fall
-        const animFighter = { ...fighter };
-        if (bug.userData.deathFall.active) {
-            animFighter.grounded = bug.userData.deathFall.landed;
+        const animFighter: FighterState = { ...fighter };
+        if (deathFall.active) {
+            animFighter.grounded = deathFall.landed;
             // Override onWall too - dead bugs aren't on walls
             if (isDead || isVictory) {
                 animFighter.onWall = false;
@@ -713,33 +805,41 @@ function updateBugs(state, deltaTime) {
 
         // Flash effect (hit feedback)
         if (fighter.flashTimer > 0 && fighter.flashTimer % 2 === 0) {
-            bug.traverse(child => {
-                if (child.isMesh && child.material) {
-                    child.material.emissive = new THREE.Color(0xffffff);
-                    child.material.emissiveIntensity = 0.8;
+            bug.traverse((child: ThreeObject3D) => {
+                const m = child as ThreeMesh;
+                if (m.isMesh && m.material) {
+                    const mat = m.material as ThreeMeshStandardMaterial;
+                    mat.emissive = new THREE.Color(0xffffff);
+                    mat.emissiveIntensity = 0.8;
                 }
             });
         } else {
-            bug.traverse(child => {
-                if (child.isMesh && child.material && child.material.emissive) {
-                    child.material.emissive = new THREE.Color(0x000000);
-                    child.material.emissiveIntensity = 0;
+            bug.traverse((child: ThreeObject3D) => {
+                const m = child as ThreeMesh;
+                if (m.isMesh && m.material) {
+                    const mat = m.material as ThreeMeshStandardMaterial;
+                    if (mat.emissive) {
+                        mat.emissive = new THREE.Color(0x000000);
+                        mat.emissiveIntensity = 0;
+                    }
                 }
             });
         }
 
         // Aggression color tint
         if (fighter.drives) {
-            const aggression = fighter.drives.aggression || 0.5;
-            const caution = fighter.drives.caution || 0.5;
-            bug.traverse(child => {
-                if (child.isMesh && child.material && !child.userData.isEye) {
+            const aggression: number = fighter.drives.aggression || 0.5;
+            const caution: number = fighter.drives.caution || 0.5;
+            bug.traverse((child: ThreeObject3D) => {
+                const m = child as ThreeMesh;
+                if (m.isMesh && m.material && !m.userData['isEye']) {
                     // Subtle color shift based on drives
-                    const r = 0.1 * (aggression - 0.5);
-                    const b = 0.1 * (caution - 0.5);
-                    if (child.material.emissive) {
-                        child.material.emissive.setRGB(Math.max(0, r), 0, Math.max(0, b));
-                        child.material.emissiveIntensity = 0.2;
+                    const r: number = 0.1 * (aggression - 0.5);
+                    const b: number = 0.1 * (caution - 0.5);
+                    const mat = m.material as ThreeMeshStandardMaterial;
+                    if (mat.emissive) {
+                        mat.emissive.setRGB(Math.max(0, r), 0, Math.max(0, b));
+                        mat.emissiveIntensity = 0.2;
                     }
                 }
             });
@@ -751,7 +851,7 @@ function updateBugs(state, deltaTime) {
 }
 
 // Helper for clamping
-function clamp3D(value, min, max) {
+function clamp3D(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
 
@@ -759,29 +859,29 @@ function clamp3D(value, min, max) {
 // EFFECTS
 // ============================================
 
-function createHitParticles(x, y, z, color = 0xffff00, count = 8, isCrit = false) {
+function createHitParticles(x: number, y: number, z: number, color: number = 0xffff00, count: number = 8, isCrit: boolean = false): void {
     // Mix of spark shapes for more dynamic effect
     const sphereGeo = new THREE.SphereGeometry(2, 4, 4);
     const sparkGeo = new THREE.ConeGeometry(1.5, 6, 4);  // Elongated sparks
 
     for (let i = 0; i < count; i++) {
         if (hitParticles.length >= 150) {
-            const old = hitParticles.shift();
-            scene.remove(old.mesh);
-            disposeObject(old.mesh);
+            const old: HitParticle | undefined = hitParticles.shift();
+            if (old) {
+                scene.remove(old.mesh);
+                disposeObject(old.mesh);
+            }
         }
 
         // Vary particle size - crits get bigger particles
-        const sizeScale = isCrit ? 1.5 + Math.random() * 0.5 : 0.8 + Math.random() * 0.6;
-        const useSpark = Math.random() > 0.4;  // 60% sparks, 40% spheres
+        const sizeScale: number = isCrit ? 1.5 + Math.random() * 0.5 : 0.8 + Math.random() * 0.6;
+        const useSpark: boolean = Math.random() > 0.4;  // 60% sparks, 40% spheres
 
         const geo = useSpark ? sparkGeo.clone() : sphereGeo.clone();
         const mat = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
             opacity: 1,
-            emissive: color,
-            emissiveIntensity: 0.5
         });
 
         const mesh = new THREE.Mesh(geo, mat);
@@ -789,25 +889,25 @@ function createHitParticles(x, y, z, color = 0xffff00, count = 8, isCrit = false
         mesh.scale.setScalar(sizeScale);
 
         // Faster, more explosive speed
-        const speed = (isCrit ? 8 : 5) + Math.random() * 6;
-        const angleXZ = Math.random() * Math.PI * 2;
-        const angleY = (Math.random() - 0.2) * Math.PI;  // Bias slightly upward
+        const speed: number = (isCrit ? 8 : 5) + Math.random() * 6;
+        const angleXZ: number = Math.random() * Math.PI * 2;
+        const angleY: number = (Math.random() - 0.2) * Math.PI;  // Bias slightly upward
 
-        const vx = Math.cos(angleXZ) * Math.cos(angleY) * speed;
-        const vy = Math.sin(angleY) * speed + 3;
-        const vz = Math.sin(angleXZ) * Math.cos(angleY) * speed;
+        const pvx: number = Math.cos(angleXZ) * Math.cos(angleY) * speed;
+        const pvy: number = Math.sin(angleY) * speed + 3;
+        const pvz: number = Math.sin(angleXZ) * Math.cos(angleY) * speed;
 
         // Orient spark in direction of travel
         if (useSpark) {
-            mesh.lookAt(x + vx, y + vy, z + vz);
+            mesh.lookAt(x + pvx, y + pvy, z + pvz);
             mesh.rotateX(Math.PI / 2);
         }
 
         hitParticles.push({
             mesh: mesh,
-            vx: vx,
-            vy: vy,
-            vz: vz,
+            vx: pvx,
+            vy: pvy,
+            vz: pvz,
             life: 1.0,
             decay: 0.04 + Math.random() * 0.02,  // Slightly faster decay
             isSpark: useSpark,
@@ -817,20 +917,22 @@ function createHitParticles(x, y, z, color = 0xffff00, count = 8, isCrit = false
     }
 }
 
-function createDamageNumber(x, y, z, damage, isCrit = false, isPoison = false) {
+function createDamageNumber(x: number, y: number, z: number, damage: number, isCrit: boolean = false, isPoison: boolean = false): void {
     if (damageNumbers.length >= 20) {
-        const old = damageNumbers.shift();
-        scene.remove(old.sprite);
-        disposeObject(old.sprite);
+        const old: DamageNumber | undefined = damageNumbers.shift();
+        if (old) {
+            scene.remove(old.sprite);
+            disposeObject(old.sprite);
+        }
     }
 
-    const canvas = document.createElement('canvas');
+    const canvas: HTMLCanvasElement = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 64;
-    const ctx = canvas.getContext('2d');
+    const ctx: CanvasRenderingContext2D = canvas.getContext('2d')!;
 
-    let color = '#fff';
-    let fontSize = 32;
+    let color: string = '#fff';
+    let fontSize: number = 32;
     if (isCrit) { color = '#ff0'; fontSize = 40; }
     else if (isPoison) { color = '#0f0'; fontSize = 28; }
 
@@ -859,7 +961,7 @@ function createDamageNumber(x, y, z, damage, isCrit = false, isPoison = false) {
     scene.add(sprite);
 }
 
-function createMotionTrail(x, y, z, color, index) {
+function createMotionTrail(x: number, y: number, z: number, color: number, index: number): void {
     // Create a small sphere for the trail point
     const trailGeo = new THREE.SphereGeometry(3, 4, 4);
     const trailMat = new THREE.MeshBasicMaterial({
@@ -870,7 +972,7 @@ function createMotionTrail(x, y, z, color, index) {
     const trailMesh = new THREE.Mesh(trailGeo, trailMat);
     trailMesh.position.set(x, y, z);
 
-    motionTrails[index].push({
+    motionTrails[index as 0 | 1].push({
         mesh: trailMesh,
         life: 1.0,
         decay: 0.08,
@@ -879,28 +981,30 @@ function createMotionTrail(x, y, z, color, index) {
     scene.add(trailMesh);
 
     // Remove oldest if too many
-    if (motionTrails[index].length > MAX_TRAIL_POINTS) {
-        const old = motionTrails[index].shift();
-        scene.remove(old.mesh);
-        disposeObject(old.mesh);
+    if (motionTrails[index as 0 | 1].length > MAX_TRAIL_POINTS) {
+        const old: MotionTrail | undefined = motionTrails[index as 0 | 1].shift();
+        if (old) {
+            scene.remove(old.mesh);
+            disposeObject(old.mesh);
+        }
     }
 }
 
-function updateMotionTrails(state) {
+function updateMotionTrails(state: GameState): void {
     if (!state.fighters) return;
 
-    state.fighters.forEach((fighter, index) => {
-        const vx = fighter.vx || 0;
-        const vy = fighter.vy || 0;
-        const vz = fighter.vz || 0;
-        const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    state.fighters.forEach((fighter: FighterState, index: number) => {
+        const vx: number = fighter.vx || 0;
+        const vy: number = fighter.vy || 0;
+        const vz: number = fighter.vz || 0;
+        const speed: number = Math.sqrt(vx * vx + vy * vy + vz * vz);
 
         // Spawn trail point if moving fast enough
         if (speed > TRAIL_SPAWN_SPEED && fighter.state !== 'death') {
-            const pos3d = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
+            const pos3d: Vec3 = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
 
             // Color based on state
-            let trailColor = 0x888888;  // Default gray
+            let trailColor: number = 0x888888;  // Default gray
             if (fighter.isFlying && fighter.isDiving) {
                 trailColor = 0xff8800;  // Orange for diving
             } else if (fighter.isFlying) {
@@ -924,25 +1028,27 @@ function updateMotionTrails(state) {
         }
 
         // Update existing trail points
-        for (let i = motionTrails[index].length - 1; i >= 0; i--) {
-            const trail = motionTrails[index][i];
+        for (let i = motionTrails[index as 0 | 1].length - 1; i >= 0; i--) {
+            const trail: MotionTrail | undefined = motionTrails[index as 0 | 1][i];
+            if (!trail) continue;
             trail.life -= trail.decay;
-            trail.mesh.material.opacity = trail.life * 0.6;
+            (trail.mesh.material as ThreeMeshBasicMaterial).opacity = trail.life * 0.6;
             trail.mesh.scale.setScalar(trail.life);
 
             if (trail.life <= 0) {
                 scene.remove(trail.mesh);
                 disposeObject(trail.mesh);
-                motionTrails[index].splice(i, 1);
+                motionTrails[index as 0 | 1].splice(i, 1);
             }
         }
     });
 }
 
-function updateEffects() {
+function updateEffects(): void {
     // Update particles
     for (let i = hitParticles.length - 1; i >= 0; i--) {
-        const p = hitParticles[i];
+        const p: HitParticle | undefined = hitParticles[i];
+        if (!p) continue;
         p.mesh.position.x += p.vx;
         p.mesh.position.y += p.vy;
         p.mesh.position.z += p.vz;
@@ -950,11 +1056,11 @@ function updateEffects() {
         p.vx *= 0.98;  // Air resistance
         p.vz *= 0.98;
         p.life -= p.decay;
-        p.mesh.material.opacity = Math.pow(p.life, 0.5);  // Fade out more gradually at first
+        (p.mesh.material as ThreeMeshBasicMaterial).opacity = Math.pow(p.life, 0.5);  // Fade out more gradually at first
 
         // Sparks orient to direction of travel and shrink lengthwise
         if (p.isSpark) {
-            const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
+            const speed: number = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
             if (speed > 0.5) {
                 p.mesh.lookAt(
                     p.mesh.position.x + p.vx,
@@ -977,11 +1083,12 @@ function updateEffects() {
 
     // Update damage numbers
     for (let i = damageNumbers.length - 1; i >= 0; i--) {
-        const d = damageNumbers[i];
+        const d: DamageNumber | undefined = damageNumbers[i];
+        if (!d) continue;
         d.sprite.position.y += d.vy;
         d.vy *= 0.95;
         d.life -= d.decay;
-        d.sprite.material.opacity = d.life;
+        (d.sprite.material as import('three').SpriteMaterial).opacity = d.life;
 
         if (d.life <= 0) {
             scene.remove(d.sprite);
@@ -997,36 +1104,36 @@ function updateEffects() {
     }
 }
 
-function processEvents(events) {
+function processEvents(events: GameEvent[]): void {
     if (!events || events.length === 0) return;
 
-    events.forEach(event => {
+    events.forEach((event: GameEvent) => {
         // Sound engine handles all event types
         if (window.BugFightsSound) {
             window.BugFightsSound.handleEvent(event);
         }
 
         if (event.type === 'hit') {
-            const pos3d = { x: event.data.x, y: event.data.y, z: 0 };
-            const isCrit = event.data.isCrit;
-            const isPoison = event.data.isPoison;
+            const pos3d: Vec3 = { x: event.data.x, y: event.data.y, z: 0 };
+            const isCrit: boolean = !!event.data.isCrit;
+            const isPoison: boolean = !!event.data.isPoison;
 
             // Color by damage type - orange normal, yellow crit, green poison
-            const color = isPoison ? 0x00ff00 : isCrit ? 0xffff00 : 0xff6600;
+            const color: number = isPoison ? 0x00ff00 : isCrit ? 0xffff00 : 0xff6600;
 
             // More particles for bigger hits, even more for crits
-            const particleCount = isCrit ? 20 : 12;
+            const particleCount: number = isCrit ? 20 : 12;
             createHitParticles(pos3d.x, pos3d.y, pos3d.z, color, particleCount, isCrit);
             createDamageNumber(pos3d.x, pos3d.y, pos3d.z, event.data.damage, isCrit, isPoison);
 
             // Stronger screen shake - scales with damage
-            const damageShake = Math.min(event.data.damage / 10, 2);
-            const critBonus = isCrit ? 4 : 0;
+            const damageShake: number = Math.min(event.data.damage / 10, 2);
+            const critBonus: number = isCrit ? 4 : 0;
             screenShake.intensity = Math.min(15, screenShake.intensity + damageShake + critBonus + 2);
         }
 
         if (event.type === 'wallImpact') {
-            const pos3d = { x: event.data.x, y: event.data.y, z: 0 };
+            const pos3d: Vec3 = { x: event.data.x, y: event.data.y, z: 0 };
             createHitParticles(pos3d.x, pos3d.y, pos3d.z, 0x888888, 15, false);
             screenShake.intensity = Math.min(12, screenShake.intensity + event.data.stunApplied / 3);
         }
@@ -1040,8 +1147,8 @@ function processEvents(events) {
 // FIGHTER UI
 // ============================================
 
-function createFighterUI(index, name) {
-    const group = new THREE.Group();
+function createFighterUI(_index: number, name: string): ThreeGroup {
+    const group: ThreeGroup = new THREE.Group();
 
     // Health bar background
     const bgGeo = new THREE.PlaneGeometry(50, 6);
@@ -1057,10 +1164,10 @@ function createFighterUI(index, name) {
     group.add(fillMesh);
 
     // Name label
-    const canvas = document.createElement('canvas');
+    const canvas: HTMLCanvasElement = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 64;
-    const ctx = canvas.getContext('2d');
+    const ctx: CanvasRenderingContext2D = canvas.getContext('2d')!;
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1077,27 +1184,27 @@ function createFighterUI(index, name) {
     nameSprite.scale.set(60, 15, 1);
     group.add(nameSprite);
 
-    group.userData.fillMesh = fillMesh;
-    group.userData.fillMat = fillMat;
+    group.userData['fillMesh'] = fillMesh;
+    group.userData['fillMat'] = fillMat;
 
     return group;
 }
 
-function updateFighterUI(index, fighter, state) {
-    if (!fighterUI[index]) {
-        const name = state.bugNames ? state.bugNames[index] : `Fighter ${index + 1}`;
-        fighterUI[index] = createFighterUI(index, name);
-        scene.add(fighterUI[index]);
+function updateFighterUI(index: number, fighter: FighterState, state: GameState): void {
+    if (!fighterUI[index as 0 | 1]) {
+        const name: string = state.bugNames ? (state.bugNames[index] ?? `Fighter ${index + 1}`) : `Fighter ${index + 1}`;
+        fighterUI[index as 0 | 1] = createFighterUI(index, name);
+        scene.add(fighterUI[index as 0 | 1]!);
     }
 
-    const ui = fighterUI[index];
-    const pos3d = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
+    const ui: ThreeGroup = fighterUI[index as 0 | 1]!;
+    const pos3d: Vec3 = { x: fighter.x, y: fighter.y, z: fighter.z || 0 };
     ui.position.set(pos3d.x, pos3d.y + 50, pos3d.z);
     ui.lookAt(camera.position);
 
-    const hpPercent = fighter.hp / fighter.maxHp;
-    const fillMesh = ui.userData.fillMesh;
-    const fillMat = ui.userData.fillMat;
+    const hpPercent: number = fighter.hp / fighter.maxHp;
+    const fillMesh: ThreeMesh = ui.userData['fillMesh'] as ThreeMesh;
+    const fillMat: ThreeMeshBasicMaterial = ui.userData['fillMat'] as ThreeMeshBasicMaterial;
 
     fillMesh.scale.x = hpPercent;
     fillMesh.position.x = (1 - hpPercent) * -24;
@@ -1113,11 +1220,11 @@ function updateFighterUI(index, fighter, state) {
 // RENDER LOOP
 // ============================================
 
-function render3D(state) {
+function render3D(state: GameState): void {
     if (!renderer) return;
 
-    const now = performance.now();
-    const deltaTime = (now - lastTime) / 1000;
+    const now: number = performance.now();
+    const deltaTime: number = (now - lastTime) / 1000;
     lastTime = now;
 
     // Update action camera before controls
@@ -1132,7 +1239,7 @@ function render3D(state) {
 
     // Update sound engine (wing buzzes, ambient, phase changes)
     if (window.BugFightsSound) {
-        window.BugFightsSound.update(state);
+        window.BugFightsSound.update(state.fighters);
     }
 
     // Screen shake
@@ -1144,8 +1251,8 @@ function render3D(state) {
     renderer.render(scene, camera);
 }
 
-function gameLoop3D() {
-    const state = window.BugFightsClient.getState();
+function gameLoop3D(): void {
+    const state: GameState = window.BugFightsClient.getState();
     render3D(state);
     requestAnimationFrame(gameLoop3D);
 }
@@ -1154,12 +1261,12 @@ function gameLoop3D() {
 // INIT
 // ============================================
 
-function initRenderer3D() {
+function initRenderer3D(): void {
     initThreeJS();
     gameLoop3D();
 
     // Initialize sound engine on first user interaction (browser requirement)
-    const initSound = () => {
+    const initSound = (): void => {
         if (window.BugFightsSound) {
             window.BugFightsSound.init();
         }

@@ -5,14 +5,14 @@
 // CONNECTION
 // ============================================
 
-let ws = null;
+let ws: WebSocket | null = null;
 let connected = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY = 2000;
 
 // Game state received from server
-let gameState = {
+let gameState: GameState = {
     phase: 'countdown',
     countdown: 10,
     tick: 0,
@@ -20,49 +20,50 @@ let gameState = {
     fighters: [],
     bugs: [],
     bugNames: [],
-    odds: { fighter1: '1.00', fighter2: '1.00' },
+    bugRecords: [],
+    odds: { fighter1: '1.00', fighter2: '1.00', american1: 0, american2: 0, prob1: 50, prob2: 50 },
     events: [],
     winner: null,
 };
 
 // Local betting state
 let player = {
-    money: parseInt(localStorage.getItem('bugfights_money')) || 1000,
+    money: parseInt(localStorage.getItem('bugfights_money') || '1000') || 1000,
 };
-let currentBet = { amount: 0, on: null };
+let currentBet: { amount: number; on: number | null } = { amount: 0, on: null };
 let lastFightNumber = 0;
 
 // Odds format preference
-let oddsFormat = localStorage.getItem('bugfights_odds_format') || 'decimal';
+let oddsFormat: 'decimal' | 'american' = (localStorage.getItem('bugfights_odds_format') as 'decimal' | 'american') || 'decimal';
 
 // Callbacks for renderer
-let onStateUpdate = null;
-let onEvent = null;
+let onStateUpdate: ((state: GameState) => void) | null = null;
+let onEvent: ((event: GameEvent) => void) | null = null;
 
-function connect() {
+function connect(): void {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
     console.log('Connecting to', wsUrl);
     ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
+    ws.onopen = (): void => {
         console.log('Connected to server');
         connected = true;
         reconnectAttempts = 0;
         updateConnectionStatus(true);
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (event: MessageEvent): void => {
         try {
-            const data = JSON.parse(event.data);
+            const data: WSServerMessage = JSON.parse(event.data);
             handleMessage(data);
         } catch (e) {
             console.error('Failed to parse message:', e);
         }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (): void => {
         console.log('Disconnected from server');
         connected = false;
         updateConnectionStatus(false);
@@ -75,23 +76,23 @@ function connect() {
         }
     };
 
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+    ws.onerror = (): void => {
+        console.error('WebSocket error');
     };
 }
 
-function handleMessage(data) {
+function handleMessage(data: WSServerMessage): void {
     switch (data.type) {
         case 'init':
         case 'state':
             updateGameState(data.state);
             break;
         default:
-            console.log('Unknown message type:', data.type);
+            console.log('Unknown message type:', (data as { type: string }).type);
     }
 }
 
-function updateGameState(state) {
+function updateGameState(state: GameState): void {
     const previousPhase = gameState.phase;
     const previousFightNumber = gameState.fightNumber;
 
@@ -113,7 +114,7 @@ function updateGameState(state) {
     }
 }
 
-function processEvent(event) {
+function processEvent(event: GameEvent): void {
     switch (event.type) {
         case 'commentary':
             addCommentary(event.data, event.color);
@@ -132,13 +133,14 @@ function processEvent(event) {
 // BETTING
 // ============================================
 
-function placeBet(which) {
+function placeBet(which: number): boolean {
     if (gameState.phase !== 'countdown') {
         addCommentary("Betting closed!", '#f00');
         return false;
     }
 
-    const amount = parseInt(document.getElementById('bet-amount').value) || 0;
+    const betInput = document.getElementById('bet-amount') as HTMLInputElement | null;
+    const amount = parseInt(betInput?.value || '0') || 0;
     if (amount <= 0) {
         addCommentary("Enter a bet amount!", '#f00');
         return false;
@@ -168,13 +170,13 @@ function placeBet(which) {
     addCommentary(`Bet $${amount} on ${bugName}! (Total: $${currentBet.amount})`, '#0f0');
 
     // Update button states
-    document.getElementById('bet-fighter1').classList.toggle('selected', which === 1);
-    document.getElementById('bet-fighter2').classList.toggle('selected', which === 2);
+    document.getElementById('bet-fighter1')?.classList.toggle('selected', which === 1);
+    document.getElementById('bet-fighter2')?.classList.toggle('selected', which === 2);
 
     return true;
 }
 
-function resolveBet(winner) {
+function resolveBet(winner: number | null): void {
     if (currentBet.amount > 0) {
         if (currentBet.on === winner) {
             // Won!
@@ -198,13 +200,13 @@ function resolveBet(winner) {
     currentBet = { amount: 0, on: null };
 
     // Clear button states
-    document.getElementById('bet-fighter1').classList.remove('selected');
-    document.getElementById('bet-fighter2').classList.remove('selected');
+    document.getElementById('bet-fighter1')?.classList.remove('selected');
+    document.getElementById('bet-fighter2')?.classList.remove('selected');
 
     updateUI();
 }
 
-function saveMoney() {
+function saveMoney(): void {
     localStorage.setItem('bugfights_money', player.money.toString());
 }
 
@@ -212,62 +214,76 @@ function saveMoney() {
 // UI
 // ============================================
 
-let commentary = [];
+let commentary: CommentaryEntry[] = [];
 
-function addCommentary(text, color = '#fff') {
+function addCommentary(text: string, color: string = '#fff'): void {
     commentary.unshift({ text, color, age: 0 });
     if (commentary.length > 6) commentary.pop();
 }
 
-function updateUI() {
+function updateUI(): void {
     // Money
-    document.getElementById('money').textContent = player.money;
+    const moneyEl = document.getElementById('money');
+    if (moneyEl) moneyEl.textContent = String(player.money);
 
     // Current bet
-    if (currentBet.amount > 0) {
-        const name = currentBet.on === 1 ? gameState.bugNames[0] : gameState.bugNames[1];
-        document.getElementById('current-bet').textContent = `$${currentBet.amount} on ${name}`;
-    } else {
-        document.getElementById('current-bet').textContent = 'None';
+    const betEl = document.getElementById('current-bet');
+    if (betEl) {
+        if (currentBet.amount > 0) {
+            const name = currentBet.on === 1 ? gameState.bugNames[0] : gameState.bugNames[1];
+            betEl.textContent = `$${currentBet.amount} on ${name}`;
+        } else {
+            betEl.textContent = 'None';
+        }
     }
 
     // Countdown
     const countdownEl = document.getElementById('countdown-timer');
     const countdownDisplay = document.getElementById('countdown-display');
     if (gameState.phase === 'countdown') {
-        countdownDisplay.classList.remove('hidden');
-        countdownEl.textContent = gameState.countdown;
+        countdownDisplay?.classList.remove('hidden');
+        if (countdownEl) countdownEl.textContent = String(gameState.countdown);
     } else {
-        countdownDisplay.classList.add('hidden');
+        countdownDisplay?.classList.add('hidden');
     }
 
     // Fighter info
     if (gameState.bugNames.length >= 2) {
-        document.getElementById('fighter1-name').textContent = gameState.bugNames[0];
-        document.getElementById('fighter2-name').textContent = gameState.bugNames[1];
+        const f1Name = document.getElementById('fighter1-name');
+        const f2Name = document.getElementById('fighter2-name');
+        if (f1Name) f1Name.textContent = gameState.bugNames[0] ?? '';
+        if (f2Name) f2Name.textContent = gameState.bugNames[1] ?? '';
     }
 
     if (gameState.bugs.length >= 2) {
-        const bug1 = gameState.bugs[0];
-        const bug2 = gameState.bugs[1];
+        const bug1 = gameState.bugs[0]!;
+        const bug2 = gameState.bugs[1]!;
 
-        document.getElementById('fighter1-stats').innerHTML =
-            `BLK: ${bug1.bulk} | SPD: ${bug1.speed} | FRY: ${bug1.fury} | INS: ${bug1.instinct}`;
-        document.getElementById('fighter2-stats').innerHTML =
-            `BLK: ${bug2.bulk} | SPD: ${bug2.speed} | FRY: ${bug2.fury} | INS: ${bug2.instinct}`;
+        const f1Stats = document.getElementById('fighter1-stats');
+        const f2Stats = document.getElementById('fighter2-stats');
+        if (f1Stats) {
+            f1Stats.innerHTML = `BLK: ${bug1.bulk} | SPD: ${bug1.speed} | FRY: ${bug1.fury} | INS: ${bug1.instinct}`;
+        }
+        if (f2Stats) {
+            f2Stats.innerHTML = `BLK: ${bug2.bulk} | SPD: ${bug2.speed} | FRY: ${bug2.fury} | INS: ${bug2.instinct}`;
+        }
 
-        document.getElementById('fighter1-attrs').innerHTML = formatAttrs(bug1);
-        document.getElementById('fighter2-attrs').innerHTML = formatAttrs(bug2);
+        const f1Attrs = document.getElementById('fighter1-attrs');
+        const f2Attrs = document.getElementById('fighter2-attrs');
+        if (f1Attrs) f1Attrs.innerHTML = formatAttrs(bug1);
+        if (f2Attrs) f2Attrs.innerHTML = formatAttrs(bug2);
     }
 
     // Odds - display in selected format
     const odds = gameState.odds;
+    const odds1El = document.getElementById('odds1');
+    const odds2El = document.getElementById('odds2');
     if (oddsFormat === 'american') {
-        document.getElementById('odds1').textContent = odds.american1;
-        document.getElementById('odds2').textContent = odds.american2;
+        if (odds1El) odds1El.textContent = String(odds.american1);
+        if (odds2El) odds2El.textContent = String(odds.american2);
     } else {
-        document.getElementById('odds1').textContent = odds.fighter1 + 'x';
-        document.getElementById('odds2').textContent = odds.fighter2 + 'x';
+        if (odds1El) odds1El.textContent = odds.fighter1 + 'x';
+        if (odds2El) odds2El.textContent = odds.fighter2 + 'x';
     }
 
     // Update odds format button
@@ -284,14 +300,14 @@ function updateUI() {
     }
 }
 
-function formatAttrs(bug) {
+function formatAttrs(bug: GenomeData): string {
     return `<span class="weapon">${bug.weapon}</span> ` +
            `<span class="defense">${bug.defense}</span> ` +
            `<span class="mobility">${bug.mobility}</span>`;
 }
 
-function updateConnectionStatus(isConnected) {
-    const badge = document.querySelector('.live-badge');
+function updateConnectionStatus(isConnected: boolean): void {
+    const badge = document.querySelector('.live-badge') as HTMLElement | null;
     if (badge) {
         if (isConnected) {
             badge.textContent = 'LIVE 24/7';
@@ -309,21 +325,21 @@ function updateConnectionStatus(isConnected) {
 // INIT
 // ============================================
 
-function toggleOddsFormat() {
+function toggleOddsFormat(): void {
     oddsFormat = oddsFormat === 'decimal' ? 'american' : 'decimal';
     localStorage.setItem('bugfights_odds_format', oddsFormat);
     updateUI();
 }
 
-function initClient() {
+function initClient(): void {
     // Set up bet buttons
-    document.getElementById('bet-fighter1').addEventListener('click', () => placeBet(1));
-    document.getElementById('bet-fighter2').addEventListener('click', () => placeBet(2));
+    document.getElementById('bet-fighter1')?.addEventListener('click', () => placeBet(1));
+    document.getElementById('bet-fighter2')?.addEventListener('click', () => placeBet(2));
 
     // Set up odds format toggle
-    document.getElementById('odds-format-btn').addEventListener('click', toggleOddsFormat);
+    document.getElementById('odds-format-btn')?.addEventListener('click', toggleOddsFormat);
 
-    // Roster modal handled by Roster3DViewer in index.html
+    // Roster modal handled by Roster3DViewer in rosterViewer.ts
 
     // Visitor counter
     let visits = parseInt(localStorage.getItem('bugfights_visits') || '0');

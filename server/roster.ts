@@ -1,23 +1,25 @@
 // Bug Fights - Roster Manager
 // Manages persistent bug roster with fight records
 
-const fs = require('fs');
-const path = require('path');
-const BugGenome = require('./BugGenome');
+import fs = require('fs');
+import path = require('path');
+import BugGenome = require('./BugGenome');
 
-const ROSTER_FILE = path.join(__dirname, '..', 'roster.json');
+const ROSTER_FILE = path.join(__dirname, '..', '..', 'roster.json');
 const ROSTER_SIZE = 20;
 
 class RosterManager {
+    bugs: RosterBug[];
+
     constructor() {
         this.bugs = [];
         this.load();
     }
 
-    load() {
+    load(): void {
         try {
             if (fs.existsSync(ROSTER_FILE)) {
-                const data = JSON.parse(fs.readFileSync(ROSTER_FILE, 'utf8'));
+                const data: RosterFile = JSON.parse(fs.readFileSync(ROSTER_FILE, 'utf8'));
                 this.bugs = data.bugs || [];
                 console.log(`Loaded roster with ${this.bugs.length} bugs`);
             } else {
@@ -34,26 +36,26 @@ class RosterManager {
         }
     }
 
-    save() {
+    save(): void {
         try {
-            const data = { bugs: this.bugs, savedAt: new Date().toISOString() };
+            const data: RosterFile = { bugs: this.bugs, savedAt: new Date().toISOString() };
             fs.writeFileSync(ROSTER_FILE, JSON.stringify(data, null, 2));
         } catch (err) {
             console.error('Error saving roster:', err);
         }
     }
 
-    generateRoster() {
+    generateRoster(): void {
         console.log('Generating new roster...');
         this.bugs = [];
 
         // Ensure variety by tracking what we've generated
-        const usedWeapons = new Set();
-        const usedDefenses = new Set();
-        const usedMobilities = new Set();
+        const usedWeapons = new Set<WeaponType>();
+        const usedDefenses = new Set<DefenseType>();
+        const usedMobilities = new Set<MobilityType>();
 
         for (let i = 0; i < ROSTER_SIZE; i++) {
-            let genome;
+            let genome: InstanceType<typeof BugGenome>;
             let attempts = 0;
 
             // Try to get variety in first few bugs
@@ -85,13 +87,13 @@ class RosterManager {
         console.log(`Generated roster with ${this.bugs.length} bugs`);
     }
 
-    generateId() {
+    generateId(): string {
         return Math.random().toString(36).substring(2, 11);
     }
 
-    addNewBug() {
+    addNewBug(): RosterBug {
         const genome = new BugGenome();
-        const bug = {
+        const bug: RosterBug = {
             id: this.generateId(),
             genome: genome.toJSON(),
             name: genome.getName(),
@@ -104,12 +106,12 @@ class RosterManager {
         return bug;
     }
 
-    getBug(id) {
+    getBug(id: string): RosterBug | undefined {
         return this.bugs.find(b => b.id === id);
     }
 
     // Select two different bugs for a fight
-    selectFighters() {
+    selectFighters(): [RosterBug, RosterBug] {
         if (this.bugs.length < 2) {
             throw new Error('Not enough bugs in roster');
         }
@@ -127,7 +129,7 @@ class RosterManager {
         let r = Math.random() * totalWeight;
         let fighter1Index = 0;
         for (let i = 0; i < weights.length; i++) {
-            r -= weights[i];
+            r -= weights[i]!;
             if (r <= 0) {
                 fighter1Index = i;
                 break;
@@ -135,22 +137,22 @@ class RosterManager {
         }
 
         // Select second fighter (different from first)
-        const remainingWeight = totalWeight - weights[fighter1Index];
+        const remainingWeight = totalWeight - weights[fighter1Index]!;
         r = Math.random() * remainingWeight;
         let fighter2Index = fighter1Index === 0 ? 1 : 0; // Default to first non-fighter1 index
         for (let i = 0; i < weights.length; i++) {
             if (i === fighter1Index) continue;
-            r -= weights[i];
+            r -= weights[i]!;
             if (r <= 0) {
                 fighter2Index = i;
                 break;
             }
         }
 
-        return [this.bugs[fighter1Index], this.bugs[fighter2Index]];
+        return [this.bugs[fighter1Index]!, this.bugs[fighter2Index]!];
     }
 
-    recordWin(bugId) {
+    recordWin(bugId: string): void {
         const bug = this.getBug(bugId);
         if (bug) {
             bug.wins++;
@@ -158,7 +160,7 @@ class RosterManager {
         }
     }
 
-    recordLoss(bugId) {
+    recordLoss(bugId: string): void {
         const bug = this.getBug(bugId);
         if (bug) {
             bug.losses++;
@@ -166,17 +168,26 @@ class RosterManager {
         }
     }
 
-    getRoster() {
+    getRoster(): RosterClientBug[] {
         return this.bugs.map(bug => ({
             id: bug.id,
             name: bug.name,
             genome: bug.genome,
+            stats: {
+                bulk: bug.genome.bulk,
+                speed: bug.genome.speed,
+                fury: bug.genome.fury,
+                instinct: bug.genome.instinct
+            },
+            weapon: bug.genome.weapon,
+            defense: bug.genome.defense,
+            mobility: bug.genome.mobility,
             wins: bug.wins,
             losses: bug.losses
         }));
     }
 
-    getRosterForClient() {
+    getRosterForClient(): RosterClientBug[] {
         return this.bugs.map(bug => ({
             id: bug.id,
             name: bug.name,
@@ -196,4 +207,4 @@ class RosterManager {
     }
 }
 
-module.exports = RosterManager;
+export = RosterManager;

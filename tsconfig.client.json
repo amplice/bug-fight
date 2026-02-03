@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "none",
+    "outDir": "public/js",
+    "rootDir": "src/client",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "src/client/*.ts",
+    "shared/types.d.ts",
+    "src/client/globals.d.ts"
+  ]
+}

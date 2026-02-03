@@ -1,8 +1,7 @@
 // Bug Fights - Bug Genome (Server Module)
 // Handles bug stats, traits, colors, and breeding
 
-// Realistic bug color palette
-const BUG_COLORS = [
+const BUG_COLORS: ReadonlyArray<{ hue: number; sat: number; light: number }> = [
     { hue: 0,   sat: 0,   light: 10 },  // jet black
     { hue: 0,   sat: 0,   light: 18 },  // charcoal
     { hue: 0,   sat: 0,   light: 29 },  // slate
@@ -23,32 +22,86 @@ const BUG_COLORS = [
     { hue: 60,  sat: 20,  light: 30 },  // olive
     { hue: 180, sat: 25,  light: 25 },  // teal
     { hue: 215, sat: 55,  light: 25 },  // navy
-];
+] as const;
+
+const WEAPONS = ['mandibles', 'stinger', 'fangs', 'pincers', 'horn'] as const;
+const DEFENSES = ['shell', 'none', 'toxic', 'camouflage'] as const;
+const MOBILITIES = ['ground', 'winged', 'wallcrawler'] as const;
+const WING_TYPES = ['fly', 'beetle', 'dragonfly'] as const;
+const TEXTURES = ['smooth', 'plated', 'rough', 'spotted', 'striped'] as const;
+const ABDOMEN_TYPES = ['round', 'oval', 'pointed', 'bulbous', 'segmented', 'sac', 'plated', 'tailed'] as const;
+const THORAX_TYPES = ['compact', 'elongated', 'wide', 'humped', 'segmented'] as const;
+const HEAD_TYPES = ['round', 'triangular', 'square', 'elongated', 'shield'] as const;
+const LEG_COUNTS = [4, 6, 8] as const;
+const LEG_STYLES = ['insect', 'spider', 'mantis', 'grasshopper', 'beetle', 'stick', 'centipede'] as const;
+const EYE_STYLES = ['compound', 'simple', 'stalked', 'multiple', 'sunken'] as const;
+const ANTENNA_STYLES = ['segmented', 'clubbed', 'whip', 'horned', 'none', 'nubs'] as const;
+
+const STAT_CAP = 350;
+const STAT_MIN = 10;
+const STAT_MAX = 100;
+
+function pickRandom<T>(arr: readonly T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)]!;
+}
 
 class BugGenome {
-    constructor(data = null) {
+    bulk!: number;
+    speed!: number;
+    fury!: number;
+    instinct!: number;
+    abdomenType!: AbdomenType;
+    thoraxType!: ThoraxType;
+    headType!: HeadType;
+    legCount!: LegCount;
+    legStyle!: LegStyle;
+    weapon!: WeaponType;
+    defense!: DefenseType;
+    mobility!: MobilityType;
+    textureType!: TextureType;
+    eyeStyle!: EyeStyle;
+    antennaStyle!: AntennaStyle;
+    wingType!: WingType;
+    color!: BugColor;
+    accentHue!: number;
+
+    constructor(data: GenomeData | null = null) {
         if (data) {
-            Object.assign(this, data);
+            this.bulk = data.bulk;
+            this.speed = data.speed;
+            this.fury = data.fury;
+            this.instinct = data.instinct;
+            this.abdomenType = data.abdomenType;
+            this.thoraxType = data.thoraxType;
+            this.headType = data.headType;
+            this.legCount = data.legCount;
+            this.legStyle = data.legStyle;
+            this.weapon = data.weapon;
+            this.defense = data.defense;
+            this.mobility = data.mobility;
+            this.textureType = data.textureType;
+            this.eyeStyle = data.eyeStyle;
+            this.antennaStyle = data.antennaStyle;
+            this.wingType = data.wingType;
             this.color = { ...data.color };
+            this.accentHue = data.accentHue;
         } else {
             this.randomize();
         }
     }
 
-    randomize() {
-        const STAT_CAP = 350, MIN = 10, MAX = 100;
-
-        const normalRandom = () => {
+    randomize(): void {
+        const normalRandom = (): number => {
             const u1 = Math.random();
             const u2 = Math.random();
             return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
         };
 
-        const generateStat = () => {
+        const generateStat = (): number => {
             const mean = 55;
             const stdDev = 20;
-            let value = Math.round(mean + normalRandom() * stdDev);
-            return Math.max(MIN, Math.min(MAX, value));
+            const value = Math.round(mean + normalRandom() * stdDev);
+            return Math.max(STAT_MIN, Math.min(STAT_MAX, value));
         };
 
         let stats = [generateStat(), generateStat(), generateStat(), generateStat()];
@@ -56,40 +109,39 @@ class BugGenome {
         const total = stats.reduce((a, b) => a + b, 0);
         if (total > STAT_CAP) {
             const scale = STAT_CAP / total;
-            stats = stats.map(s => Math.max(MIN, Math.round(s * scale)));
+            stats = stats.map(s => Math.max(STAT_MIN, Math.round(s * scale)));
 
             let newTotal = stats.reduce((a, b) => a + b, 0);
             while (newTotal > STAT_CAP) {
                 const maxIdx = stats.indexOf(Math.max(...stats));
-                stats[maxIdx]--;
+                stats[maxIdx]!--;
                 newTotal--;
             }
         }
 
-        [this.bulk, this.speed, this.fury, this.instinct] = stats;
+        [this.bulk, this.speed, this.fury, this.instinct] = stats as [number, number, number, number];
 
-        this.abdomenType = ['round', 'oval', 'pointed', 'bulbous', 'segmented', 'sac', 'plated', 'tailed'][Math.floor(Math.random() * 8)];
-        this.thoraxType = ['compact', 'elongated', 'wide', 'humped', 'segmented'][Math.floor(Math.random() * 5)];
-        this.headType = ['round', 'triangular', 'square', 'elongated', 'shield'][Math.floor(Math.random() * 5)];
+        this.abdomenType = pickRandom(ABDOMEN_TYPES);
+        this.thoraxType = pickRandom(THORAX_TYPES);
+        this.headType = pickRandom(HEAD_TYPES);
+        this.legCount = pickRandom(LEG_COUNTS);
+        this.legStyle = pickRandom(LEG_STYLES);
+        this.weapon = pickRandom(WEAPONS);
+        this.defense = pickRandom(DEFENSES);
+        this.mobility = pickRandom(MOBILITIES);
+        this.textureType = pickRandom(TEXTURES);
+        this.eyeStyle = pickRandom(EYE_STYLES);
+        this.antennaStyle = pickRandom(ANTENNA_STYLES);
 
-        this.legCount = [4, 6, 8][Math.floor(Math.random() * 3)];
-        this.legStyle = ['insect', 'spider', 'mantis', 'grasshopper', 'beetle', 'stick', 'centipede'][Math.floor(Math.random() * 7)];
-
-        this.weapon = ['mandibles', 'stinger', 'fangs', 'pincers', 'horn'][Math.floor(Math.random() * 5)];
-        this.defense = ['shell', 'none', 'toxic', 'camouflage'][Math.floor(Math.random() * 4)];
-        this.mobility = ['ground', 'winged', 'wallcrawler'][Math.floor(Math.random() * 3)];
-        this.textureType = ['smooth', 'plated', 'rough', 'spotted', 'striped'][Math.floor(Math.random() * 5)];
-        this.eyeStyle = ['compound', 'simple', 'stalked', 'multiple', 'sunken'][Math.floor(Math.random() * 5)];
-        this.antennaStyle = ['segmented', 'clubbed', 'whip', 'horned', 'none', 'nubs'][Math.floor(Math.random() * 6)];
         // Winged bugs always get a wing type; non-winged bugs are always 'none'
         if (this.mobility === 'winged') {
-            this.wingType = ['fly', 'beetle', 'dragonfly'][Math.floor(Math.random() * 3)];
+            this.wingType = pickRandom(WING_TYPES);
         } else {
             this.wingType = 'none';
         }
 
         // Pick from realistic color palette
-        const colorChoice = BUG_COLORS[Math.floor(Math.random() * BUG_COLORS.length)];
+        const colorChoice = pickRandom(BUG_COLORS);
         this.color = {
             hue: colorChoice.hue,
             saturation: colorChoice.sat / 100,
@@ -98,7 +150,7 @@ class BugGenome {
         this.accentHue = (this.color.hue + 30 + Math.random() * 60) % 360;
     }
 
-    breed(other) {
+    breed(other: BugGenome): BugGenome {
         const child = new BugGenome();
 
         child.bulk = this.inheritStat(this.bulk, other.bulk);
@@ -107,28 +159,27 @@ class BugGenome {
         child.instinct = this.inheritStat(this.instinct, other.instinct);
 
         // Scale stats to target total, clamped to [10, 100]
-        const STAT_CAP = 350, MIN = 10, MAX = 100;
         const total = child.bulk + child.speed + child.fury + child.instinct;
         const scale = STAT_CAP / total;
         let stats = [
-            Math.max(MIN, Math.min(MAX, Math.round(child.bulk * scale))),
-            Math.max(MIN, Math.min(MAX, Math.round(child.speed * scale))),
-            Math.max(MIN, Math.min(MAX, Math.round(child.fury * scale))),
-            Math.max(MIN, Math.min(MAX, Math.round(child.instinct * scale))),
+            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.bulk * scale))),
+            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.speed * scale))),
+            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.fury * scale))),
+            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.instinct * scale))),
         ];
         // Adjust for rounding errors - trim from highest stats
         let newTotal = stats.reduce((a, b) => a + b, 0);
         while (newTotal > STAT_CAP) {
             const maxIdx = stats.indexOf(Math.max(...stats));
-            stats[maxIdx]--;
+            stats[maxIdx]!--;
             newTotal--;
         }
         while (newTotal < STAT_CAP) {
             const minIdx = stats.indexOf(Math.min(...stats));
-            stats[minIdx]++;
+            stats[minIdx]!++;
             newTotal++;
         }
-        [child.bulk, child.speed, child.fury, child.instinct] = stats;
+        [child.bulk, child.speed, child.fury, child.instinct] = stats as [number, number, number, number];
 
         child.abdomenType = Math.random() < 0.5 ? this.abdomenType : other.abdomenType;
         child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
@@ -141,14 +192,14 @@ class BugGenome {
         child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
         child.eyeStyle = Math.random() < 0.5 ? this.eyeStyle : other.eyeStyle;
         child.antennaStyle = Math.random() < 0.5 ? this.antennaStyle : other.antennaStyle;
+
         // Winged bugs always get a wing type; non-winged are always 'none'
         if (child.mobility === 'winged') {
-            // Inherit wing type from a parent that has wings, or random
-            const parentWings = [this.wingType, other.wingType].filter(w => w !== 'none');
+            const parentWings = [this.wingType, other.wingType].filter(w => w !== 'none') as WingType[];
             if (parentWings.length > 0) {
-                child.wingType = parentWings[Math.floor(Math.random() * parentWings.length)];
+                child.wingType = pickRandom(parentWings);
             } else {
-                child.wingType = ['fly', 'beetle', 'dragonfly'][Math.floor(Math.random() * 3)];
+                child.wingType = pickRandom(WING_TYPES);
             }
         } else {
             child.wingType = 'none';
@@ -164,13 +215,13 @@ class BugGenome {
         return child;
     }
 
-    inheritStat(a, b) {
+    inheritStat(a: number, b: number): number {
         const avg = (a + b) / 2;
         const mutation = (Math.random() - 0.5) * 20;
-        return Math.max(10, Math.min(100, Math.round(avg + mutation)));
+        return Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(avg + mutation)));
     }
 
-    blendHue(h1, h2) {
+    blendHue(h1: number, h2: number): number {
         const diff = h2 - h1;
         if (Math.abs(diff) > 180) {
             return diff > 0 ? (h1 + (diff - 360) / 2 + 360) % 360 : (h1 + (diff + 360) / 2) % 360;
@@ -178,15 +229,15 @@ class BugGenome {
         return (h1 + diff / 2 + 360) % 360;
     }
 
-    getName() {
-        const prefixes = {
+    getName(): string {
+        const prefixes: Record<WeaponType, string[]> = {
             mandibles: ['Crusher', 'Gnasher', 'Chomper', 'Breaker'],
             stinger: ['Piercer', 'Stabber', 'Lancer', 'Spike'],
             fangs: ['Venom', 'Toxic', 'Biter', 'Fang'],
             pincers: ['Gripper', 'Clamper', 'Pincher', 'Snapper'],
             horn: ['Charger', 'Ramhorn', 'Gorer', 'Impaler']
         };
-        const suffixes = {
+        const suffixes: Record<AbdomenType, string[]> = {
             round: ['Blob', 'Orb', 'Ball', 'Dome'],
             oval: ['Runner', 'Swift', 'Dash', 'Scout'],
             pointed: ['Spike', 'Lance', 'Arrow', 'Dart'],
@@ -197,16 +248,15 @@ class BugGenome {
             tailed: ['Tail', 'Whip', 'Sting', 'Lash']
         };
 
-        return prefixes[this.weapon][Math.floor(Math.random() * 4)] + ' ' +
-               suffixes[this.abdomenType][Math.floor(Math.random() * 4)];
+        return prefixes[this.weapon][Math.floor(Math.random() * 4)]! + ' ' +
+               suffixes[this.abdomenType][Math.floor(Math.random() * 4)]!;
     }
 
-    getSizeMultiplier() {
+    getSizeMultiplier(): number {
         return 0.6 + (this.bulk / 100) * 0.9;
     }
 
-    // Serialize genome for transmission to client
-    toJSON() {
+    toJSON(): GenomeData {
         return {
             bulk: this.bulk,
             speed: this.speed,
@@ -230,4 +280,4 @@ class BugGenome {
     }
 }
 
-module.exports = BugGenome;
+export = BugGenome;

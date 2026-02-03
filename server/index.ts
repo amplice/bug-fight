@@ -1,19 +1,19 @@
 // Bug Fights - WebSocket Server
 // Runs simulation 24/7 and broadcasts to all clients
 
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const WebSocket = require('ws');
+import http = require('http');
+import fs = require('fs');
+import path = require('path');
+import WebSocket = require('ws');
 
-const { Simulation, TICK_RATE, TICK_MS } = require('./simulation');
-const { version } = require('../package.json');
+import { Simulation, TICK_RATE, TICK_MS } from './simulation';
+const { version } = require('../../package.json') as { version: string };
 
 // ============================================
 // HTTP SERVER (Static Files)
 // ============================================
 
-const MIME_TYPES = {
+const MIME_TYPES: Record<string, string> = {
     '.html': 'text/html',
     '.css': 'text/css',
     '.js': 'application/javascript',
@@ -25,13 +25,14 @@ const MIME_TYPES = {
     '.ico': 'image/x-icon',
 };
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public');
 
-function serveStatic(req, res) {
-    let filePath = req.url === '/' ? '/index.html' : req.url;
+function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
+    let filePath = req.url === '/' ? '/index.html' : req.url ?? '/index.html';
 
     // Remove query string
-    filePath = filePath.split('?')[0];
+    filePath = filePath.split('?')[0]!;
 
     // API endpoints
     if (filePath === '/api/roster') {
@@ -48,11 +49,11 @@ function serveStatic(req, res) {
 
     const fullPath = path.join(PUBLIC_DIR, filePath);
     const ext = path.extname(fullPath).toLowerCase();
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
 
     fs.readFile(fullPath, (err, data) => {
         if (err) {
-            if (err.code === 'ENOENT') {
+            if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('404 Not Found');
             } else {
@@ -76,22 +77,23 @@ const server = http.createServer(serveStatic);
 const wss = new WebSocket.Server({ server });
 
 // Track connected clients
-let clients = new Set();
+const clients = new Set<WebSocket>();
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws: WebSocket) => {
     console.log(`Client connected. Total: ${clients.size + 1}`);
     clients.add(ws);
 
     // Send initial state immediately
     const state = simulation.getState();
-    ws.send(JSON.stringify({
+    const initMsg: WSInitMessage = {
         type: 'init',
         state: state,
-    }));
+    };
+    ws.send(JSON.stringify(initMsg));
 
-    ws.on('message', (message) => {
+    ws.on('message', (message: WebSocket.Data) => {
         try {
-            const data = JSON.parse(message);
+            const data = JSON.parse(message.toString()) as { type: string };
             // Handle client messages (e.g., bet placement)
             // For now, betting is client-side only
             console.log('Received:', data.type);
@@ -105,13 +107,13 @@ wss.on('connection', (ws) => {
         console.log(`Client disconnected. Total: ${clients.size}`);
     });
 
-    ws.on('error', (err) => {
+    ws.on('error', (err: Error) => {
         console.error('WebSocket error:', err);
         clients.delete(ws);
     });
 });
 
-function broadcast(data) {
+function broadcast(data: WSServerMessage): void {
     const message = JSON.stringify(data);
     clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -129,7 +131,7 @@ const simulation = new Simulation();
 let lastTickTime = Date.now();
 let tickCount = 0;
 
-function gameLoop() {
+function gameLoop(): void {
     const now = Date.now();
 
     // Run simulation tick
@@ -137,10 +139,11 @@ function gameLoop() {
     tickCount++;
 
     // Broadcast state to all clients
-    broadcast({
+    const stateMsg: WSStateMessage = {
         type: 'state',
         state: simulation.getState(),
-    });
+    };
+    broadcast(stateMsg);
 
     // Log stats periodically
     if (tickCount % (TICK_RATE * 10) === 0) { // Every 10 seconds
@@ -157,7 +160,7 @@ setInterval(gameLoop, TICK_MS);
 // START SERVER
 // ============================================
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env['PORT'] ?? 8080;
 
 server.listen(PORT, () => {
     const versionPadded = version.padEnd(14);
