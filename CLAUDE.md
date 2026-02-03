@@ -132,7 +132,7 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 - **Language**: TypeScript (strict mode, zero-error build)
 - **Frontend**: TypeScript (module: "none", script-tag loading), Three.js (3D), static HTML/CSS
 - **Backend**: Bun (native HTTP + WebSocket via Bun.serve()), runs .ts directly
-- **Database**: JSON files (roster.json)
+- **Database**: SQLite via Prisma ORM (libsql adapter)
 - **Hosting**: Single VPS
 
 ### Target Stack (Near-term)
@@ -195,10 +195,12 @@ const rng = createSeededRNG(seed);
 ### Files
 
 **TypeScript Source:**
-- `server/index.ts` - HTTP server, WebSocket handling → compiles to `server/dist/index.js`
+- `server/index.ts` - Bun HTTP + WebSocket server, REST API endpoints
 - `server/simulation.ts` - Game engine, Fighter class, 3D combat AI
-- `server/roster.ts` - Persistent bug roster management
+- `server/roster.ts` - Persistent bug roster management (Prisma/SQLite)
+- `server/db.ts` - Prisma client singleton (libsql adapter)
 - `server/BugGenome.ts` - Bug genetics and genome generation
+- `prisma/schema.prisma` - Database schema (Bug, Fight models)
 - `src/client/client.ts` - WebSocket client, betting logic, UI updates → compiles to `public/js/client.js`
 - `src/client/renderer3d.ts` - Three.js 3D rendering, camera controls, effects
 - `src/client/bugGenerator3d.ts` - 3D bug mesh generation, BugAnimator class
@@ -211,8 +213,9 @@ const rng = createSeededRNG(seed);
 
 **Config:**
 - `tsconfig.json` - Base strict TypeScript config
-- `tsconfig.server.json` - Server config (CommonJS, outDir: server/dist)
+- `tsconfig.server.json` - Server config (ESNext, bundler resolution, bun-types)
 - `tsconfig.client.json` - Client config (module: "none", outDir: public/js)
+- `prisma.config.ts` - Prisma config (SQLite datasource URL)
 
 **Other:**
 - `public/index.html` - 3D arena and betting UI
@@ -247,8 +250,8 @@ Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenom
 - Roster viewer modal
 
 ## Next Steps
-1. Migrate to Bun (native WebSocket, faster runtime)
-2. Migrate to SQLite + Prisma ORM (replace roster.json)
+1. ~~Migrate to Bun (native WebSocket, faster runtime)~~ ✓
+2. ~~Migrate to SQLite + Prisma ORM (replace roster.json)~~ ✓
 3. Migrate to Vite (bundling, dev server, HMR)
 4. Add breeding system (winners pass on genomes)
 5. Revisit variants as genetic traits, not cosmetic rarity

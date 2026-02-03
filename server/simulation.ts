@@ -3,6 +3,7 @@
 
 import BugGenome from './BugGenome';
 import RosterManager from './roster';
+import prisma from './db';
 
 // ============================================
 // CONSTANTS
@@ -2274,6 +2275,23 @@ class Simulation {
         fightLogger.logFightEnd(this.winner, this.fighters);
 
         this.addEvent('fightEnd', { winner: this.winner });
+
+        // Record fight to database (fire-and-forget)
+        const winnerId = this.winner === 1 ? this.bugIds[0]!
+            : this.winner === 2 ? this.bugIds[1]!
+            : null;
+        prisma.fight.create({
+            data: {
+                fightNumber: this.fightNumber,
+                bug1Id: this.bugIds[0]!,
+                bug2Id: this.bugIds[1]!,
+                winnerId: winnerId ?? undefined,
+                duration: this.tick,
+                isDraw: this.winner === 0,
+                eventsSummary: `${f1.name} vs ${f2.name}` +
+                    (this.winner === 0 ? ' - Draw' : ` - ${this.winner === 1 ? f1.name : f2.name} wins`),
+            },
+        }).catch((err: unknown) => console.error('Error recording fight:', err));
     }
 
     getState(): GameState {

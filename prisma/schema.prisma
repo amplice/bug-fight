@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Bug {
+  id        String   @id @default(cuid())
+  name      String
+  genome    String   // JSON-encoded GenomeData
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fightsAsBug1 Fight[] @relation("Bug1")
+  fightsAsBug2 Fight[] @relation("Bug2")
+  fightsWon    Fight[] @relation("Winner")
+}
+
+model Fight {
+  id            String   @id @default(cuid())
+  fightNumber   Int
+  bug1Id        String
+  bug2Id        String
+  winnerId      String?
+  duration      Int      // ticks
+  isDraw        Boolean  @default(false)
+  eventsSummary String?  // brief fight summary text
+  createdAt     DateTime @default(now())
+
+  bug1   Bug  @relation("Bug1", fields: [bug1Id], references: [id])
+  bug2   Bug  @relation("Bug2", fields: [bug2Id], references: [id])
+  winner Bug? @relation("Winner", fields: [winnerId], references: [id])
+}

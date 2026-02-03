@@ -1,10 +1,11 @@
 // Bug Fights - Roster Manager
-// Manages persistent bug roster with fight records
+// Manages persistent bug roster with fight records via SQLite/Prisma
 
 import BugGenome from './BugGenome';
+import prisma from './db';
 
-const ROSTER_FILE = import.meta.dir + '/../roster.json';
 const ROSTER_SIZE = 20;
+const ROSTER_FILE = import.meta.dir + '/../roster.json';
 
 class RosterManager {
     bugs: RosterBug[];
@@ -20,31 +21,66 @@ class RosterManager {
     }
 
     async load(): Promise<void> {
-        try {
-            const file = Bun.file(ROSTER_FILE);
-            if (await file.exists()) {
-                const data: RosterFile = await file.json();
-                this.bugs = data.bugs || [];
-                console.log(`Loaded roster with ${this.bugs.length} bugs`);
-            } else {
-                this.generateRoster();
-            }
-        } catch (err) {
-            console.error('Error loading roster:', err);
-            this.generateRoster();
+        // Try migrating from roster.json if DB is empty
+        const count = await prisma.bug.count();
+        if (count === 0) {
+            await this.migrateFromJson();
         }
+
+        // Load all active bugs from DB
+        const dbBugs = await prisma.bug.findMany({
+            where: { active: true },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        this.bugs = dbBugs.map((b: { id: string; genome: string; name: string; wins: number; losses: number; createdAt: Date }) => ({
+            id: b.id,
+            genome: JSON.parse(b.genome) as GenomeData,
+            name: b.name,
+            wins: b.wins,
+            losses: b.losses,
+            createdAt: b.createdAt.toISOString(),
+        }));
+
+        console.log(`Loaded roster with ${this.bugs.length} bugs from database`);
 
         // Ensure roster has enough bugs
         while (this.bugs.length < ROSTER_SIZE) {
-            this.addNewBug();
+            await this.addNewBug();
         }
     }
 
-    save(): void {
-        const data: RosterFile = { bugs: this.bugs, savedAt: new Date().toISOString() };
-        Bun.write(ROSTER_FILE, JSON.stringify(data, null, 2)).catch(err => {
-            console.error('Error saving roster:', err);
-        });
+    private async migrateFromJson(): Promise<void> {
+        try {
+            const file = Bun.file(ROSTER_FILE);
+            if (!(await file.exists())) {
+                console.log('No roster.json found, generating fresh roster');
+                return;
+            }
+
+            const data: RosterFile = await file.json();
+            if (!data.bugs || data.bugs.length === 0) return;
+
+            console.log(`Migrating ${data.bugs.length} bugs from roster.json to SQLite...`);
+
+            for (const bug of data.bugs) {
+                await prisma.bug.create({
+                    data: {
+                        id: bug.id,
+                        name: bug.name,
+                        genome: JSON.stringify(bug.genome),
+                        wins: bug.wins,
+                        losses: bug.losses,
+                        active: true,
+                        createdAt: new Date(bug.createdAt),
+                    },
+                });
+            }
+
+            console.log(`Migration complete: ${data.bugs.length} bugs imported`);
+        } catch (err) {
+            console.error('Error migrating from roster.json:', err);
+        }
     }
 
     generateRoster(): void {
@@ -75,17 +111,30 @@ class RosterManager {
             usedDefenses.add(genome.defense);
             usedMobilities.add(genome.mobility);
 
-            this.bugs.push({
+            const bug: RosterBug = {
                 id: this.generateId(),
                 genome: genome.toJSON(),
                 name: genome.getName(),
                 wins: 0,
                 losses: 0,
-                createdAt: new Date().toISOString()
-            });
+                createdAt: new Date().toISOString(),
+            };
+
+            this.bugs.push(bug);
+
+            // Fire-and-forget DB insert
+            prisma.bug.create({
+                data: {
+                    id: bug.id,
+                    name: bug.name,
+                    genome: JSON.stringify(bug.genome),
+                    wins: 0,
+                    losses: 0,
+                    active: true,
+                },
+            }).catch((err: unknown) => console.error('Error saving bug to DB:', err));
         }
 
-        this.save();
         console.log(`Generated roster with ${this.bugs.length} bugs`);
     }
 
@@ -93,7 +142,7 @@ class RosterManager {
         return Math.random().toString(36).substring(2, 11);
     }
 
-    addNewBug(): RosterBug {
+    async addNewBug(): Promise<RosterBug> {
         const genome = new BugGenome();
         const bug: RosterBug = {
             id: this.generateId(),
@@ -101,10 +150,21 @@ class RosterManager {
             name: genome.getName(),
             wins: 0,
             losses: 0,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
         };
         this.bugs.push(bug);
-        this.save();
+
+        await prisma.bug.create({
+            data: {
+                id: bug.id,
+                name: bug.name,
+                genome: JSON.stringify(bug.genome),
+                wins: 0,
+                losses: 0,
+                active: true,
+            },
+        });
+
         return bug;
     }
 
@@ -158,7 +218,11 @@ class RosterManager {
         const bug = this.getBug(bugId);
         if (bug) {
             bug.wins++;
-            this.save();
+            // Fire-and-forget DB update
+            prisma.bug.update({
+                where: { id: bugId },
+                data: { wins: { increment: 1 } },
+            }).catch((err: unknown) => console.error('Error recording win:', err));
         }
     }
 
@@ -166,7 +230,11 @@ class RosterManager {
         const bug = this.getBug(bugId);
         if (bug) {
             bug.losses++;
-            this.save();
+            // Fire-and-forget DB update
+            prisma.bug.update({
+                where: { id: bugId },
+                data: { losses: { increment: 1 } },
+            }).catch((err: unknown) => console.error('Error recording loss:', err));
         }
     }
 

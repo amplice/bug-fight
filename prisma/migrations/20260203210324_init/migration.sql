@@ -1,0 +1,27 @@
+-- CreateTable
+CREATE TABLE "Bug" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "genome" TEXT NOT NULL,
+    "wins" INTEGER NOT NULL DEFAULT 0,
+    "losses" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "Fight" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "fightNumber" INTEGER NOT NULL,
+    "bug1Id" TEXT NOT NULL,
+    "bug2Id" TEXT NOT NULL,
+    "winnerId" TEXT,
+    "duration" INTEGER NOT NULL,
+    "isDraw" BOOLEAN NOT NULL DEFAULT false,
+    "eventsSummary" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Fight_bug1Id_fkey" FOREIGN KEY ("bug1Id") REFERENCES "Bug" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Fight_bug2Id_fkey" FOREIGN KEY ("bug2Id") REFERENCES "Bug" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Fight_winnerId_fkey" FOREIGN KEY ("winnerId") REFERENCES "Bug" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);

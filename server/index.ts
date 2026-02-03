@@ -3,6 +3,7 @@
 
 import { Simulation, TICK_RATE, TICK_MS } from './simulation';
 import type { ServerWebSocket } from 'bun';
+import prisma from './db';
 
 const PUBLIC_DIR = import.meta.dir + '/../public';
 
@@ -72,6 +73,59 @@ const server = Bun.serve({
         // API: roster
         if (url.pathname === '/api/roster') {
             return Response.json(simulation.getRoster(), {
+                headers: { 'Access-Control-Allow-Origin': '*' },
+            });
+        }
+
+        // API: recent fight history
+        if (url.pathname === '/api/fights') {
+            const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 200);
+            const fights = await prisma.fight.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: limit,
+                include: {
+                    bug1: { select: { id: true, name: true } },
+                    bug2: { select: { id: true, name: true } },
+                    winner: { select: { id: true, name: true } },
+                },
+            });
+            return Response.json(fights, {
+                headers: { 'Access-Control-Allow-Origin': '*' },
+            });
+        }
+
+        // API: bug details with fight history
+        const bugMatch = url.pathname.match(/^\/api\/bug\/(.+)$/);
+        if (bugMatch) {
+            const bugId = bugMatch[1]!;
+            const bug = await prisma.bug.findUnique({
+                where: { id: bugId },
+                include: {
+                    fightsAsBug1: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 20,
+                        include: {
+                            bug2: { select: { id: true, name: true } },
+                            winner: { select: { id: true, name: true } },
+                        },
+                    },
+                    fightsAsBug2: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 20,
+                        include: {
+                            bug1: { select: { id: true, name: true } },
+                            winner: { select: { id: true, name: true } },
+                        },
+                    },
+                },
+            });
+            if (!bug) {
+                return Response.json({ error: 'Bug not found' }, { status: 404 });
+            }
+            return Response.json({
+                ...bug,
+                genome: JSON.parse(bug.genome),
+            }, {
                 headers: { 'Access-Control-Allow-Origin': '*' },
             });
         }

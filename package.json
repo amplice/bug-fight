@@ -13,5 +13,11 @@
     "@types/bun": "latest",
     "@types/three": "^0.182.0",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@prisma/adapter-libsql": "^7.3.0",
+    "@prisma/client": "^7.3.0",
+    "prisma": "^7.3.0"
   }
 }
