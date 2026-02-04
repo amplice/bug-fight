@@ -402,6 +402,22 @@ class Fighter {
     spriteSize: number;
     lastWallImpact: { velocity: number; wallSide: WallSide; stunApplied: number } | null;
 
+    // Phenotype combat bonuses (derived from visual traits, undocumented)
+    phenotype: {
+        accuracyBonus: number;       // triangular head
+        frontalReduction: number;    // shield head
+        dodgeBonus: number;          // compact thorax + compound eyes
+        knockbackResist: number;     // wide thorax
+        staminaBonus: number;        // bulbous abdomen
+        poisonBonus: number;         // sac abdomen (conditional on toxic defense)
+        stunBonus: number;           // mantis legs
+        wallClimbBonus: number;      // spider legs (conditional on wallcrawler)
+        counterSpeedBonus: number;   // whip antennae
+        feintDetectBonus: number;    // segmented antennae
+        damageReduction: number;     // plated texture
+        hoverAccuracy: number;       // dragonfly wings (conditional on winged)
+    };
+
     constructor(genome: BugGenome, side: FighterSide, name: string) {
         this.genome = genome;
         this.name = name;
@@ -499,6 +515,29 @@ class Fighter {
 
         // Wall impact (assigned later by applyWallStun)
         this.lastWallImpact = null;
+
+        // Phenotype combat bonuses — small effects from visual traits
+        this.phenotype = {
+            accuracyBonus:     genome.headType === 'triangular' ? 0.04 : 0,
+            frontalReduction:  genome.headType === 'shield' ? 0.08 : 0,
+            dodgeBonus:        (genome.thoraxType === 'compact' ? 0.03 : 0) +
+                               (genome.eyeStyle === 'compound' ? 0.03 : 0),
+            knockbackResist:   genome.thoraxType === 'wide' ? 0.15 : 0,
+            staminaBonus:      genome.abdomenType === 'bulbous' ? 0.12 : 0,
+            poisonBonus:       (genome.abdomenType === 'sac' && genome.defense === 'toxic') ? 0.25 : 0,
+            stunBonus:         genome.legStyle === 'mantis' ? 0.20 : 0,
+            wallClimbBonus:    (genome.legStyle === 'spider' && genome.mobility === 'wallcrawler') ? 0.25 : 0,
+            counterSpeedBonus: genome.antennaStyle === 'whip' ? 0.15 : 0,
+            feintDetectBonus:  genome.antennaStyle === 'segmented' ? 0.08 : 0,
+            damageReduction:   genome.textureType === 'plated' ? 2 : 0,
+            hoverAccuracy:     (genome.wingType === 'dragonfly' && genome.mobility === 'winged') ? 0.05 : 0,
+        };
+
+        // Apply stamina phenotype bonus
+        if (this.phenotype.staminaBonus > 0) {
+            this.maxStamina = Math.floor(this.maxStamina * (1 + this.phenotype.staminaBonus));
+            this.stamina = this.maxStamina;
+        }
     }
 
     calculateJumpPower(): number {
@@ -1490,7 +1529,7 @@ class Fighter {
                 this.vy = -2;
             } else if (this.aiState === 'aggressive') {
                 if (Math.abs(heightDiff) > 20) {
-                    const climbSpeed = 4 + (this.genome.speed / 30);
+                    const climbSpeed = (4 + (this.genome.speed / 30)) * (1 + this.phenotype.wallClimbBonus);
                     this.vy = Math.sign(targetY - this.y) * climbSpeed;
                 } else {
                     this.vy = Math.sin(this.moveTimer / 10) * 1;
@@ -1907,7 +1946,8 @@ class Simulation {
         }
 
         const targetInstinct = target.genome.instinct / 100;
-        const readChance = 0.15 + targetInstinct * 0.55;
+        // Segmented antennae: better feint detection
+        const readChance = 0.15 + targetInstinct * 0.55 + target.phenotype.feintDetectBonus;
 
         if (Math.random() < readChance) {
             this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + Math.random() * 15;
@@ -2018,7 +2058,8 @@ class Simulation {
                 const baseDodgeChance = targetInstinct * 0.6;
                 const speedPenalty = attackerMomentum * 0.3;
                 const camoBonus = target.genome.defense === 'camouflage' ? 0.12 : 0;
-                const dodgeChance = Math.max(0.05, baseDodgeChance - speedPenalty + (target.isFlying ? 0.15 : 0) + camoBonus);
+                const phenoDodge = target.phenotype.dodgeBonus;
+                const dodgeChance = Math.max(0.05, baseDodgeChance - speedPenalty + (target.isFlying ? 0.15 : 0) + camoBonus + phenoDodge);
 
                 if (Math.random() < dodgeChance) {
                     dodged = true;
@@ -2074,11 +2115,24 @@ class Simulation {
                 const baseCD = 48 - attacker.genome.speed / 5;
                 const missPenalty = 8 + attackerMomentum * 12;
                 this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + missPenalty + Math.random() * 10;
+
+                // Whip antennae on the target: faster counter-attack after dodging
+                if (target.phenotype.counterSpeedBonus > 0) {
+                    const targetIdx = (1 - attackerIndex) as 0 | 1;
+                    this.attackCooldowns[targetIdx] = Math.floor(
+                        this.attackCooldowns[targetIdx]! * (1 - target.phenotype.counterSpeedBonus)
+                    );
+                }
                 return;
             }
 
             let hitRoll = rollDice(100) + attacker.genome.speed;
             let dodgeRoll = rollDice(100) + target.genome.instinct * 0.5;
+
+            // Phenotype bonuses on accuracy and dodge
+            hitRoll += attacker.phenotype.accuracyBonus * 100;
+            hitRoll += attacker.phenotype.hoverAccuracy * 100;
+            dodgeRoll += target.phenotype.dodgeBonus * 100;
 
             if (target.isFlying) dodgeRoll += 10;
             if (target.stunTimer > 0) dodgeRoll -= 30;
@@ -2111,15 +2165,25 @@ class Simulation {
                 const zFlanking = Math.abs(dz) > Math.abs(dx) * 1.5;
 
                 if (isFlanking || zFlanking) {
-                    damage = Math.floor(damage * 1.25);
+                    // Stalked eyes: better spatial awareness → bonus flanking damage
+                    const flankMult = 1.25 + (attacker.genome.eyeStyle === 'stalked' ? 0.05 : 0);
+                    damage = Math.floor(damage * flankMult);
                     if (isFlanking && zFlanking) {
                         damage = Math.floor(damage * 1.15);
                         this.addEvent('commentary', 'BACKSTAB!', '#f0f');
                     }
+                } else if (target.phenotype.frontalReduction > 0) {
+                    // Shield head: frontal damage reduction (only when NOT flanked)
+                    damage = Math.floor(damage * (1 - target.phenotype.frontalReduction));
                 }
 
                 if (target.genome.defense === 'shell') {
                     damage = Math.max(1, damage - Math.floor(target.genome.bulk / 20));
+                }
+
+                // Plated texture: flat damage reduction
+                if (target.phenotype.damageReduction > 0) {
+                    damage = Math.max(1, damage - target.phenotype.damageReduction);
                 }
 
                 const isCrit = rollDice(100) <= attacker.genome.fury / 2;
@@ -2132,7 +2196,10 @@ class Simulation {
 
                 target.hp -= damage;
                 target.setState('hit');
-                target.stunTimer = isCrit ? 25 : 15;
+                let baseStun = isCrit ? 25 : 15;
+                // Mantis legs: longer stun on hit
+                baseStun = Math.floor(baseStun * (1 + attacker.phenotype.stunBonus));
+                target.stunTimer = baseStun;
                 target.flashTimer = 4;
                 target.squash = 1.2;
                 target.stretch = 0.8;
@@ -2164,7 +2231,9 @@ class Simulation {
                 }
 
                 const baseKnockback = isCrit ? 8 : 5;
-                const knockbackForce = baseKnockback * Math.sqrt(massRatio) * weaponKnockback * defenseResist * momentumVulnerability * (0.8 + damageRatio * 0.3);
+                // Wide thorax: knockback resistance
+                const phenoResist = 1 - target.phenotype.knockbackResist;
+                const knockbackForce = baseKnockback * Math.sqrt(massRatio) * weaponKnockback * defenseResist * momentumVulnerability * phenoResist * (0.8 + damageRatio * 0.3);
 
                 const kbDirZ = dist > 0 ? dz / dist : 0;
                 target.vx += dirX * knockbackForce;
@@ -2197,7 +2266,8 @@ class Simulation {
                 }
 
                 if (target.genome.defense === 'toxic') {
-                    const toxicDamage = Math.floor(target.genome.bulk / 25);
+                    const toxicMult = 1 + target.phenotype.poisonBonus;
+                    const toxicDamage = Math.floor((target.genome.bulk / 25) * toxicMult);
                     if (toxicDamage > 0) {
                         attacker.hp -= toxicDamage;
                         attacker.flashTimer = 4;
@@ -2231,7 +2301,10 @@ class Simulation {
 
     processPoison(fighter: Fighter): void {
         if (fighter.poisoned > 0 && this.tick % TICK_RATE === 0) {
-            const poisonDamage = 2;
+            // Sac abdomen on the poisoner → bonus poison tick damage
+            const poisoner = this.fighters.find(f => f !== fighter);
+            const poisonMult = poisoner ? (1 + poisoner.phenotype.poisonBonus) : 1;
+            const poisonDamage = Math.floor(2 * poisonMult);
             fighter.hp -= poisonDamage;
             fighter.flashTimer = 2;
             fighter.poisoned--;

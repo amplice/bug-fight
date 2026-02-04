@@ -45,6 +45,17 @@ function pickRandom<T>(arr: readonly T[]): T {
     return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
+/** Pick from array using weighted probabilities. weights must match arr length. */
+function pickWeighted<T>(arr: readonly T[], weights: number[]): T {
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < arr.length; i++) {
+        r -= weights[i]!;
+        if (r <= 0) return arr[i]!;
+    }
+    return arr[arr.length - 1]!;
+}
+
 class BugGenome {
     bulk!: number;
     speed!: number;
@@ -121,21 +132,64 @@ class BugGenome {
 
         [this.bulk, this.speed, this.fury, this.instinct] = stats as [number, number, number, number];
 
-        this.abdomenType = pickRandom(ABDOMEN_TYPES);
-        this.thoraxType = pickRandom(THORAX_TYPES);
-        this.headType = pickRandom(HEAD_TYPES);
-        this.legCount = pickRandom(LEG_COUNTS);
-        this.legStyle = pickRandom(LEG_STYLES);
+        // Combat traits (not stat-weighted)
         this.weapon = pickRandom(WEAPONS);
         this.defense = pickRandom(DEFENSES);
         this.mobility = pickRandom(MOBILITIES);
-        this.textureType = pickRandom(TEXTURES);
-        this.eyeStyle = pickRandom(EYE_STYLES);
-        this.antennaStyle = pickRandom(ANTENNA_STYLES);
 
-        // Winged bugs always get a wing type; non-winged bugs are always 'none'
+        // Visual traits — stat-weighted: form follows function
+        const b = this.bulk;
+        const s = this.speed;
+        const f = this.fury;
+        const n = this.instinct; // "n" for iNstinct, avoiding "i" for index
+
+        // Head: fury → triangular, bulk → shield/square
+        // [round, triangular, square, elongated, shield]
+        this.headType = pickWeighted(HEAD_TYPES, [50, 30 + f, 30 + b * 0.5, 30 + s * 0.5, 20 + b * 0.7]);
+
+        // Thorax: speed → compact, bulk → wide, fury → humped
+        // [compact, elongated, wide, humped, segmented]
+        this.thoraxType = pickWeighted(THORAX_TYPES, [30 + s * 0.8, 30 + n * 0.5, 30 + b * 0.8, 25 + f * 0.6, 40]);
+
+        // Abdomen: bulk → bulbous/plated, speed → pointed, fury+toxic → sac
+        // [round, oval, pointed, bulbous, segmented, sac, plated, tailed]
+        const sacWeight = (this.defense === 'toxic') ? 25 + f * 0.6 : 15;
+        const platedAbWeight = (this.defense === 'shell') ? 25 + b * 0.5 : 15;
+        this.abdomenType = pickWeighted(ABDOMEN_TYPES, [
+            40, 40, 30 + s * 0.4, 25 + b * 0.7, 30 + n * 0.4, sacWeight, platedAbWeight, 30,
+        ]);
+
+        // Leg count: cosmetic but stat-correlated for coherence
+        // [4, 6, 8]
+        this.legCount = pickWeighted(LEG_COUNTS, [30 + s * 0.4, 60, 30 + b * 0.4]);
+
+        // Leg style: fury → mantis, speed+ground → grasshopper, wallcrawler → spider
+        // [insect, spider, mantis, grasshopper, beetle, stick, centipede]
+        const spiderWeight = (this.mobility === 'wallcrawler') ? 40 + n * 0.5 : 20;
+        const hopperWeight = (this.mobility === 'ground') ? 20 + s * 0.5 : 15;
+        this.legStyle = pickWeighted(LEG_STYLES, [
+            40, spiderWeight, 20 + f * 0.5, hopperWeight, 25 + b * 0.3, 25 + s * 0.3, 25,
+        ]);
+
+        // Eyes: instinct → compound/stalked
+        // [compound, simple, stalked, multiple, sunken]
+        this.eyeStyle = pickWeighted(EYE_STYLES, [25 + n * 0.7, 40 - n * 0.2, 20 + n * 0.5, 25 + f * 0.3, 25 + b * 0.3]);
+
+        // Antennae: instinct+speed → whip, instinct → segmented, fury → horned
+        // [segmented, clubbed, whip, horned, none, nubs]
+        this.antennaStyle = pickWeighted(ANTENNA_STYLES, [
+            25 + n * 0.5, 35, 20 + s * 0.3 + n * 0.3, 20 + f * 0.5, 25 + b * 0.3, 30 - n * 0.2,
+        ]);
+
+        // Texture: bulk+shell → plated, fury → rough
+        // [smooth, plated, rough, spotted, striped]
+        const platedTexWeight = (this.defense === 'shell') ? 25 + b * 0.7 : 20 + b * 0.3;
+        this.textureType = pickWeighted(TEXTURES, [30 + s * 0.4, platedTexWeight, 25 + f * 0.4, 35, 35]);
+
+        // Wings: only for winged bugs. speed → fly, bulk → beetle, instinct → dragonfly
         if (this.mobility === 'winged') {
-            this.wingType = pickRandom(WING_TYPES);
+            // [fly, beetle, dragonfly]
+            this.wingType = pickWeighted(WING_TYPES, [30 + s * 0.6, 25 + b * 0.5, 25 + n * 0.6]);
         } else {
             this.wingType = 'none';
         }
@@ -253,7 +307,7 @@ class BugGenome {
     }
 
     getSizeMultiplier(): number {
-        return 0.6 + (this.bulk / 100) * 0.9;
+        return 1.0 + ((this.bulk - this.speed) / 100) * 0.55;
     }
 
     toJSON(): GenomeData {

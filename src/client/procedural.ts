@@ -44,7 +44,9 @@ class BugGenome {
     }
 
     getSizeMultiplier(): number {
-        return 0.6 + (this.bulk / 100) * 0.9;
+        // Size is a function of bulk vs speed: high bulk + low speed = biggest,
+        // high speed + low bulk = smallest, equal = medium
+        return 1.0 + ((this.bulk - this.speed) / 100) * 0.55;
     }
 }
 
