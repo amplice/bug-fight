@@ -25,7 +25,7 @@ type AntennaStyle = 'segmented' | 'clubbed' | 'whip' | 'horned' | 'none' | 'nubs
 
 type AIState = 'aggressive' | 'circling' | 'retreating' | 'stunned';
 type AnimationState = 'idle' | 'attack' | 'feint' | 'hit' | 'windup' | 'death' | 'victory';
-type GamePhase = 'countdown' | 'fighting' | 'victory';
+type GamePhase = 'countdown' | 'fighting' | 'victory' | 'waiting';
 type FighterSide = 'left' | 'right';
 type WallSide = 'left' | 'right' | 'front' | 'back';
 
@@ -260,6 +260,11 @@ interface RosterBug {
     wins: number;
     losses: number;
     createdAt: string;
+    generation: number;
+    parent1Id: string | null;
+    parent2Id: string | null;
+    parent1Name: string | null;
+    parent2Name: string | null;
 }
 
 /** Bug record sent to client via getRosterForClient() */
@@ -278,6 +283,8 @@ interface RosterClientBug {
     wins: number;
     losses: number;
     genome: GenomeData;
+    generation: number;
+    parentNames: [string, string] | null;
 }
 
 /** Roster data format (legacy roster.json, used for migration) */

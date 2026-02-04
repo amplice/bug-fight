@@ -17,6 +17,16 @@ model Bug {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  generation Int      @default(0)
+  parent1Id  String?
+  parent2Id  String?
+  retiredAt  DateTime?
+
+  parent1           Bug?   @relation("Parent1", fields: [parent1Id], references: [id])
+  parent2           Bug?   @relation("Parent2", fields: [parent2Id], references: [id])
+  childrenAsParent1 Bug[]  @relation("Parent1")
+  childrenAsParent2 Bug[]  @relation("Parent2")
+
   fightsAsBug1 Fight[] @relation("Bug1")
   fightsAsBug2 Fight[] @relation("Bug2")
   fightsWon    Fight[] @relation("Winner")
@@ -31,6 +41,8 @@ model Fight {
   duration      Int      // ticks
   isDraw        Boolean  @default(false)
   eventsSummary String?  // brief fight summary text
+  drandRound    Int?
+  drandSeed     String?
   createdAt     DateTime @default(now())
 
   bug1   Bug  @relation("Bug1", fields: [bug1Id], references: [id])

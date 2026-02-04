@@ -207,6 +207,12 @@ class BugGenome {
     breed(other: BugGenome): BugGenome {
         const child = new BugGenome();
 
+        // 5% per-trait mutation: pick a random value from the pool instead of inheriting
+        const inheritTrait = <T>(a: T, b: T, pool: readonly T[]): T => {
+            if (Math.random() < 0.05) return pickRandom(pool);
+            return Math.random() < 0.5 ? a : b;
+        };
+
         child.bulk = this.inheritStat(this.bulk, other.bulk);
         child.speed = this.inheritStat(this.speed, other.speed);
         child.fury = this.inheritStat(this.fury, other.fury);
@@ -235,17 +241,17 @@ class BugGenome {
         }
         [child.bulk, child.speed, child.fury, child.instinct] = stats as [number, number, number, number];
 
-        child.abdomenType = Math.random() < 0.5 ? this.abdomenType : other.abdomenType;
-        child.thoraxType = Math.random() < 0.5 ? this.thoraxType : other.thoraxType;
-        child.headType = Math.random() < 0.5 ? this.headType : other.headType;
-        child.legCount = Math.random() < 0.5 ? this.legCount : other.legCount;
-        child.legStyle = Math.random() < 0.5 ? this.legStyle : other.legStyle;
-        child.weapon = Math.random() < 0.5 ? this.weapon : other.weapon;
-        child.defense = Math.random() < 0.5 ? this.defense : other.defense;
-        child.mobility = Math.random() < 0.5 ? this.mobility : other.mobility;
-        child.textureType = Math.random() < 0.5 ? this.textureType : other.textureType;
-        child.eyeStyle = Math.random() < 0.5 ? this.eyeStyle : other.eyeStyle;
-        child.antennaStyle = Math.random() < 0.5 ? this.antennaStyle : other.antennaStyle;
+        child.abdomenType = inheritTrait(this.abdomenType, other.abdomenType, ABDOMEN_TYPES);
+        child.thoraxType = inheritTrait(this.thoraxType, other.thoraxType, THORAX_TYPES);
+        child.headType = inheritTrait(this.headType, other.headType, HEAD_TYPES);
+        child.legCount = inheritTrait(this.legCount, other.legCount, LEG_COUNTS);
+        child.legStyle = inheritTrait(this.legStyle, other.legStyle, LEG_STYLES);
+        child.weapon = inheritTrait(this.weapon, other.weapon, WEAPONS);
+        child.defense = inheritTrait(this.defense, other.defense, DEFENSES);
+        child.mobility = inheritTrait(this.mobility, other.mobility, MOBILITIES);
+        child.textureType = inheritTrait(this.textureType, other.textureType, TEXTURES);
+        child.eyeStyle = inheritTrait(this.eyeStyle, other.eyeStyle, EYE_STYLES);
+        child.antennaStyle = inheritTrait(this.antennaStyle, other.antennaStyle, ANTENNA_STYLES);
 
         // Winged bugs always get a wing type; non-winged are always 'none'
         if (child.mobility === 'winged') {

@@ -114,11 +114,23 @@ class Roster3DViewer {
         canvas.height = 300;
         item.appendChild(canvas);
 
-        // Bug name
-        const name = document.createElement('div');
-        name.className = 'roster-bug-name';
-        name.textContent = bug.name;
-        item.appendChild(name);
+        // Bug name + generation badge
+        const nameRow = document.createElement('div');
+        nameRow.className = 'roster-bug-name';
+        nameRow.textContent = bug.name;
+        const genBadge = document.createElement('span');
+        genBadge.className = 'roster-gen-badge';
+        genBadge.textContent = `Gen ${bug.generation}`;
+        nameRow.appendChild(genBadge);
+        item.appendChild(nameRow);
+
+        // Parent lineage
+        if (bug.parentNames) {
+            const lineage = document.createElement('div');
+            lineage.className = 'roster-bug-lineage';
+            lineage.textContent = `${bug.parentNames[0]} × ${bug.parentNames[1]}`;
+            item.appendChild(lineage);
+        }
 
         // Record
         const record = document.createElement('div');

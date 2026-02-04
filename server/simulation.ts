@@ -4,6 +4,7 @@
 import BugGenome from './BugGenome';
 import RosterManager from './roster';
 import prisma from './db';
+import { SeededRNG, fetchDrandBeacon } from './rng';
 
 // ============================================
 // CONSTANTS
@@ -29,9 +30,7 @@ const TICK_MS: number = 1000 / TICK_RATE;
 // HELPER FUNCTIONS
 // ============================================
 
-function rollDice(sides: number): number {
-    return Math.floor(Math.random() * sides) + 1;
-}
+// rollDice moved to Simulation method to use seeded RNG
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -401,6 +400,7 @@ class Fighter {
     sizeMultiplier: number;
     spriteSize: number;
     lastWallImpact: { velocity: number; wallSide: WallSide; stunApplied: number } | null;
+    rng: SeededRNG;
 
     // Phenotype combat bonuses (derived from visual traits, undocumented)
     phenotype: {
@@ -418,10 +418,11 @@ class Fighter {
         hoverAccuracy: number;       // dragonfly wings (conditional on winged)
     };
 
-    constructor(genome: BugGenome, side: FighterSide, name: string) {
+    constructor(genome: BugGenome, side: FighterSide, name: string, rng: SeededRNG) {
         this.genome = genome;
         this.name = name;
         this.side = side;
+        this.rng = rng;
 
         // Mobility type
         this.isFlying = genome.mobility === 'winged';
@@ -437,7 +438,7 @@ class Fighter {
         this.maxHp = 150 + Math.floor(genome.bulk * 5);
         this.hp = this.maxHp;
         this.poisoned = 0;
-        this.attackCooldown = 35 + Math.random() * 25;
+        this.attackCooldown = 35 + this.rng.random() * 25;
 
         // Animation state
         this.state = 'idle';
@@ -565,8 +566,8 @@ class Fighter {
             this.y = ARENA.minY + 20;
         } else if (this.isFlying) {
             this.x = this.side === 'left' ? -250 : 250;
-            this.y = 220 + Math.random() * 150;
-            this.z = (Math.random() - 0.5) * 50;
+            this.y = 220 + this.rng.random() * 150;
+            this.z = (this.rng.random() - 0.5) * 50;
         } else if (this.isWallcrawler) {
             this.x = this.side === 'left' ? -300 : 300;
             this.y = ARENA.minY + 20;
@@ -1052,7 +1053,7 @@ class Fighter {
         if (instinctFactor > 0.5 && (this.state as AnimationState) !== 'attack' && this.state !== 'hit') {
             const shouldFaceRight = dx > 0;
             if (this.facingRight !== shouldFaceRight) {
-                if (Math.random() < instinctFactor * 0.3) {
+                if (this.rng.random() < instinctFactor * 0.3) {
                     this.facingRight = shouldFaceRight;
                 }
             }
@@ -1141,7 +1142,7 @@ class Fighter {
             const pressured = dist < attackRange * 1.5;
             const desperate = hpPercent < 0.5;
 
-            if ((pressured || desperate) && Math.random() < escapeUrgency * 0.15) {
+            if ((pressured || desperate) && this.rng.random() < escapeUrgency * 0.15) {
                 this.aiState = 'retreating';
                 this.aiStateTimer = 0;
                 return;
@@ -1151,13 +1152,13 @@ class Fighter {
         const minStateTime = 12;
         const canTransition = this.aiStateTimer > minStateTime;
 
-        if (hpPercent < 0.4 && caution > 0.5 && (this.isFlying || this.isWallcrawler) && Math.random() < caution * 0.08) {
+        if (hpPercent < 0.4 && caution > 0.5 && (this.isFlying || this.isWallcrawler) && this.rng.random() < caution * 0.08) {
             this.aiState = 'retreating';
             this.aiStateTimer = 0;
-        } else if (canTransition && this.aiState !== 'aggressive' && dist < attackRange * 1.5 && Math.random() < aggression * 0.10) {
+        } else if (canTransition && this.aiState !== 'aggressive' && dist < attackRange * 1.5 && this.rng.random() < aggression * 0.10) {
             this.aiState = 'aggressive';
             this.aiStateTimer = 0;
-        } else if (canTransition && this.aiState !== 'circling' && dist < attackRange * 2 && this.aiStateTimer > 40 && Math.random() < caution * 0.05) {
+        } else if (canTransition && this.aiState !== 'circling' && dist < attackRange * 2 && this.aiStateTimer > 40 && this.rng.random() < caution * 0.05) {
             this.aiState = 'circling';
             this.aiStateTimer = 0;
             this.circleAngle = Math.atan2(this.y - opponent.y, this.x - opponent.x);
@@ -1256,7 +1257,7 @@ class Fighter {
         } else if (this.onWall) {
             this.vy = Math.sign(dy) * speed * 2;
 
-            if (horizDist < 150 && Math.abs(dy) < 60 && Math.random() < 0.02 + this.drives.aggression * 0.03) {
+            if (horizDist < 150 && Math.abs(dy) < 60 && this.rng.random() < 0.02 + this.drives.aggression * 0.03) {
                 this.jump(1.0);
                 if (this.wallSide === 'left' || this.wallSide === 'right') {
                     this.vx = (this.wallSide === 'left' ? 1 : -1) * 6;
@@ -1275,7 +1276,7 @@ class Fighter {
             this.vz += forwardZ * speed * 0.9;
 
             if (opponent.isFlying || opponent.onWall || opponent.y > this.y + 50) {
-                if (this.grounded && horizDist < attackRange * 2.5 && Math.random() < 0.02 + this.drives.aggression * 0.04) {
+                if (this.grounded && horizDist < attackRange * 2.5 && this.rng.random() < 0.02 + this.drives.aggression * 0.04) {
                     this.jump(0.8);
                     this.vx += forwardX * 3;
                     this.vz += forwardZ * 2;
@@ -1384,8 +1385,8 @@ class Fighter {
         const escapeDir = this.getEscapeDirection();
         const escapeDirZ = this.z > 0 ? -1 : 1;
 
-        const retreatDir = -Math.sign(dx) || (Math.random() > 0.5 ? 1 : -1);
-        const retreatDirZ = -Math.sign(dz) || (Math.random() > 0.5 ? 1 : -1);
+        const retreatDir = -Math.sign(dx) || (this.rng.random() > 0.5 ? 1 : -1);
+        const retreatDirZ = -Math.sign(dz) || (this.rng.random() > 0.5 ? 1 : -1);
 
         if (this.isFlying) {
             const staminaPercent = this.stamina / this.maxStamina;
@@ -1446,9 +1447,9 @@ class Fighter {
                     this.vy -= 0.5;
                 }
 
-                if (opponent.isFlying && dist < 150 && Math.random() < 0.03) {
+                if (opponent.isFlying && dist < 150 && this.rng.random() < 0.03) {
                     this.vy -= 1.5;
-                    this.vz += (Math.random() > 0.5 ? 1 : -1) * speed * 3;
+                    this.vz += (this.rng.random() > 0.5 ? 1 : -1) * speed * 3;
                 }
             }
 
@@ -1482,7 +1483,7 @@ class Fighter {
                 this.vz += strafeZ * dodgeDir * speed * 0.5;
             }
 
-            if (this.grounded && Math.random() < 0.03) {
+            if (this.grounded && this.rng.random() < 0.03) {
                 this.jump(0.4);
             }
         }
@@ -1554,7 +1555,7 @@ class Fighter {
                     (heightAdvantage ? 0.05 : 0) +
                     (horizDist < 150 ? 0.03 : 0);
 
-                if (Math.random() < pounceChance) {
+                if (this.rng.random() < pounceChance) {
                     this.onWall = false;
                     this.grounded = false;
 
@@ -1598,8 +1599,8 @@ class Fighter {
                 const wantToClimb =
                     opponent.isFlying ||
                     opponent.y > this.y + 40 ||
-                    (this.drives.caution > 0.6 && Math.random() < 0.15) ||
-                    (dist < 120 && Math.random() < 0.12) ||
+                    (this.drives.caution > 0.6 && this.rng.random() < 0.15) ||
+                    (dist < 120 && this.rng.random() < 0.12) ||
                     (this.aiState === 'retreating' && staminaPercent > 0.7);
 
                 if (wantToClimb) {
@@ -1689,6 +1690,9 @@ class Simulation {
     winner: number | null;
     attackCooldowns: [number, number];
     victoryTimer: number;
+    rng: SeededRNG;
+    drandRound: number | null;
+    drandSeed: string | null;
 
     constructor() {
         this.phase = 'countdown';
@@ -1709,17 +1713,40 @@ class Simulation {
 
         this.attackCooldowns = [0, 0];
         this.victoryTimer = 0;
+        this.rng = new SeededRNG(Date.now());
+        this.drandRound = null;
+        this.drandSeed = null;
+    }
+
+    rollDice(sides: number): number {
+        return Math.floor(this.rng.random() * sides) + 1;
     }
 
     static async create(): Promise<Simulation> {
         const sim = new Simulation();
         sim.roster = await RosterManager.create();
-        sim.setupNextFight();
+        await sim.setupNextFight();
         return sim;
     }
 
-    setupNextFight(): void {
+    async setupNextFight(): Promise<void> {
         this.fightNumber++;
+
+        // Fetch drand beacon for verifiable randomness
+        const beacon = await fetchDrandBeacon();
+        if (beacon) {
+            this.rng = SeededRNG.fromHex(beacon.randomness);
+            this.drandRound = beacon.round;
+            this.drandSeed = beacon.randomness;
+            console.log(`[drand] Fight #${this.fightNumber} seeded with round ${beacon.round}`);
+        } else {
+            const fallback = Date.now();
+            this.rng = new SeededRNG(fallback);
+            this.drandRound = null;
+            this.drandSeed = null;
+            console.log(`[drand] Beacon unavailable, using fallback`);
+        }
+
         this.phase = 'countdown';
         this.countdown = COUNTDOWN_SECONDS;
         this.winner = null;
@@ -1738,11 +1765,11 @@ class Simulation {
         ];
 
         this.fighters = [
-            new Fighter(genome1, 'left', bug1.name),
-            new Fighter(genome2, 'right', bug2.name),
+            new Fighter(genome1, 'left', bug1.name, this.rng),
+            new Fighter(genome2, 'right', bug2.name, this.rng),
         ];
 
-        this.attackCooldowns = [25 + Math.random() * 20, 25 + Math.random() * 20];
+        this.attackCooldowns = [25 + this.rng.random() * 20, 25 + this.rng.random() * 20];
 
         fightLogger.reset(bug1.name, bug2.name);
 
@@ -1815,7 +1842,8 @@ class Simulation {
         } else if (this.phase === 'victory') {
             this.victoryTimer--;
             if (this.victoryTimer <= 0) {
-                this.setupNextFight();
+                this.phase = 'waiting';
+                this.setupNextFight();  // fire-and-forget async, sets phase to 'countdown' when done
             }
         }
     }
@@ -1925,7 +1953,7 @@ class Simulation {
 
     executeFeint(attacker: Fighter, target: Fighter, attackerIndex: number, dx: number, dy: number, dz: number, dist: number): void {
         attacker.spendStamina(3);
-        attacker.feintCooldown = 90 + Math.floor(Math.random() * 60);
+        attacker.feintCooldown = 90 + Math.floor(this.rng.random() * 60);
         attacker.onAttackAttempted();
 
         attacker.setState('feint');
@@ -1949,8 +1977,8 @@ class Simulation {
         // Segmented antennae: better feint detection
         const readChance = 0.15 + targetInstinct * 0.55 + target.phenotype.feintDetectBonus;
 
-        if (Math.random() < readChance) {
-            this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + Math.random() * 15;
+        if (this.rng.random() < readChance) {
+            this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + this.rng.random() * 15;
             attacker.feintSuccess = false;
 
             this.addEvent('commentary', `${target.name} reads the feint!`, '#0ff');
@@ -1962,14 +1990,14 @@ class Simulation {
             fightLogger.logFeint(attackerIndex, attacker.name, target.name, 'read');
 
         } else {
-            const dodgeReaction = Math.random() < 0.4 + targetInstinct * 0.2;
+            const dodgeReaction = this.rng.random() < 0.4 + targetInstinct * 0.2;
 
             if (dodgeReaction) {
                 const dodgeStrength = 3 + targetInstinct * 3;
                 const dirZ = dz / safeDist;
                 const perpX = -dirZ;
                 const perpZ = dirX;
-                const side = Math.random() > 0.5 ? 1 : -1;
+                const side = this.rng.random() > 0.5 ? 1 : -1;
                 target.vx += perpX * dodgeStrength * side;
                 target.vz += perpZ * dodgeStrength * side;
 
@@ -2022,7 +2050,7 @@ class Simulation {
                 const caution = attacker.drives.caution;
                 const feintChance = (instinct * 0.12 + caution * 0.06) * (1 - fury * 0.5) + 0.04;
 
-                if (Math.random() < feintChance) {
+                if (this.rng.random() < feintChance) {
                     this.executeFeint(attacker, target, attackerIndex, dx, dy, dz, dist);
                     return;
                 }
@@ -2061,7 +2089,7 @@ class Simulation {
                 const phenoDodge = target.phenotype.dodgeBonus;
                 const dodgeChance = Math.max(0.05, baseDodgeChance - speedPenalty + (target.isFlying ? 0.15 : 0) + camoBonus + phenoDodge);
 
-                if (Math.random() < dodgeChance) {
+                if (this.rng.random() < dodgeChance) {
                     dodged = true;
 
                     const dodgeStrength = 4 + targetInstinct * 4;
@@ -2069,17 +2097,17 @@ class Simulation {
                     if (targetInstinct > 0.5) {
                         dodgeDir.x = -dirZ * dodgeStrength;
                         dodgeDir.z = dirX * dodgeStrength;
-                        if (Math.random() < 0.5) {
+                        if (this.rng.random() < 0.5) {
                             dodgeDir.x *= -1;
                             dodgeDir.z *= -1;
                         }
                     } else {
-                        dodgeDir.x = -dirX * dodgeStrength * 0.7 + (Math.random() - 0.5) * 3;
-                        dodgeDir.z = -dirZ * dodgeStrength * 0.7 + (Math.random() - 0.5) * 3;
+                        dodgeDir.x = -dirX * dodgeStrength * 0.7 + (this.rng.random() - 0.5) * 3;
+                        dodgeDir.z = -dirZ * dodgeStrength * 0.7 + (this.rng.random() - 0.5) * 3;
                     }
 
                     if (target.isFlying && !target.grounded) {
-                        dodgeDir.y = 2 + Math.random() * 3;
+                        dodgeDir.y = 2 + this.rng.random() * 3;
                     }
 
                     target.vx += dodgeDir.x;
@@ -2114,7 +2142,7 @@ class Simulation {
 
                 const baseCD = 48 - attacker.genome.speed / 5;
                 const missPenalty = 8 + attackerMomentum * 12;
-                this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + missPenalty + Math.random() * 10;
+                this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + missPenalty + this.rng.random() * 10;
 
                 // Whip antennae on the target: faster counter-attack after dodging
                 if (target.phenotype.counterSpeedBonus > 0) {
@@ -2126,8 +2154,8 @@ class Simulation {
                 return;
             }
 
-            let hitRoll = rollDice(100) + attacker.genome.speed;
-            let dodgeRoll = rollDice(100) + target.genome.instinct * 0.5;
+            let hitRoll = this.rollDice(100) + attacker.genome.speed;
+            let dodgeRoll = this.rollDice(100) + target.genome.instinct * 0.5;
 
             // Phenotype bonuses on accuracy and dodge
             hitRoll += attacker.phenotype.accuracyBonus * 100;
@@ -2138,7 +2166,7 @@ class Simulation {
             if (target.stunTimer > 0) dodgeRoll -= 30;
 
             if (hitRoll > dodgeRoll) {
-                let damage = Math.floor((attacker.genome.bulk + attacker.genome.fury) / 10) + rollDice(6);
+                let damage = Math.floor((attacker.genome.bulk + attacker.genome.fury) / 10) + this.rollDice(6);
 
                 const momentumBonus = 1 + attackerMomentum * 0.35;
                 damage = Math.floor(damage * momentumBonus);
@@ -2186,7 +2214,7 @@ class Simulation {
                     damage = Math.max(1, damage - target.phenotype.damageReduction);
                 }
 
-                const isCrit = rollDice(100) <= attacker.genome.fury / 2;
+                const isCrit = this.rollDice(100) <= attacker.genome.fury / 2;
                 if (isCrit) {
                     damage = Math.floor(damage * 1.5);
                     this.addEvent('commentary', 'CRITICAL HIT!', '#ff0');
@@ -2260,7 +2288,7 @@ class Simulation {
                     momentum: attackerMomentum
                 });
 
-                if (attacker.genome.weapon === 'fangs' && rollDice(3) === 3) {
+                if (attacker.genome.weapon === 'fangs' && this.rollDice(3) === 3) {
                     target.poisoned = 4;
                     this.addEvent('commentary', `${target.name} is poisoned!`, '#0f0');
                 }
@@ -2295,7 +2323,7 @@ class Simulation {
             }
 
             const baseCD = 48 - attacker.genome.speed / 5;
-            this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + Math.random() * 15;
+            this.attackCooldowns[attackerIndex as 0 | 1] = baseCD + this.rng.random() * 15;
         }
     }
 
@@ -2363,8 +2391,15 @@ class Simulation {
                 isDraw: this.winner === 0,
                 eventsSummary: `${f1.name} vs ${f2.name}` +
                     (this.winner === 0 ? ' - Draw' : ` - ${this.winner === 1 ? f1.name : f2.name} wins`),
+                drandRound: this.drandRound,
+                drandSeed: this.drandSeed,
             },
         }).catch((err: unknown) => console.error('Error recording fight:', err));
+
+        // Breeding cycle check (fire-and-forget, completes during victory phase)
+        this.roster.checkBreedingCycle([this.bugIds[0]!, this.bugIds[1]!])
+            .then(result => { if (result.retired) console.log(`[Evolution] Roster turnover complete — ${this.roster.bugs.length} bugs active`); })
+            .catch(err => console.error('Breeding cycle error:', err));
     }
 
     getState(): GameState {
