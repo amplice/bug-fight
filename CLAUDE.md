@@ -15,7 +15,7 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 4. **No spectacle for spectacle's sake** - Effects serve clarity, not flash
 
 ## Current State
-**3D-only mode.** Core emergent combat system with full 3D rendering. Bugs fight in a true 3D arena with height, depth, and tactical positioning.
+**3D arena + multi-page SPA.** Core emergent combat system with full 3D rendering. Hash-based SPA with 5 pages: Arena, Roster, Bug Detail, Fight History, About. Dual-container architecture keeps Three.js alive across page transitions. Breeding system evolves the roster. drand provides provable fairness.
 
 ### Implemented Systems
 
@@ -152,22 +152,13 @@ Every feature must pass this test: "Does this add a simple rule that creates eme
 
 **Goal**: Prove fights aren't rigged. Users can verify the exact code from GitHub is running, and randomness can't be manipulated.
 
-**Phase 1 - drand Integration (Near-term)**:
-- Replace `Math.random()` with seeded PRNG
-- Seed each fight with [drand](https://drand.love) randomness beacon
-- Store `drandRound` with each fight result
+**Phase 1 - drand Integration** ✅ **IMPLEMENTED**:
+- `Math.random()` replaced with seeded PRNG (mulberry32) throughout simulation — zero `Math.random()` calls remain
+- Each fight seeded with [drand](https://drand.love) randomness beacon via `fetchDrandBeacon()` in `server/rng.ts`
+- `drandRound` and `drandSeed` stored with every fight result in database
+- Graceful fallback to `Date.now()` seed if drand beacon unavailable
 - Anyone can replay fight: clone repo + same seed = same outcome
-- Combat mechanics unchanged - just swap randomness source
-
-```javascript
-// Fetch drand beacon at fight start
-const beacon = await fetch('https://api.drand.sh/public/latest').json();
-const seed = beacon.randomness;  // Publicly verifiable
-const round = beacon.round;      // Stored with fight result
-
-// Seeded RNG replaces Math.random() throughout simulation
-const rng = createSeededRNG(seed);
-```
+- Fight history page shows drand round links to `api.drand.sh`
 
 **Phase 2 - TEE Attestation (With real money)**:
 - Run simulation in AWS Nitro Enclave (or Intel SGX)
@@ -189,28 +180,34 @@ const rng = createSeededRNG(seed);
 ### Files
 
 **TypeScript Source:**
-- `server/index.ts` - Bun HTTP + WebSocket server, REST API endpoints
-- `server/simulation.ts` - Game engine, Fighter class, 3D combat AI
-- `server/roster.ts` - Persistent bug roster management (Prisma/SQLite)
+- `server/index.ts` - Bun HTTP + WebSocket server, REST API endpoints (includes parent/children in bug detail)
+- `server/simulation.ts` - Game engine, Fighter class, 3D combat AI, SeededRNG throughout
+- `server/roster.ts` - Persistent bug roster management (Prisma/SQLite), breeding, retirement
 - `server/db.ts` - Prisma client singleton (libsql adapter)
-- `server/BugGenome.ts` - Bug genetics and genome generation
-- `prisma/schema.prisma` - Database schema (Bug, Fight models)
-- `src/client/main.ts` - Vite entry point, exposes onclick handlers to window
-- `src/client/app.ts` - App initialization, camera controls, sound toggle, debug overlay
-- `src/client/client.ts` - WebSocket client, betting logic, UI updates
+- `server/BugGenome.ts` - Bug genetics, genome generation, breeding (breed() method)
+- `server/rng.ts` - SeededRNG (mulberry32) + drand beacon fetcher
+- `prisma/schema.prisma` - Database schema (Bug with lineage, Fight with drand fields)
+- `src/client/main.ts` - Vite entry point, registers routes, inits router
+- `src/client/app.ts` - Arena initialization, camera controls, sound toggle, debug overlay
+- `src/client/client.ts` - WebSocket client, betting logic, multi-listener state pattern
+- `src/client/router.ts` - Hash-based SPA router with parameterized routes
+- `src/client/nav.ts` - Persistent navigation bar with live fight status
 - `src/client/renderer3d.ts` - Three.js 3D rendering, camera controls, effects
 - `src/client/bugGenerator3d.ts` - 3D bug mesh generation, BugAnimator class
 - `src/client/soundEngine.ts` - Procedural Web Audio API sound engine
 - `src/client/procedural.ts` - Client-side BugGenome class
-- `src/client/rosterViewer.ts` - 3D roster viewer modal (Three.js)
-- `src/client/index.html` - 3D arena and betting UI (Vite entry HTML)
-- `src/client/globals.d.ts` - Window augmentation for onclick handlers + API interfaces
+- `src/client/views/rosterView.ts` - Full-page roster grid with 3D previews, sort/filter
+- `src/client/views/bugDetailView.ts` - Bug detail with 3D model, stat bars, lineage, fight history
+- `src/client/views/fightHistoryView.ts` - Fight history table with drand links, pagination
+- `src/client/views/aboutView.ts` - About page with terminal-styled sections
+- `src/client/index.html` - Dual-container SPA (arena + page-content), nav bar
+- `src/client/globals.d.ts` - Window augmentation, PageView interface, API interfaces
 - `shared/types.d.ts` - Shared type definitions (GenomeData, FighterState, GameEvent, etc.)
 
 **Config:**
 - `tsconfig.json` - Base strict TypeScript config
 - `tsconfig.server.json` - Server config (ESNext, bundler resolution, bun-types)
-- `tsconfig.client.json` - Client config (ESNext modules, bundler resolution)
+- `tsconfig.client.json` - Client config (ESNext modules, bundler resolution, includes views/)
 - `vite.config.ts` - Vite config (root, publicDir, proxy, build output)
 - `prisma.config.ts` - Prisma config (SQLite datasource URL)
 
@@ -238,21 +235,30 @@ When adding, removing, or renaming any trait option (weapon, defense, mobility, 
 Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenome that receives genome data from the server. It has no trait lists or logic to sync.
 
 ## Implemented Features
-- Persistent roster of 20 bugs with fight records (W-L)
-- Pre-fight stats screen with pentagon charts
-- Accurate odds calculation with 5% house edge
+- Persistent roster of 25 bugs with fight records (W-L)
+- Pre-fight stats screen with accurate odds (5% house edge)
 - American/European odds toggle
 - Enhanced wallcrawler AI (wall seeking, wall jumps)
-- Roster viewer modal
+- Breeding system: winners breed every 8 fights, worst performer retires after 30 fights
+- drand integration: all fights seeded with verifiable randomness (Phase 1 provable fairness)
+- Multi-page SPA with hash-based routing (Arena, Roster, Bug Detail, Fights, About)
+- Dual-container architecture: Three.js arena stays alive across page transitions
+- Full-page roster with 3D previews, sorting, filtering
+- Bug detail page with large 3D model (OrbitControls), stat bars, lineage tree, fight history
+- Fight history table with drand round links and pagination
+- Persistent nav bar with live fight status across all pages
 
 ## Next Steps
 1. ~~Migrate to Bun (native WebSocket, faster runtime)~~ ✓
 2. ~~Migrate to SQLite + Prisma ORM (replace roster.json)~~ ✓
 3. ~~Migrate to Vite (bundling, dev server, HMR)~~ ✓
-4. Add breeding system (winners pass on genomes)
-5. Revisit variants as genetic traits, not cosmetic rarity
-6. Integrate drand for provable randomness (replace Math.random with seeded RNG)
-7. User accounts with persistent balances and leaderboards
+4. ~~Add breeding system (winners pass on genomes)~~ ✓
+5. ~~Integrate drand for provable randomness (replace Math.random with seeded RNG)~~ ✓
+6. ~~Multi-page UI (roster, bug detail, fight history, about pages)~~ ✓
+7. Revisit variants as genetic traits, not cosmetic rarity
+8. User accounts with persistent balances and leaderboards
+9. Tournament brackets and seasonal rankings
+10. TEE attestation for hardware-enforced fairness (Phase 2)
 
 ## Running
 

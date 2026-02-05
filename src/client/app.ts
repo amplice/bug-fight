@@ -4,7 +4,6 @@
 import { BugFightsClient } from './client';
 import { BugFightsRenderer3D } from './renderer3d';
 import { BugFightsSound } from './soundEngine';
-import { Roster3DViewer } from './rosterViewer';
 
 // ============================================
 // CAMERA CONTROL
@@ -91,7 +90,7 @@ function updateDebugOverlay(state: GameState): void {
         // Facing angle in degrees
         const facingDeg = ((fighter.facingAngle || 0) * 180 / Math.PI).toFixed(0);
         const facingEl = document.getElementById(`dbg${i}-facing`);
-        if (facingEl) facingEl.textContent = `${facingDeg}°`;
+        if (facingEl) facingEl.textContent = `${facingDeg}\u00B0`;
 
         // Position
         const posEl = document.getElementById(`dbg${i}-pos`);
@@ -141,6 +140,5 @@ function hookDebugOverlay(): void {
 export function initApp(): void {
     BugFightsClient.init();
     BugFightsRenderer3D.init();
-    new Roster3DViewer();
     hookDebugOverlay();
 }

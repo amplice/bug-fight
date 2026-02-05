@@ -102,6 +102,10 @@ const server = Bun.serve({
             const bug = await prisma.bug.findUnique({
                 where: { id: bugId },
                 include: {
+                    parent1: { select: { id: true, name: true } },
+                    parent2: { select: { id: true, name: true } },
+                    childrenAsParent1: { select: { id: true, name: true, generation: true } },
+                    childrenAsParent2: { select: { id: true, name: true, generation: true } },
                     fightsAsBug1: {
                         orderBy: { createdAt: 'desc' },
                         take: 20,

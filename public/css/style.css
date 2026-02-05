@@ -80,7 +80,247 @@ h1 {
     50%, 100% { opacity: 1; background: linear-gradient(180deg, #f66 0%, #f00 100%); }
 }
 
-/* Fighter Cards - Beveled 90s panels */
+/* ============================================
+   NAV BAR
+   ============================================ */
+
+#nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 15px;
+    margin-bottom: 15px;
+    background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+    border: 3px solid;
+    border-color: #555 #222 #222 #555;
+    box-shadow:
+        inset 1px 1px 0 rgba(255,255,255,0.1),
+        0 2px 6px rgba(0,0,0,0.5);
+}
+
+.nav-links {
+    display: flex;
+    gap: 0;
+}
+
+.nav-link {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #0f0;
+    text-decoration: none;
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    cursor: pointer;
+}
+
+.nav-link:hover {
+    color: #ff0;
+    background: rgba(255, 255, 0, 0.05);
+    text-shadow: 0 0 8px #ff0;
+}
+
+.nav-link.active {
+    color: #ff0;
+    background: rgba(255, 255, 0, 0.1);
+    border-color: #ff0;
+    text-shadow: 0 0 10px #ff0;
+}
+
+.nav-status {
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: #888;
+}
+
+.nav-status .fight-num {
+    color: #ff0;
+}
+
+.nav-status .fight-phase {
+    color: #0f0;
+    text-transform: uppercase;
+}
+
+/* ============================================
+   PAGE CONTENT CONTAINER
+   ============================================ */
+
+#page-content {
+    width: 100%;
+}
+
+#arena-container.hidden,
+#page-content.hidden {
+    display: none !important;
+}
+
+/* Page Headers */
+.page-header {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 18px;
+    color: #ff0;
+    text-shadow: 0 0 10px #ff0, 0 0 20px #f80;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #333;
+}
+
+/* ============================================
+   ARENA (3D canvas & controls)
+   ============================================ */
+
+#arena3d {
+    width: 900px;
+    height: 600px;
+    display: block;
+    border: 2px solid #333;
+    border-radius: 4px;
+}
+
+.camera-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+.camera-btn {
+    background: linear-gradient(180deg, #444 0%, #222 100%);
+    border: 2px solid #555;
+    color: #fff;
+    padding: 8px 16px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.camera-btn:hover {
+    background: linear-gradient(180deg, #555 0%, #333 100%);
+    border-color: #666;
+}
+
+.camera-btn.active {
+    background: linear-gradient(180deg, #666 0%, #444 100%);
+    border-color: #888;
+}
+
+.controls-hint {
+    color: #666;
+    font-size: 12px;
+    margin-top: 8px;
+    text-align: center;
+}
+
+.arena-container {
+    position: relative;
+    display: inline-block;
+}
+
+/* Admin Debug Overlay */
+.admin-debug-btn {
+    background: linear-gradient(180deg, #442 0%, #221 100%);
+    border: 2px solid #553;
+    color: #aa8;
+    padding: 8px 16px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 20px;
+}
+
+.admin-debug-btn:hover {
+    background: linear-gradient(180deg, #553 0%, #332 100%);
+    border-color: #664;
+}
+
+.admin-debug-btn.active {
+    background: linear-gradient(180deg, #664 0%, #442 100%);
+    border-color: #886;
+    color: #ff0;
+}
+
+.debug-overlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.debug-panel {
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #0f0;
+    min-width: 200px;
+    max-width: 280px;
+}
+
+.debug-panel.right {
+    text-align: right;
+}
+
+.debug-panel h4 {
+    margin: 0 0 6px 0;
+    color: #ff0;
+    font-size: 10px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+}
+
+.debug-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
+}
+
+.debug-panel.right .debug-row {
+    flex-direction: row-reverse;
+}
+
+.debug-label {
+    color: #888;
+}
+
+.debug-value {
+    color: #0f0;
+}
+
+.debug-value.state-aggressive { color: #f44; }
+.debug-value.state-circling { color: #4af; }
+.debug-value.state-retreating { color: #fa4; }
+.debug-value.state-stunned { color: #f0f; }
+
+.debug-bar {
+    height: 4px;
+    background: #222;
+    margin: 2px 0;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.debug-bar-fill {
+    height: 100%;
+    transition: width 0.1s;
+}
+
+.debug-bar-fill.stamina { background: #0af; }
+.debug-bar-fill.aggression { background: #f44; }
+.debug-bar-fill.caution { background: #fa4; }
+
+/* ============================================
+   FIGHTER CARDS - Beveled 90s panels
+   ============================================ */
+
 .selection-panel {
     display: flex;
     justify-content: space-between;
@@ -468,7 +708,521 @@ h1 {
     background: linear-gradient(180deg, #555 0%, #333 100%);
 }
 
-/* Retro Footer - 90s web badges and visitor counter */
+/* ============================================
+   ROSTER PAGE
+   ============================================ */
+
+.roster-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding: 10px 0;
+}
+
+.roster-item-3d {
+    background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.roster-item-3d:hover {
+    border-color: #ff0;
+    box-shadow: 0 0 15px rgba(255, 255, 0, 0.2);
+}
+
+.roster-bug-canvas {
+    width: 200px;
+    height: 150px;
+    border-radius: 4px;
+    cursor: grab;
+}
+
+.roster-bug-canvas:active {
+    cursor: grabbing;
+}
+
+.roster-bug-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    color: #fff;
+    margin-top: 8px;
+    text-align: center;
+}
+
+.roster-bug-record {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #888;
+    margin-top: 4px;
+}
+
+.roster-bug-winrate {
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    color: #af5;
+    margin-top: 2px;
+}
+
+.roster-bug-stats {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.roster-stat {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: #333;
+}
+
+.roster-stat.blk { color: #f88; }
+.roster-stat.spd { color: #8f8; }
+.roster-stat.fry { color: #ff8; }
+.roster-stat.ins { color: #8ff; }
+
+.roster-gen-badge {
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    color: #af5;
+    background: #1a2a1a;
+    border: 1px solid #4a4;
+    padding: 1px 6px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.roster-bug-lineage {
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    color: #888;
+    margin-top: 2px;
+    font-style: italic;
+}
+
+.roster-bug-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.roster-controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.roster-controls label {
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: #888;
+}
+
+.roster-controls select {
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    background: #111;
+    color: #0f0;
+    border: 2px solid #444;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.roster-controls select:focus {
+    outline: none;
+    border-color: #0f0;
+}
+
+.roster-controls-hint {
+    color: #666;
+    font-size: 10px;
+    text-align: center;
+    padding: 10px;
+    border-top: 1px solid #333;
+    margin-top: 10px;
+}
+
+/* ============================================
+   BUG DETAIL PAGE
+   ============================================ */
+
+.bug-detail-layout {
+    display: flex;
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.bug-detail-model {
+    flex: 0 0 400px;
+    height: 350px;
+    background: #1a2a1a;
+    border: 2px solid #444;
+    border-radius: 4px;
+    position: relative;
+}
+
+.bug-detail-model canvas {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+.bug-detail-model canvas:active {
+    cursor: grabbing;
+}
+
+.bug-detail-model .controls-hint {
+    position: absolute;
+    bottom: 5px;
+    left: 0;
+    right: 0;
+    font-size: 11px;
+}
+
+.bug-detail-info {
+    flex: 1;
+}
+
+.bug-detail-name {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.bug-detail-name .roster-gen-badge {
+    font-size: 16px;
+}
+
+.bug-detail-status {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.bug-detail-status.active { color: #0f0; }
+.bug-detail-status.retired { color: #f55; }
+
+.bug-detail-record {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: #ff0;
+    margin-bottom: 15px;
+}
+
+.stat-bars {
+    margin-bottom: 15px;
+}
+
+.stat-bar-row {
+    display: flex;
+    align-items: center;
+    margin: 6px 0;
+    gap: 10px;
+}
+
+.stat-bar-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    width: 35px;
+    flex-shrink: 0;
+}
+
+.stat-bar-label.blk { color: #f88; }
+.stat-bar-label.spd { color: #8f8; }
+.stat-bar-label.fry { color: #ff8; }
+.stat-bar-label.ins { color: #8ff; }
+
+.stat-bar-track {
+    flex: 1;
+    height: 10px;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    border-radius: 1px;
+    transition: width 0.3s;
+}
+
+.stat-bar-fill.blk { background: linear-gradient(90deg, #a44, #f88); }
+.stat-bar-fill.spd { background: linear-gradient(90deg, #4a4, #8f8); }
+.stat-bar-fill.fry { background: linear-gradient(90deg, #aa4, #ff8); }
+.stat-bar-fill.ins { background: linear-gradient(90deg, #4aa, #8ff); }
+
+.stat-bar-value {
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: #0f0;
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.bug-detail-traits {
+    margin-bottom: 15px;
+}
+
+.bug-detail-traits h3,
+.bug-detail-lineage h3,
+.bug-detail-visual h3 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #ff0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+}
+
+.trait-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.bug-detail-visual {
+    margin-bottom: 15px;
+}
+
+.visual-traits-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 15px;
+}
+
+.visual-trait {
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+}
+
+.visual-trait-label {
+    color: #888;
+}
+
+.visual-trait-value {
+    color: #0f0;
+}
+
+.bug-detail-lineage {
+    margin-bottom: 15px;
+}
+
+.lineage-links {
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    line-height: 1.8;
+}
+
+.lineage-links a {
+    color: #0ff;
+    text-decoration: none;
+}
+
+.lineage-links a:hover {
+    text-decoration: underline;
+    text-shadow: 0 0 8px #0ff;
+}
+
+.children-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+/* ============================================
+   FIGHT HISTORY PAGE & BUG DETAIL FIGHTS TABLE
+   ============================================ */
+
+.fights-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+}
+
+.fights-table th {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #ff0;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 2px solid #444;
+    text-transform: uppercase;
+}
+
+.fights-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #222;
+    color: #0f0;
+}
+
+.fights-table tr:hover td {
+    background: rgba(255, 255, 0, 0.03);
+}
+
+.fights-table a {
+    color: #0ff;
+    text-decoration: none;
+}
+
+.fights-table a:hover {
+    text-decoration: underline;
+    text-shadow: 0 0 8px #0ff;
+}
+
+.fights-table .winner-cell {
+    color: #ff0;
+    font-weight: bold;
+}
+
+.fights-table .draw-cell {
+    color: #888;
+    font-style: italic;
+}
+
+.fights-table .vs-cell {
+    color: #555;
+    text-align: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+}
+
+.fights-table .drand-link {
+    color: #a8f;
+}
+
+.fights-table .drand-link:hover {
+    text-shadow: 0 0 8px #a8f;
+}
+
+.load-more-btn {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 25px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    background: linear-gradient(180deg, #444 0%, #222 100%);
+    border: 2px solid;
+    border-color: #666 #222 #222 #666;
+    color: #0f0;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.load-more-btn:hover {
+    background: linear-gradient(180deg, #555 0%, #333 100%);
+    color: #ff0;
+    border-color: #888 #333 #333 #888;
+}
+
+/* ============================================
+   ABOUT PAGE
+   ============================================ */
+
+.about-section {
+    background: linear-gradient(180deg, #1a1a2a 0%, #0a0a1a 100%);
+    border: 3px solid;
+    border-color: #555 #222 #222 #555;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow:
+        inset 1px 1px 0 rgba(255,255,255,0.05),
+        0 2px 6px rgba(0,0,0,0.5);
+}
+
+.about-section h3 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    color: #ff0;
+    margin-bottom: 12px;
+    text-shadow: 0 0 8px #ff0;
+}
+
+.about-section p {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #0f0;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.about-section ul {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #0f0;
+    line-height: 1.6;
+    padding-left: 20px;
+    list-style: none;
+}
+
+.about-section ul li::before {
+    content: "> ";
+    color: #ff0;
+}
+
+.about-section a {
+    color: #0ff;
+    text-decoration: none;
+}
+
+.about-section a:hover {
+    text-decoration: underline;
+    text-shadow: 0 0 8px #0ff;
+}
+
+.about-section .code-block {
+    background: #000;
+    border: 1px solid #333;
+    padding: 10px 15px;
+    margin: 10px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #0f0;
+    overflow-x: auto;
+}
+
+.about-back-link {
+    display: inline-block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #ff0;
+    text-decoration: none;
+    padding: 10px 20px;
+    border: 2px solid;
+    border-color: #ff0 #660 #660 #ff0;
+    background: linear-gradient(180deg, #440 0%, #220 100%);
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+.about-back-link:hover {
+    background: linear-gradient(180deg, #660 0%, #330 100%);
+    text-shadow: 0 0 10px #ff0;
+}
+
+/* ============================================
+   RETRO FOOTER
+   ============================================ */
+
 .retro-footer {
     margin-top: 20px;
     text-align: center;
@@ -635,9 +1389,47 @@ h1 {
     background: linear-gradient(180deg, #800 0%, #400 100%);
 }
 
-/* Roster Grid - styles in index.html inline <style> for 3D viewer */
+/* ============================================
+   LOADING / EMPTY STATES
+   ============================================ */
 
-/* Responsive */
+.loading-msg {
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: #0f0;
+    text-align: center;
+    padding: 40px;
+    animation: blink90s 1s steps(1) infinite;
+}
+
+.error-msg {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #f88;
+    text-align: center;
+    padding: 30px;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 900px) {
+    .roster-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .bug-detail-layout {
+        flex-direction: column;
+    }
+
+    .bug-detail-model {
+        flex: none;
+        width: 100%;
+        height: 300px;
+    }
+}
+
 @media (max-width: 700px) {
     body {
         font-size: 16px;
@@ -660,9 +1452,34 @@ h1 {
         align-items: stretch;
     }
 
-
     .bet-btn {
         font-size: 8px;
         padding: 12px 8px;
+    }
+
+    .roster-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #nav-bar {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .nav-link {
+        font-size: 8px;
+        padding: 6px 10px;
+    }
+
+    .fights-table {
+        font-size: 14px;
+    }
+
+    .fights-table th {
+        font-size: 7px;
+    }
+
+    .visual-traits-grid {
+        grid-template-columns: 1fr;
     }
 }

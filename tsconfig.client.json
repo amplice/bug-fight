@@ -9,6 +9,7 @@
   },
   "include": [
     "src/client/*.ts",
+    "src/client/views/*.ts",
     "shared/types.d.ts"
   ]
 }

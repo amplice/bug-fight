@@ -5,427 +5,164 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bug Fights - 24/7 Live</title>
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* 3D-specific overrides */
-        #arena3d {
-            width: 900px;
-            height: 600px;
-            display: block;
-            border: 2px solid #333;
-            border-radius: 4px;
-        }
-
-        .camera-controls {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-            justify-content: center;
-        }
-
-        .camera-btn {
-            background: linear-gradient(180deg, #444 0%, #222 100%);
-            border: 2px solid #555;
-            color: #fff;
-            padding: 8px 16px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 10px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .camera-btn:hover {
-            background: linear-gradient(180deg, #555 0%, #333 100%);
-            border-color: #666;
-        }
-
-        .camera-btn.active {
-            background: linear-gradient(180deg, #666 0%, #444 100%);
-            border-color: #888;
-        }
-
-        .controls-hint {
-            color: #666;
-            font-size: 12px;
-            margin-top: 8px;
-            text-align: center;
-        }
-
-        /* 3D Roster Styles */
-        .roster-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            max-height: 70vh;
-            overflow-y: auto;
-            padding: 10px;
-        }
-
-        .roster-item-3d {
-            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
-            border: 2px solid #444;
-            border-radius: 8px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .roster-item-3d:hover {
-            border-color: #666;
-        }
-
-        .roster-bug-canvas {
-            width: 200px;
-            height: 150px;
-            border-radius: 4px;
-            cursor: grab;
-        }
-
-        .roster-bug-canvas:active {
-            cursor: grabbing;
-        }
-
-        .roster-bug-name {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 11px;
-            color: #fff;
-            margin-top: 8px;
-            text-align: center;
-        }
-
-        .roster-bug-record {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 9px;
-            color: #888;
-            margin-top: 4px;
-        }
-
-        .roster-bug-stats {
-            display: flex;
-            gap: 8px;
-            margin-top: 6px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .roster-stat {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 8px;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background: #333;
-        }
-
-        .roster-stat.blk { color: #f88; }
-        .roster-stat.spd { color: #8f8; }
-        .roster-stat.fry { color: #ff8; }
-        .roster-stat.ins { color: #8ff; }
-
-        .roster-gen-badge {
-            font-family: 'VT323', monospace;
-            font-size: 14px;
-            color: #af5;
-            background: #1a2a1a;
-            border: 1px solid #4a4;
-            padding: 1px 6px;
-            margin-left: 8px;
-            vertical-align: middle;
-        }
-
-        .roster-bug-lineage {
-            font-family: 'VT323', monospace;
-            font-size: 13px;
-            color: #888;
-            margin-top: 2px;
-            font-style: italic;
-        }
-
-        .roster-controls-hint {
-            color: #666;
-            font-size: 10px;
-            text-align: center;
-            padding: 10px;
-            border-top: 1px solid #333;
-            margin-top: 10px;
-        }
-
-        .version-tag {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 8px;
-            color: #555;
-            margin-top: 8px;
-        }
-
-        /* Admin Debug Overlay */
-        .admin-debug-btn {
-            background: linear-gradient(180deg, #442 0%, #221 100%);
-            border: 2px solid #553;
-            color: #aa8;
-            padding: 8px 16px;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 10px;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-left: 20px;
-        }
-
-        .admin-debug-btn:hover {
-            background: linear-gradient(180deg, #553 0%, #332 100%);
-            border-color: #664;
-        }
-
-        .admin-debug-btn.active {
-            background: linear-gradient(180deg, #664 0%, #442 100%);
-            border-color: #886;
-            color: #ff0;
-        }
-
-        .debug-overlay {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            display: flex;
-            justify-content: space-between;
-            pointer-events: none;
-            z-index: 100;
-        }
-
-        .debug-panel {
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid #444;
-            border-radius: 4px;
-            padding: 8px 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            color: #0f0;
-            min-width: 200px;
-            max-width: 280px;
-        }
-
-        .debug-panel.right {
-            text-align: right;
-        }
-
-        .debug-panel h4 {
-            margin: 0 0 6px 0;
-            color: #ff0;
-            font-size: 10px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 4px;
-        }
-
-        .debug-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 2px 0;
-        }
-
-        .debug-panel.right .debug-row {
-            flex-direction: row-reverse;
-        }
-
-        .debug-label {
-            color: #888;
-        }
-
-        .debug-value {
-            color: #0f0;
-        }
-
-        .debug-value.state-aggressive { color: #f44; }
-        .debug-value.state-circling { color: #4af; }
-        .debug-value.state-retreating { color: #fa4; }
-        .debug-value.state-stunned { color: #f0f; }
-
-        .debug-bar {
-            height: 4px;
-            background: #222;
-            margin: 2px 0;
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .debug-bar-fill {
-            height: 100%;
-            transition: width 0.1s;
-        }
-
-        .debug-bar-fill.stamina { background: #0af; }
-        .debug-bar-fill.aggression { background: #f44; }
-        .debug-bar-fill.caution { background: #fa4; }
-
-        .arena-container {
-            position: relative;
-            display: inline-block;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <h1>BUG FIGHTS <span class="live-badge">LIVE 24/7</span></h1>
 
-        <div class="arena-container">
-            <canvas id="arena3d" width="900" height="600"></canvas>
-            <div id="debug-overlay" class="debug-overlay" style="display: none;">
-                <div id="debug-panel-1" class="debug-panel">
-                    <h4>FIGHTER 1</h4>
-                    <div class="debug-row"><span class="debug-label">AI State:</span><span class="debug-value" id="dbg1-aistate">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Anim State:</span><span class="debug-value" id="dbg1-animstate">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Stun Timer:</span><span class="debug-value" id="dbg1-stun">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Action:</span><span class="debug-value" id="dbg1-action">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Facing:</span><span class="debug-value" id="dbg1-facing">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Position:</span><span class="debug-value" id="dbg1-pos">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Velocity:</span><span class="debug-value" id="dbg1-vel">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Stamina:</span></div>
-                    <div class="debug-bar"><div class="debug-bar-fill stamina" id="dbg1-stamina-bar"></div></div>
-                    <div class="debug-row"><span class="debug-label">Aggression:</span></div>
-                    <div class="debug-bar"><div class="debug-bar-fill aggression" id="dbg1-aggr-bar"></div></div>
-                    <div class="debug-row"><span class="debug-label">Caution:</span></div>
-                    <div class="debug-bar"><div class="debug-bar-fill caution" id="dbg1-caut-bar"></div></div>
-                    <div class="debug-row"><span class="debug-label">Grounded:</span><span class="debug-value" id="dbg1-grounded">-</span></div>
-                    <div class="debug-row"><span class="debug-label">On Wall:</span><span class="debug-value" id="dbg1-wall">-</span></div>
+        <nav id="nav-bar"></nav>
+
+        <div id="arena-container">
+            <div class="arena-container">
+                <canvas id="arena3d" width="900" height="600"></canvas>
+                <div id="debug-overlay" class="debug-overlay" style="display: none;">
+                    <div id="debug-panel-1" class="debug-panel">
+                        <h4>FIGHTER 1</h4>
+                        <div class="debug-row"><span class="debug-label">AI State:</span><span class="debug-value" id="dbg1-aistate">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Anim State:</span><span class="debug-value" id="dbg1-animstate">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Stun Timer:</span><span class="debug-value" id="dbg1-stun">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Action:</span><span class="debug-value" id="dbg1-action">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Facing:</span><span class="debug-value" id="dbg1-facing">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Position:</span><span class="debug-value" id="dbg1-pos">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Velocity:</span><span class="debug-value" id="dbg1-vel">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Stamina:</span></div>
+                        <div class="debug-bar"><div class="debug-bar-fill stamina" id="dbg1-stamina-bar"></div></div>
+                        <div class="debug-row"><span class="debug-label">Aggression:</span></div>
+                        <div class="debug-bar"><div class="debug-bar-fill aggression" id="dbg1-aggr-bar"></div></div>
+                        <div class="debug-row"><span class="debug-label">Caution:</span></div>
+                        <div class="debug-bar"><div class="debug-bar-fill caution" id="dbg1-caut-bar"></div></div>
+                        <div class="debug-row"><span class="debug-label">Grounded:</span><span class="debug-value" id="dbg1-grounded">-</span></div>
+                        <div class="debug-row"><span class="debug-label">On Wall:</span><span class="debug-value" id="dbg1-wall">-</span></div>
+                    </div>
+                    <div id="debug-panel-2" class="debug-panel right">
+                        <h4>FIGHTER 2</h4>
+                        <div class="debug-row"><span class="debug-label">AI State:</span><span class="debug-value" id="dbg2-aistate">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Anim State:</span><span class="debug-value" id="dbg2-animstate">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Stun Timer:</span><span class="debug-value" id="dbg2-stun">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Action:</span><span class="debug-value" id="dbg2-action">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Facing:</span><span class="debug-value" id="dbg2-facing">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Position:</span><span class="debug-value" id="dbg2-pos">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Velocity:</span><span class="debug-value" id="dbg2-vel">-</span></div>
+                        <div class="debug-row"><span class="debug-label">Stamina:</span></div>
+                        <div class="debug-bar"><div class="debug-bar-fill stamina" id="dbg2-stamina-bar"></div></div>
+                        <div class="debug-row"><span class="debug-label">Aggression:</span></div>
+                        <div class="debug-bar"><div class="debug-bar-fill aggression" id="dbg2-aggr-bar"></div></div>
+                        <div class="debug-row"><span class="debug-label">Caution:</span></div>
+                        <div class="debug-bar"><div class="debug-bar-fill caution" id="dbg2-caut-bar"></div></div>
+                        <div class="debug-row"><span class="debug-label">Grounded:</span><span class="debug-value" id="dbg2-grounded">-</span></div>
+                        <div class="debug-row"><span class="debug-label">On Wall:</span><span class="debug-value" id="dbg2-wall">-</span></div>
+                    </div>
                 </div>
-                <div id="debug-panel-2" class="debug-panel right">
-                    <h4>FIGHTER 2</h4>
-                    <div class="debug-row"><span class="debug-label">AI State:</span><span class="debug-value" id="dbg2-aistate">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Anim State:</span><span class="debug-value" id="dbg2-animstate">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Stun Timer:</span><span class="debug-value" id="dbg2-stun">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Action:</span><span class="debug-value" id="dbg2-action">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Facing:</span><span class="debug-value" id="dbg2-facing">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Position:</span><span class="debug-value" id="dbg2-pos">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Velocity:</span><span class="debug-value" id="dbg2-vel">-</span></div>
-                    <div class="debug-row"><span class="debug-label">Stamina:</span></div>
-                    <div class="debug-bar"><div class="debug-bar-fill stamina" id="dbg2-stamina-bar"></div></div>
-                    <div class="debug-row"><span class="debug-label">Aggression:</span></div>
-                    <div class="debug-bar"><div class="debug-bar-fill aggression" id="dbg2-aggr-bar"></div></div>
-                    <div class="debug-row"><span class="debug-label">Caution:</span></div>
-                    <div class="debug-bar"><div class="debug-bar-fill caution" id="dbg2-caut-bar"></div></div>
-                    <div class="debug-row"><span class="debug-label">Grounded:</span><span class="debug-value" id="dbg2-grounded">-</span></div>
-                    <div class="debug-row"><span class="debug-label">On Wall:</span><span class="debug-value" id="dbg2-wall">-</span></div>
+            </div>
+
+            <div class="camera-controls">
+                <button class="camera-btn active" onclick="setCamera('front')" id="cam-front">1: Front</button>
+                <button class="camera-btn" onclick="setCamera('side')" id="cam-side">2: Side</button>
+                <button class="camera-btn" onclick="setCamera('top')" id="cam-top">3: Top</button>
+                <button class="camera-btn" onclick="setCamera('isometric')" id="cam-iso">4: Isometric</button>
+                <button class="admin-debug-btn" onclick="toggleDebugOverlay()" id="debug-toggle">DEBUG</button>
+                <button class="camera-btn" onclick="toggleSound()" id="sound-toggle">SOUND: ON</button>
+            </div>
+            <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-4 for presets, R to reset, M to mute</div>
+
+            <div class="selection-panel">
+                <div class="fighter-card left">
+                    <h3>FIGHTER 1</h3>
+                    <div id="fighter1-name" class="fighter-name">-</div>
+                    <div id="fighter1-stats" class="fighter-stats"></div>
+                    <div id="fighter1-attrs" class="fighter-attrs"></div>
+                    <div class="odds">Odds: <span id="odds1">-</span></div>
+                    <div id="bet-buttons">
+                        <button id="bet-fighter1" class="bet-btn">BET ON FIGHTER 1</button>
+                    </div>
                 </div>
+
+                <div class="vs-divider">
+                    <div id="countdown-display" class="countdown">
+                        <div id="countdown-timer">10</div>
+                        <div class="countdown-label">seconds</div>
+                    </div>
+                </div>
+
+                <div class="fighter-card right">
+                    <h3>FIGHTER 2</h3>
+                    <div id="fighter2-name" class="fighter-name">-</div>
+                    <div id="fighter2-stats" class="fighter-stats"></div>
+                    <div id="fighter2-attrs" class="fighter-attrs"></div>
+                    <div class="odds">Odds: <span id="odds2">-</span></div>
+                    <div id="bet-buttons-2">
+                        <button id="bet-fighter2" class="bet-btn">BET ON FIGHTER 2</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="betting-panel">
+                <div class="betting-info">
+                    <div class="money-display">
+                        <span class="label">BALANCE:</span>
+                        <span class="money">$<span id="money">1000</span></span>
+                    </div>
+                    <div class="bet-amount-group">
+                        <label>Bet Amount: $</label>
+                        <input type="number" id="bet-amount" value="100" min="0" step="50">
+                    </div>
+                    <div class="current-bet-display">
+                        <span class="label">Current Bet:</span>
+                        <span id="current-bet">None</span>
+                    </div>
+                    <div class="odds-toggle">
+                        <span class="label">Odds:</span>
+                        <button id="odds-format-btn" class="odds-format-btn">DECIMAL</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-legend">
+                <span>BLK = Bulk (HP/Damage)</span>
+                <span>SPD = Speed (Attack Rate)</span>
+                <span>FRY = Fury (Crits)</span>
+                <span>INS = Instinct (Dodge)</span>
+            </div>
+
+            <div class="attributes-legend">
+                <div class="attr-group">
+                    <strong>Weapons:</strong>
+                    <span class="weapon">mandibles</span>
+                    <span class="weapon">stinger</span>
+                    <span class="weapon">fangs</span>
+                    <span class="weapon">pincers</span>
+                    <span class="weapon">horn</span>
+                </div>
+                <div class="attr-group">
+                    <strong>Defense:</strong>
+                    <span class="defense">shell</span>
+                    <span class="defense">toxic</span>
+                    <span class="defense">camouflage</span>
+                    <span class="defense">none</span>
+                </div>
+                <div class="attr-group">
+                    <strong>Mobility:</strong>
+                    <span class="mobility">ground</span>
+                    <span class="mobility">winged</span>
+                    <span class="mobility">wallcrawler</span>
+                </div>
+            </div>
+
+            <div class="retro-footer">
+                <div class="visitor-counter">
+                    <span class="counter-label">VISITORS:</span>
+                    <span class="counter-digits" id="visitor-count">000042</span>
+                </div>
+                <div class="footer-badges">
+                    <span class="badge netscape">Best viewed at 800x600</span>
+                    <span class="badge construction">Always under construction!</span>
+                </div>
+                <div class="copyright">&copy; 1997-2026 Bug Fights Inc. All bugs reserved.</div>
+                <div class="version-tag">v0.3.0-alpha</div>
             </div>
         </div>
 
-        <div class="camera-controls">
-            <button class="camera-btn active" onclick="setCamera('front')" id="cam-front">1: Front</button>
-            <button class="camera-btn" onclick="setCamera('side')" id="cam-side">2: Side</button>
-            <button class="camera-btn" onclick="setCamera('top')" id="cam-top">3: Top</button>
-            <button class="camera-btn" onclick="setCamera('isometric')" id="cam-iso">4: Isometric</button>
-            <button class="admin-debug-btn" onclick="toggleDebugOverlay()" id="debug-toggle">DEBUG</button>
-            <button class="camera-btn" onclick="toggleSound()" id="sound-toggle">SOUND: ON</button>
-        </div>
-        <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-4 for presets, R to reset, M to mute</div>
-
-        <div class="selection-panel">
-            <div class="fighter-card left">
-                <h3>FIGHTER 1</h3>
-                <div id="fighter1-name" class="fighter-name">-</div>
-                <div id="fighter1-stats" class="fighter-stats"></div>
-                <div id="fighter1-attrs" class="fighter-attrs"></div>
-                <div class="odds">Odds: <span id="odds1">-</span></div>
-                <div id="bet-buttons">
-                    <button id="bet-fighter1" class="bet-btn">BET ON FIGHTER 1</button>
-                </div>
-            </div>
-
-            <div class="vs-divider">
-                <div id="countdown-display" class="countdown">
-                    <div id="countdown-timer">10</div>
-                    <div class="countdown-label">seconds</div>
-                </div>
-            </div>
-
-            <div class="fighter-card right">
-                <h3>FIGHTER 2</h3>
-                <div id="fighter2-name" class="fighter-name">-</div>
-                <div id="fighter2-stats" class="fighter-stats"></div>
-                <div id="fighter2-attrs" class="fighter-attrs"></div>
-                <div class="odds">Odds: <span id="odds2">-</span></div>
-                <div id="bet-buttons-2">
-                    <button id="bet-fighter2" class="bet-btn">BET ON FIGHTER 2</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="betting-panel">
-            <div class="betting-info">
-                <div class="money-display">
-                    <span class="label">BALANCE:</span>
-                    <span class="money">$<span id="money">1000</span></span>
-                </div>
-                <div class="bet-amount-group">
-                    <label>Bet Amount: $</label>
-                    <input type="number" id="bet-amount" value="100" min="0" step="50">
-                </div>
-                <div class="current-bet-display">
-                    <span class="label">Current Bet:</span>
-                    <span id="current-bet">None</span>
-                </div>
-                <div class="odds-toggle">
-                    <span class="label">Odds:</span>
-                    <button id="odds-format-btn" class="odds-format-btn">DECIMAL</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="stats-legend">
-            <span>BLK = Bulk (HP/Damage)</span>
-            <span>SPD = Speed (Attack Rate)</span>
-            <span>FRY = Fury (Crits)</span>
-            <span>INS = Instinct (Dodge)</span>
-        </div>
-
-        <div class="attributes-legend">
-            <div class="attr-group">
-                <strong>Weapons:</strong>
-                <span class="weapon">mandibles</span>
-                <span class="weapon">stinger</span>
-                <span class="weapon">fangs</span>
-                <span class="weapon">pincers</span>
-                <span class="weapon">horn</span>
-            </div>
-            <div class="attr-group">
-                <strong>Defense:</strong>
-                <span class="defense">shell</span>
-                <span class="defense">toxic</span>
-                <span class="defense">camouflage</span>
-                <span class="defense">none</span>
-            </div>
-            <div class="attr-group">
-                <strong>Mobility:</strong>
-                <span class="mobility">ground</span>
-                <span class="mobility">winged</span>
-                <span class="mobility">wallcrawler</span>
-            </div>
-        </div>
-
-        <div class="retro-footer">
-            <div class="visitor-counter">
-                <span class="counter-label">VISITORS:</span>
-                <span class="counter-digits" id="visitor-count">000042</span>
-            </div>
-            <div class="footer-badges">
-                <button id="roster-btn" class="badge roster-btn">VIEW ROSTER</button>
-                <span class="badge netscape">Best viewed at 800x600</span>
-                <span class="badge construction">Always under construction!</span>
-            </div>
-            <div class="copyright">&copy; 1997-2026 Bug Fights Inc. All bugs reserved.</div>
-            <div class="version-tag">v0.3.0-alpha</div>
-        </div>
-    </div>
-
-    <!-- Roster Modal -->
-    <div id="roster-modal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>BUG ROSTER</h2>
-                <button id="close-roster" class="close-btn">&times;</button>
-            </div>
-            <div id="roster-grid" class="roster-grid">
-                <!-- Roster items populated by JS -->
-            </div>
-        </div>
+        <div id="page-content" class="hidden"></div>
     </div>
 
     <script type="module" src="./main.ts"></script>

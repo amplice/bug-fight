@@ -34,9 +34,16 @@ let currentBet: { amount: number; on: number | null } = { amount: 0, on: null };
 // Odds format preference
 let oddsFormat: 'decimal' | 'american' = (localStorage.getItem('bugfights_odds_format') as 'decimal' | 'american') || 'decimal';
 
-// Callbacks for renderer
-let onStateUpdate: ((state: GameState) => void) | null = null;
+// Multi-listener pattern for state updates
+let stateListeners: Array<(state: GameState) => void> = [];
 let onEvent: ((event: GameEvent) => void) | null = null;
+
+function addStateListener(cb: (state: GameState) => void): () => void {
+    stateListeners.push(cb);
+    return () => {
+        stateListeners = stateListeners.filter(l => l !== cb);
+    };
+}
 
 function connect(): void {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -91,9 +98,6 @@ function handleMessage(data: WSServerMessage): void {
 }
 
 function updateGameState(state: GameState): void {
-    const previousPhase = gameState.phase;
-    const previousFightNumber = gameState.fightNumber;
-
     gameState = state;
 
     // Process events
@@ -106,10 +110,8 @@ function updateGameState(state: GameState): void {
     // Update UI
     updateUI();
 
-    // Notify renderer
-    if (onStateUpdate) {
-        onStateUpdate(gameState);
-    }
+    // Notify all listeners
+    stateListeners.forEach(cb => cb(gameState));
 }
 
 function processEvent(event: GameEvent): void {
@@ -318,8 +320,6 @@ function updateConnectionStatus(isConnected: boolean): void {
 }
 
 // ============================================
-// ROSTER MODAL
-// ============================================
 // INIT
 // ============================================
 
@@ -336,8 +336,6 @@ function initClient(): void {
 
     // Set up odds format toggle
     document.getElementById('odds-format-btn')?.addEventListener('click', toggleOddsFormat);
-
-    // Roster modal handled by Roster3DViewer in rosterViewer.ts
 
     // Visitor counter
     let visits = parseInt(localStorage.getItem('bugfights_visits') || '0');
@@ -359,7 +357,13 @@ export const BugFightsClient: BugFightsClientAPI = {
     init: initClient,
     getState: () => gameState,
     getCommentary: () => commentary,
-    setOnStateUpdate: (cb) => { onStateUpdate = cb; },
+    setOnStateUpdate: (cb) => {
+        // Backwards compat: register as a listener
+        if (cb) {
+            addStateListener(cb);
+        }
+    },
     setOnEvent: (cb) => { onEvent = cb; },
     addCommentary: addCommentary,
+    addStateListener: addStateListener,
 };

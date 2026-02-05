@@ -9,6 +9,15 @@ interface Window {
 }
 
 // ============================================
+// PAGE VIEW INTERFACE
+// ============================================
+
+interface PageView {
+    mount(container: HTMLElement): void;
+    unmount(): void;
+}
+
+// ============================================
 // CLIENT MODULE APIS
 // ============================================
 
@@ -19,6 +28,7 @@ interface BugFightsClientAPI {
     setOnStateUpdate(cb: ((state: GameState) => void) | null): void;
     setOnEvent(cb: ((event: GameEvent) => void) | null): void;
     addCommentary(text: string, color?: string): void;
+    addStateListener(cb: (state: GameState) => void): () => void;
 }
 
 interface CommentaryEntry {
