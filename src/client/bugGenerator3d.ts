@@ -959,12 +959,14 @@ class BugGenerator3D {
         } else if (defense === 'camouflage') {
             abdomenMat = this.createMaterial('primary', {
                 transparent: true,
-                opacity: 0.20,
+                opacity: 0.55,
                 roughness: 0.7,
             });
         } else {
             abdomenMat = this.createMaterial('primary');
         }
+
+        const isCamo = defense === 'camouflage';
 
         // Base dimensions
         let rx = 4 * bulkFactor * scale;
@@ -1074,7 +1076,7 @@ class BugGenerator3D {
                     roughness: 0.3,
                     metalness: 0.1,
                     transparent: true,
-                    opacity: 0.85,
+                    opacity: isCamo ? 0.45 : 0.85,
                 });
 
                 // Main sac body
@@ -1244,7 +1246,7 @@ class BugGenerator3D {
         } else if (defense === 'camouflage') {
             thoraxMat = this.createMaterial('primary', {
                 transparent: true,
-                opacity: 0.20,
+                opacity: 0.55,
                 roughness: 0.7,
             });
         } else {
@@ -1384,7 +1386,7 @@ class BugGenerator3D {
         } else if (defense === 'camouflage') {
             headMat = this.createMaterial('primary', {
                 transparent: true,
-                opacity: 0.20,
+                opacity: 0.55,
                 roughness: 0.7,
             });
         } else {

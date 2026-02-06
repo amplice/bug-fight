@@ -255,10 +255,11 @@ Note: `src/client/procedural.ts` is a thin constructor-only client-side BugGenom
 4. ~~Add breeding system (winners pass on genomes)~~ ✓
 5. ~~Integrate drand for provable randomness (replace Math.random with seeded RNG)~~ ✓
 6. ~~Multi-page UI (roster, bug detail, fight history, about pages)~~ ✓
-7. Revisit variants as genetic traits, not cosmetic rarity
-8. User accounts with persistent balances and leaderboards
-9. Tournament brackets and seasonal rankings
-10. TEE attestation for hardware-enforced fairness (Phase 2)
+7. User accounts with persistent balances and leaderboards
+8. ELO rating system with historical tracking, rise/fall graphs, meaningful matchmaking
+9. Shareable bug cards (PNG/SVG trading cards with 3D render, stats, lineage, record)
+10. Tournament brackets and seasonal rankings
+11. TEE attestation for hardware-enforced fairness (Phase 2)
 
 ## Running
 

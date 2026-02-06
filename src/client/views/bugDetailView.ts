@@ -216,8 +216,8 @@ export function createBugDetailView(): PageView {
             scene.background = new THREE.Color(0x1a2a1a);
 
             const camera = new THREE.PerspectiveCamera(50, 800 / 700, 0.1, 100);
-            camera.position.set(0, 1.5, 6);
-            camera.lookAt(0, 0, 0);
+            camera.position.set(0, 1, 7);
+            camera.lookAt(0, 0.3, 0);
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
             const dir = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -230,7 +230,7 @@ export function createBugDetailView(): PageView {
             const bugGenome = new BugGenome(genome);
             const generator = new BugGenerator3D(bugGenome);
             const bugGroup = generator.generate();
-            bugGroup.scale.setScalar(0.15);
+            bugGroup.scale.setScalar(0.13);
             scene.add(bugGroup);
 
             controls = new OrbitControls(camera, canvas);
@@ -238,7 +238,7 @@ export function createBugDetailView(): PageView {
             controls.dampingFactor = 0.1;
             controls.enableZoom = true;
             controls.enablePan = false;
-            controls.target.set(0, 0, 0);
+            controls.target.set(0, 0.3, 0);
 
             const animator = new BugAnimator(bugGroup);
             const clock = new THREE.Clock();
