@@ -1,10 +1,5 @@
 // Bug Fights - About Page View
 
-interface PageView {
-    mount(container: HTMLElement): void;
-    unmount(): void;
-}
-
 export function createAboutView(): PageView {
     function mount(container: HTMLElement): void {
         const header = document.createElement('h2');

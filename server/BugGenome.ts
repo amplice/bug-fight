@@ -218,28 +218,25 @@ class BugGenome {
         child.fury = this.inheritStat(this.fury, other.fury);
         child.instinct = this.inheritStat(this.instinct, other.instinct);
 
-        // Scale stats to target total, clamped to [10, 100]
+        // Only scale DOWN if over cap (don't inflate weak parents to max stats)
         const total = child.bulk + child.speed + child.fury + child.instinct;
-        const scale = STAT_CAP / total;
-        let stats = [
-            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.bulk * scale))),
-            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.speed * scale))),
-            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.fury * scale))),
-            Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.instinct * scale))),
-        ];
-        // Adjust for rounding errors - trim from highest stats
-        let newTotal = stats.reduce((a, b) => a + b, 0);
-        while (newTotal > STAT_CAP) {
-            const maxIdx = stats.indexOf(Math.max(...stats));
-            stats[maxIdx]!--;
-            newTotal--;
+        if (total > STAT_CAP) {
+            const scale = STAT_CAP / total;
+            let stats = [
+                Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.bulk * scale))),
+                Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.speed * scale))),
+                Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.fury * scale))),
+                Math.max(STAT_MIN, Math.min(STAT_MAX, Math.round(child.instinct * scale))),
+            ];
+            // Adjust for rounding errors - trim from highest stats
+            let newTotal = stats.reduce((a, b) => a + b, 0);
+            while (newTotal > STAT_CAP) {
+                const maxIdx = stats.indexOf(Math.max(...stats));
+                stats[maxIdx]!--;
+                newTotal--;
+            }
+            [child.bulk, child.speed, child.fury, child.instinct] = stats as [number, number, number, number];
         }
-        while (newTotal < STAT_CAP) {
-            const minIdx = stats.indexOf(Math.min(...stats));
-            stats[minIdx]!++;
-            newTotal++;
-        }
-        [child.bulk, child.speed, child.fury, child.instinct] = stats as [number, number, number, number];
 
         child.abdomenType = inheritTrait(this.abdomenType, other.abdomenType, ABDOMEN_TYPES);
         child.thoraxType = inheritTrait(this.thoraxType, other.thoraxType, THORAX_TYPES);

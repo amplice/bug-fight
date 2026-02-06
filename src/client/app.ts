@@ -12,8 +12,8 @@ import { BugFightsSound } from './soundEngine';
 export function setCamera(preset: string): void {
     BugFightsRenderer3D.setCameraPreset(preset);
 
-    // Update button states
-    document.querySelectorAll('.camera-btn').forEach(btn => btn.classList.remove('active'));
+    // Update button states (exclude sound-toggle which is also a camera-btn)
+    document.querySelectorAll('.camera-btn:not(#sound-toggle)').forEach(btn => btn.classList.remove('active'));
     const btnId = 'cam-' + (preset === 'isometric' ? 'iso' : preset);
     document.getElementById(btnId)?.classList.add('active');
 }

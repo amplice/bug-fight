@@ -134,8 +134,8 @@ class RosterManager {
             } while (
                 attempts < 20 &&
                 i < 6 &&
-                (usedWeapons.has(genome.weapon) && usedWeapons.size < 4) ||
-                (usedMobilities.has(genome.mobility) && usedMobilities.size < 3)
+                ((usedWeapons.has(genome.weapon) && usedWeapons.size < 4) ||
+                 (usedMobilities.has(genome.mobility) && usedMobilities.size < 3))
             );
 
             usedWeapons.add(genome.weapon);

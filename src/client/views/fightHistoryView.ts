@@ -1,10 +1,5 @@
 // Bug Fights - Fight History Page View
 
-interface PageView {
-    mount(container: HTMLElement): void;
-    unmount(): void;
-}
-
 interface FightData {
     id: string;
     fightNumber: number;
@@ -23,9 +18,11 @@ export function createFightHistoryView(): PageView {
     let container: HTMLElement | null = null;
     let tbody: HTMLTableSectionElement | null = null;
     let loadMoreBtn: HTMLButtonElement | null = null;
+    let abortController: AbortController | null = null;
 
     function mount(el: HTMLElement): void {
         container = el;
+        abortController = new AbortController();
 
         const header = document.createElement('h2');
         header.className = 'page-header';
@@ -69,7 +66,11 @@ export function createFightHistoryView(): PageView {
         tbody.innerHTML = '';
 
         try {
-            const response = await fetch(`/api/fights?limit=${currentLimit}`);
+            const response = await fetch(`/api/fights?limit=${currentLimit}`, { signal: abortController?.signal });
+            if (!response.ok) {
+                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="error-msg">Failed to load fight history</td></tr>';
+                return;
+            }
             const fights: FightData[] = await response.json();
 
             fights.forEach(fight => {
@@ -110,7 +111,8 @@ export function createFightHistoryView(): PageView {
             if (loadMoreBtn) {
                 loadMoreBtn.style.display = (fights.length < currentLimit || currentLimit >= 200) ? 'none' : 'block';
             }
-        } catch {
+        } catch (e) {
+            if (e instanceof DOMException && e.name === 'AbortError') return;
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="8" class="error-msg">Failed to load fight history</td></tr>';
             }
@@ -118,6 +120,10 @@ export function createFightHistoryView(): PageView {
     }
 
     function unmount(): void {
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
         currentLimit = 50;
         container = null;
         tbody = null;

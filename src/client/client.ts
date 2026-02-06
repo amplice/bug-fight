@@ -8,8 +8,9 @@
 let ws: WebSocket | null = null;
 let connected = false;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_DELAY = 2000;
+const MAX_RECONNECT_ATTEMPTS = 20;
+const BASE_RECONNECT_DELAY = 1000;
+const MAX_RECONNECT_DELAY = 30000;
 
 // Game state received from server
 let gameState: GameState = {
@@ -73,11 +74,15 @@ function connect(): void {
         connected = false;
         updateConnectionStatus(false);
 
-        // Try to reconnect
+        // Reconnect with exponential backoff
         if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts++;
-            console.log(`Reconnecting in ${RECONNECT_DELAY}ms (attempt ${reconnectAttempts})`);
-            setTimeout(connect, RECONNECT_DELAY);
+            const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+            console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            setTimeout(connect, delay);
+        } else {
+            console.error('Max reconnect attempts reached. Refresh the page to reconnect.');
+            updateConnectionStatus(false, true);
         }
     };
 
@@ -306,12 +311,15 @@ function formatAttrs(bug: GenomeData): string {
            `<span class="mobility">${bug.mobility}</span>`;
 }
 
-function updateConnectionStatus(isConnected: boolean): void {
+function updateConnectionStatus(isConnected: boolean, gaveUp: boolean = false): void {
     const badge = document.querySelector('.live-badge') as HTMLElement | null;
     if (badge) {
         if (isConnected) {
             badge.textContent = 'LIVE 24/7';
             badge.style.background = 'linear-gradient(180deg, #f00 0%, #900 100%)';
+        } else if (gaveUp) {
+            badge.textContent = 'OFFLINE';
+            badge.style.background = 'linear-gradient(180deg, #800 0%, #400 100%)';
         } else {
             badge.textContent = 'CONNECTING...';
             badge.style.background = 'linear-gradient(180deg, #888 0%, #444 100%)';

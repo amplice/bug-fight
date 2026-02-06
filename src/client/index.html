@@ -56,14 +56,15 @@
             </div>
 
             <div class="camera-controls">
-                <button class="camera-btn active" onclick="setCamera('front')" id="cam-front">1: Front</button>
-                <button class="camera-btn" onclick="setCamera('side')" id="cam-side">2: Side</button>
-                <button class="camera-btn" onclick="setCamera('top')" id="cam-top">3: Top</button>
-                <button class="camera-btn" onclick="setCamera('isometric')" id="cam-iso">4: Isometric</button>
+                <button class="camera-btn active" onclick="setCamera('action')" id="cam-action">1: Action</button>
+                <button class="camera-btn" onclick="setCamera('front')" id="cam-front">2: Front</button>
+                <button class="camera-btn" onclick="setCamera('side')" id="cam-side">3: Side</button>
+                <button class="camera-btn" onclick="setCamera('top')" id="cam-top">4: Top</button>
+                <button class="camera-btn" onclick="setCamera('isometric')" id="cam-iso">5: Isometric</button>
                 <button class="admin-debug-btn" onclick="toggleDebugOverlay()" id="debug-toggle">DEBUG</button>
                 <button class="camera-btn" onclick="toggleSound()" id="sound-toggle">SOUND: ON</button>
             </div>
-            <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-4 for presets, R to reset, M to mute</div>
+            <div class="controls-hint">Mouse: Drag to orbit, Scroll to zoom | Keys: 1-5 for camera, R to reset, M to mute</div>
 
             <div class="selection-panel">
                 <div class="fighter-card left">

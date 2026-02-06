@@ -6,11 +6,6 @@ import { BugGenome } from '../procedural';
 import { BugGenerator3D, BugAnimator } from '../bugGenerator3d';
 import { getRouteParams } from '../router';
 
-interface PageView {
-    mount(container: HTMLElement): void;
-    unmount(): void;
-}
-
 interface BugDetailData {
     id: string;
     name: string;
@@ -45,8 +40,13 @@ export function createBugDetailView(): PageView {
     let renderer: THREE.WebGLRenderer | null = null;
     let animationId: number | null = null;
     let controls: OrbitControls | null = null;
+    let abortController: AbortController | null = null;
+    let mounted = false;
+    let scene: THREE.Scene | null = null;
 
     function mount(container: HTMLElement): void {
+        mounted = true;
+        abortController = new AbortController();
         const params = getRouteParams();
         const bugId = params['id'];
         if (!bugId) {
@@ -60,14 +60,16 @@ export function createBugDetailView(): PageView {
 
     async function loadBug(container: HTMLElement, bugId: string): Promise<void> {
         try {
-            const response = await fetch(`/api/bug/${bugId}`);
+            const response = await fetch(`/api/bug/${bugId}`, { signal: abortController?.signal });
             if (!response.ok) {
                 container.innerHTML = '<div class="error-msg">Bug not found</div>';
                 return;
             }
             const bug: BugDetailData = await response.json();
+            if (!mounted) return; // View was unmounted during fetch
             renderDetail(container, bug);
-        } catch {
+        } catch (e) {
+            if (e instanceof DOMException && e.name === 'AbortError') return;
             container.innerHTML = '<div class="error-msg">Failed to load bug data</div>';
         }
     }
@@ -210,7 +212,7 @@ export function createBugDetailView(): PageView {
             renderer.setSize(800, 700);
             renderer.setPixelRatio(1);
 
-            const scene = new THREE.Scene();
+            scene = new THREE.Scene();
             scene.background = new THREE.Color(0x1a2a1a);
 
             const camera = new THREE.PerspectiveCamera(50, 800 / 700, 0.1, 100);
@@ -246,7 +248,7 @@ export function createBugDetailView(): PageView {
                 const delta = clock.getDelta();
                 animator.update(delta, 'idle');
                 controls!.update();
-                renderer!.render(scene, camera);
+                renderer!.render(scene!, camera);
             };
             animate();
 
@@ -377,6 +379,11 @@ export function createBugDetailView(): PageView {
     }
 
     function unmount(): void {
+        mounted = false;
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
         if (animationId) {
             cancelAnimationFrame(animationId);
             animationId = null;
@@ -384,6 +391,20 @@ export function createBugDetailView(): PageView {
         if (controls) {
             controls.dispose();
             controls = null;
+        }
+        if (scene) {
+            scene.traverse((obj: THREE.Object3D) => {
+                const mesh = obj as THREE.Mesh;
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) {
+                    if (Array.isArray(mesh.material)) {
+                        (mesh.material as THREE.Material[]).forEach(m => m.dispose());
+                    } else {
+                        mesh.material.dispose();
+                    }
+                }
+            });
+            scene = null;
         }
         if (renderer) {
             renderer.dispose();

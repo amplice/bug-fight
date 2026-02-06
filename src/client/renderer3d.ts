@@ -461,11 +461,11 @@ function updateActionCamera(state: GameState): void {
 
 function onKeyDown(event: KeyboardEvent): void {
     switch (event.key) {
-        case '1': setCameraPreset('front'); break;
-        case '2': setCameraPreset('side'); break;
-        case '3': setCameraPreset('top'); break;
-        case '4': setCameraPreset('isometric'); break;
-        case '5': setCameraPreset('action'); break;
+        case '1': setCameraPreset('action'); break;
+        case '2': setCameraPreset('front'); break;
+        case '3': setCameraPreset('side'); break;
+        case '4': setCameraPreset('top'); break;
+        case '5': setCameraPreset('isometric'); break;
         case 'r': case 'R': setCameraPreset(currentPreset); break;
         case 'm': case 'M':
             if (BugFightsSound) {

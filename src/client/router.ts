@@ -2,11 +2,6 @@
 
 import { initNav, updateNav } from './nav';
 
-interface PageView {
-    mount(container: HTMLElement): void;
-    unmount(): void;
-}
-
 type RouteHandler = () => PageView;
 
 const routes: Record<string, RouteHandler> = {};

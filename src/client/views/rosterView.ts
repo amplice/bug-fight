@@ -13,11 +13,6 @@ interface RosterBugScene {
     rotationY: number;
 }
 
-interface PageView {
-    mount(container: HTMLElement): void;
-    unmount(): void;
-}
-
 let sharedRenderer: THREE.WebGLRenderer | null = null;
 let sharedCanvas: HTMLCanvasElement | null = null;
 
@@ -43,9 +38,14 @@ export function createRosterView(): PageView {
     let allBugs: RosterClientBug[] = [];
     let container: HTMLElement | null = null;
     let gridEl: HTMLElement | null = null;
+    let abortController: AbortController | null = null;
+    let mounted = false;
+    let sortAscending = false;
 
     function mount(el: HTMLElement): void {
         container = el;
+        mounted = true;
+        abortController = new AbortController();
 
         const header = document.createElement('h2');
         header.className = 'page-header';
@@ -56,29 +56,53 @@ export function createRosterView(): PageView {
         const controls = document.createElement('div');
         controls.className = 'roster-controls';
         controls.innerHTML = `
-            <label>Sort:</label>
-            <select id="roster-sort">
-                <option value="name">Name</option>
-                <option value="gen">Generation</option>
-                <option value="wins">Wins</option>
-                <option value="winpct">Win %</option>
-                <option value="bulk">Bulk</option>
-                <option value="speed">Speed</option>
-                <option value="fury">Fury</option>
-                <option value="instinct">Instinct</option>
-            </select>
-            <label>Filter:</label>
-            <select id="roster-filter">
-                <option value="all">All</option>
-                <option value="mandibles">Mandibles</option>
-                <option value="stinger">Stinger</option>
-                <option value="fangs">Fangs</option>
-                <option value="pincers">Pincers</option>
-                <option value="horn">Horn</option>
-                <option value="ground">Ground</option>
-                <option value="winged">Winged</option>
-                <option value="wallcrawler">Wallcrawler</option>
-            </select>
+            <div class="roster-control-group">
+                <label>Sort:</label>
+                <select id="roster-sort">
+                    <option value="name">Name</option>
+                    <option value="gen">Generation</option>
+                    <option value="fights">Total Fights</option>
+                    <option value="wins">Wins</option>
+                    <option value="losses">Losses</option>
+                    <option value="winpct">Win %</option>
+                    <option value="bulk">Bulk</option>
+                    <option value="speed">Speed</option>
+                    <option value="fury">Fury</option>
+                    <option value="instinct">Instinct</option>
+                    <option value="total">Total Stats</option>
+                </select>
+                <button id="roster-sort-dir" class="sort-dir-btn" title="Toggle sort direction">DESC</button>
+            </div>
+            <div class="roster-control-group">
+                <label>Weapon:</label>
+                <select id="roster-filter-weapon">
+                    <option value="all">All</option>
+                    <option value="mandibles">Mandibles</option>
+                    <option value="stinger">Stinger</option>
+                    <option value="fangs">Fangs</option>
+                    <option value="pincers">Pincers</option>
+                    <option value="horn">Horn</option>
+                </select>
+            </div>
+            <div class="roster-control-group">
+                <label>Mobility:</label>
+                <select id="roster-filter-mobility">
+                    <option value="all">All</option>
+                    <option value="ground">Ground</option>
+                    <option value="winged">Winged</option>
+                    <option value="wallcrawler">Wallcrawler</option>
+                </select>
+            </div>
+            <div class="roster-control-group">
+                <label>Defense:</label>
+                <select id="roster-filter-defense">
+                    <option value="all">All</option>
+                    <option value="shell">Shell</option>
+                    <option value="toxic">Toxic</option>
+                    <option value="camouflage">Camouflage</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
         `;
         el.appendChild(controls);
 
@@ -88,9 +112,20 @@ export function createRosterView(): PageView {
 
         // Event listeners for controls
         const sortSelect = controls.querySelector('#roster-sort') as HTMLSelectElement;
-        const filterSelect = controls.querySelector('#roster-filter') as HTMLSelectElement;
+        const sortDirBtn = controls.querySelector('#roster-sort-dir') as HTMLButtonElement;
+        const filterWeapon = controls.querySelector('#roster-filter-weapon') as HTMLSelectElement;
+        const filterMobility = controls.querySelector('#roster-filter-mobility') as HTMLSelectElement;
+        const filterDefense = controls.querySelector('#roster-filter-defense') as HTMLSelectElement;
+
         sortSelect.addEventListener('change', () => renderGrid());
-        filterSelect.addEventListener('change', () => renderGrid());
+        filterWeapon.addEventListener('change', () => renderGrid());
+        filterMobility.addEventListener('change', () => renderGrid());
+        filterDefense.addEventListener('change', () => renderGrid());
+        sortDirBtn.addEventListener('click', () => {
+            sortAscending = !sortAscending;
+            sortDirBtn.textContent = sortAscending ? 'ASC' : 'DESC';
+            renderGrid();
+        });
 
         loadRoster();
     }
@@ -100,11 +135,17 @@ export function createRosterView(): PageView {
         gridEl.innerHTML = '<div class="loading-msg">Loading roster...</div>';
 
         try {
-            const response = await fetch('/api/roster');
+            const response = await fetch('/api/roster', { signal: abortController?.signal });
+            if (!response.ok) {
+                gridEl.innerHTML = '<div class="error-msg">Failed to load roster</div>';
+                return;
+            }
             allBugs = await response.json();
+            if (!mounted) return; // View was unmounted during fetch
             renderGrid();
-        } catch {
-            gridEl.innerHTML = '<div class="error-msg">Failed to load roster</div>';
+        } catch (e) {
+            if (e instanceof DOMException && e.name === 'AbortError') return;
+            if (gridEl) gridEl.innerHTML = '<div class="error-msg">Failed to load roster</div>';
         }
     }
 
@@ -116,33 +157,71 @@ export function createRosterView(): PageView {
         gridEl.innerHTML = '';
 
         const sortSelect = container.querySelector('#roster-sort') as HTMLSelectElement | null;
-        const filterSelect = container.querySelector('#roster-filter') as HTMLSelectElement | null;
+        const filterWeapon = container.querySelector('#roster-filter-weapon') as HTMLSelectElement | null;
+        const filterMobility = container.querySelector('#roster-filter-mobility') as HTMLSelectElement | null;
+        const filterDefense = container.querySelector('#roster-filter-defense') as HTMLSelectElement | null;
         const sortBy = sortSelect?.value || 'name';
-        const filterBy = filterSelect?.value || 'all';
+        const weaponFilter = filterWeapon?.value || 'all';
+        const mobilityFilter = filterMobility?.value || 'all';
+        const defenseFilter = filterDefense?.value || 'all';
 
         let filtered = allBugs;
-        if (filterBy !== 'all') {
-            filtered = allBugs.filter(b =>
-                b.weapon === filterBy || b.mobility === filterBy
-            );
+        if (weaponFilter !== 'all') {
+            filtered = filtered.filter(b => b.weapon === weaponFilter);
+        }
+        if (mobilityFilter !== 'all') {
+            filtered = filtered.filter(b => b.mobility === mobilityFilter);
+        }
+        if (defenseFilter !== 'all') {
+            filtered = filtered.filter(b => b.genome.defense === defenseFilter);
         }
 
         const sorted = [...filtered].sort((a, b) => {
+            let result = 0;
             switch (sortBy) {
-                case 'name': return a.name.localeCompare(b.name);
-                case 'gen': return a.generation - b.generation;
-                case 'wins': return b.wins - a.wins;
+                case 'name':
+                    result = a.name.localeCompare(b.name);
+                    break;
+                case 'gen':
+                    result = a.generation - b.generation;
+                    break;
+                case 'fights':
+                    result = (b.wins + b.losses) - (a.wins + a.losses);
+                    break;
+                case 'wins':
+                    result = b.wins - a.wins;
+                    break;
+                case 'losses':
+                    result = b.losses - a.losses;
+                    break;
                 case 'winpct': {
                     const apct = (a.wins + a.losses) > 0 ? a.wins / (a.wins + a.losses) : 0;
                     const bpct = (b.wins + b.losses) > 0 ? b.wins / (b.wins + b.losses) : 0;
-                    return bpct - apct;
+                    result = bpct - apct;
+                    break;
                 }
-                case 'bulk': return (b.stats?.bulk ?? b.genome.bulk) - (a.stats?.bulk ?? a.genome.bulk);
-                case 'speed': return (b.stats?.speed ?? b.genome.speed) - (a.stats?.speed ?? a.genome.speed);
-                case 'fury': return (b.stats?.fury ?? b.genome.fury) - (a.stats?.fury ?? a.genome.fury);
-                case 'instinct': return (b.stats?.instinct ?? b.genome.instinct) - (a.stats?.instinct ?? a.genome.instinct);
-                default: return 0;
+                case 'bulk':
+                    result = (b.stats?.bulk ?? b.genome.bulk) - (a.stats?.bulk ?? a.genome.bulk);
+                    break;
+                case 'speed':
+                    result = (b.stats?.speed ?? b.genome.speed) - (a.stats?.speed ?? a.genome.speed);
+                    break;
+                case 'fury':
+                    result = (b.stats?.fury ?? b.genome.fury) - (a.stats?.fury ?? a.genome.fury);
+                    break;
+                case 'instinct':
+                    result = (b.stats?.instinct ?? b.genome.instinct) - (a.stats?.instinct ?? a.genome.instinct);
+                    break;
+                case 'total': {
+                    const aTotal = (a.stats?.bulk ?? a.genome.bulk) + (a.stats?.speed ?? a.genome.speed) +
+                                   (a.stats?.fury ?? a.genome.fury) + (a.stats?.instinct ?? a.genome.instinct);
+                    const bTotal = (b.stats?.bulk ?? b.genome.bulk) + (b.stats?.speed ?? b.genome.speed) +
+                                   (b.stats?.fury ?? b.genome.fury) + (b.stats?.instinct ?? b.genome.instinct);
+                    result = bTotal - aTotal;
+                    break;
+                }
             }
+            return sortAscending ? -result : result;
         });
 
         sorted.forEach(bug => {
@@ -342,6 +421,11 @@ export function createRosterView(): PageView {
     }
 
     function unmount(): void {
+        mounted = false;
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
         cleanupScenes();
         if (sharedRenderer) {
             sharedRenderer.dispose();
